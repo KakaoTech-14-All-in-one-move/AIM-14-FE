@@ -16,7 +16,7 @@ const Sidebar: React.FC = () => {
                 <SidebarIcon key={index} text={server} />
             ))}
             <Divider />
-            // TODO: 서버 만들면, 서버에 post 되도록 구현
+            {/* TODO: 서버 만들면, 서버에 post 되도록 구현 */}
             <SidebarIcon
                 icon={<span className="text-2xl">+</span>}
                 text="서버 추가"
