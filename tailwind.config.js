@@ -7,6 +7,7 @@ export default {
     extend: {
       colors: {
         kakaoYellow: '#FEE500',
+        kakaoBrown: '#3B1E1E',
       }
     },
   },
