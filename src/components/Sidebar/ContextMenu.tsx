@@ -18,6 +18,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, onInvite, onRemo
                 minWidth: '120px'
             }}
         >
+            {/* TODO: 멤버 초대 기능 (멤버 초대하는 UI, DB 조회하여 초대) */}
             <button
                 className="block w-full text-left px-4 py-2 text-kakaoYellow hover:bg-gray-800 whitespace-nowrap"
                 onClick={onInvite}
