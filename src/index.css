@@ -15,7 +15,7 @@
     @apply relative flex items-center justify-center
     h-12 w-12 mt-2 mb-2 mx-auto
     bg-gray-400 hover:bg-kakaoYellow dark:bg-discord500
-    text-kakaoYellow hover:text-kakaoBrown
+    text-kakaoYellow hover:text-gray-400
     hover:rounded-xl rounded-3xl
     transition-all duration-100 ease-linear
     cursor-pointer shadow-lg;
