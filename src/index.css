@@ -12,14 +12,14 @@
 
 @layer components {
   .sidebar-icon {
-    @apply relative flex items-center justify-center 
-    h-12 w-12 mt-2 mb-2 mx-auto  
-  bg-gray-400 hover:bg-kakaoYellow dark:bg-gray-800 
-  text-kakaoYellow hover:text-kakaoBrown
+    @apply relative flex items-center justify-center
+    h-12 w-12 mt-2 mb-2 mx-auto
+    bg-gray-400 hover:bg-kakaoYellow dark:bg-discord500
+    text-kakaoYellow hover:text-gray-400
     hover:rounded-xl rounded-3xl
-    transition-all duration-300 ease-linear
-    cursor-pointer shadow-lg ;
-  }
+    transition-all duration-100 ease-linear
+    cursor-pointer shadow-lg;
+  }  
 
   .sidebar-tooltip {
     @apply absolute w-auto p-2 m-2 min-w-max left-14 rounded-md shadow-md
