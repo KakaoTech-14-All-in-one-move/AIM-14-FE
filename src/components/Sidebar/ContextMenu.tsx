@@ -11,7 +11,7 @@ interface ContextMenuProps {
 export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, onInvite, onRemove }) => {
     return (
         <div
-            className="absolute bg-black shadow-md rounded-md py-1 z-50"
+            className="absolute bg-gray-800 shadow-md rounded-md py-1 z-50"
             style={{
                 top: `${y}px`,
                 left: `${x}px`,
