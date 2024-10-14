@@ -37,7 +37,7 @@ body {
   }
 
   .sidebar-hr {
-    @apply  bg-gray-800 
+    @apply bg-gray-800 
     border border-gray-800 rounded-full
     mx-2;
   }
