@@ -22,7 +22,7 @@ body {
   .sidebar-icon {
     @apply relative flex items-center justify-center
     h-12 w-12 mt-2 mb-2 mx-auto
-    bg-gray-400 hover:bg-kakaoYellow dark:bg-discord500
+    hover:bg-kakaoYellow bg-discord500
     text-kakaoYellow hover:text-gray-400
     hover:rounded-xl rounded-3xl
     transition-all duration-100 ease-linear
@@ -37,8 +37,8 @@ body {
   }
 
   .sidebar-hr {
-    @apply bg-gray-200 dark:bg-gray-800 
-    border border-gray-200 dark:border-gray-800 rounded-full
+    @apply  bg-gray-800 
+    border border-gray-800 rounded-full
     mx-2;
   }
 }
