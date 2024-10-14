@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ContextMenu } from './ContextMenu';
+import { ContextMenu } from '@/components/Home/Sidebar/ContextMenu';
 
 interface SidebarIconProps {
     icon?: React.ReactNode;

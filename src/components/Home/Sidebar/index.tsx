@@ -1,8 +1,8 @@
 import React from 'react';
-import { SidebarIcon } from './SidebarIcon';
-import { Divider } from './Divider';
-import { useServerStore } from '../../hooks/useServers';
-import { HomeIcon } from './icons/HomeIcon';
+import { SidebarIcon } from '@/components/Home/Sidebar/SidebarIcon'
+import { Divider } from '@/components/Home/Sidebar/Divider';
+import { useServerStore } from '@/hooks/useServers';
+import { HomeIcon } from '@/components/Home/Sidebar/icons/HomeIcon';
 
 const Sidebar: React.FC = () => {
     const { servers, addServer, removeServer } = useServerStore();
