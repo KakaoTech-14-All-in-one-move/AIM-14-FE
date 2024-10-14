@@ -10,6 +10,13 @@
   padding: 0;
 }
 
+/* 전체 페이지의 배경색 설정 */
+html, body {
+  @apply bg-gray-900;
+  height: 100%;
+  margin: 0;
+}
+
 @layer components {
   .sidebar-icon {
     @apply relative flex items-center justify-center
