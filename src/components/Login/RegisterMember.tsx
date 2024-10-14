@@ -7,7 +7,7 @@ const RegisterMember: React.FC = () => {
   if (!isRegisterOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 flex items-center justify-center z-50">
       <div className="w-full max-w-md p-8 space-y-6 rounded-xl bg-discord800">
         <h2 className="text-2xl font-bold text-center text-kakaoYellow">회원가입</h2>
         <form className="space-y-6 mt-4">
@@ -38,6 +38,16 @@ const RegisterMember: React.FC = () => {
               className="w-full px-4 py-2 border rounded-md bg-discord700 text-white border-discord600
                      focus:border-yellow-300 focus:ring-yellow-300 focus:outline-none"
               placeholder="비밀번호를 다시 입력하세요"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-300">닉네임</label>
+            <input
+              type="username"
+              className="w-full px-4 py-2 border rounded-md bg-discord700 text-white border-discord600
+                     focus:border-yellow-300 focus:ring-yellow-300 focus:outline-none"
+              placeholder="닉네임을 입력하세요"
             />
           </div>
 
