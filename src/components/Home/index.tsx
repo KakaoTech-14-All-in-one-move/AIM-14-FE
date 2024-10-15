@@ -7,7 +7,7 @@ const Home: React.FC = () => {
     <div className="flex h-screen">
       <Sidebar />
       <Channelbar />
-      <div className="flex-1 bg-discord600">
+      <div className="flex-1 bg-discord500">
         {/* 채팅 콘텐츠 영역 */}
       </div>
     </div>

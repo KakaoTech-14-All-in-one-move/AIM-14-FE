@@ -10,7 +10,7 @@ const Channelbar: React.FC = () => {
         <ChannelProvider>
             <div className="w-60 bg-discord800 text-white h-screen flex flex-col">
                 <ChannelHeader />
-                <div className="overflow-y-auto flex-grow px-2">
+                <div className="overflow-y-auto flex-grow px-2 bg-discord700">
                     <ChannelList type="text" icon={Hash} />
                     <ChannelList type="voice" icon={Volume2} />
                     <ChannelList type="video" icon={Monitor} />
