@@ -1,4 +1,4 @@
-const colors = require('tailwindcss/colors')
+const colors = require('tailwindcss/colors');
 
 /** @type {import('tailwindcss').Config} */
 export default {
@@ -13,7 +13,7 @@ export default {
         discord700: '#2B2D31',
         discord600: '#2B2D31',
         discord500: '#313339',
-      }
+      },
     },
   },
   plugins: [],
