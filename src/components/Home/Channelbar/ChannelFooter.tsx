@@ -6,7 +6,7 @@ const ChannelFooter: React.FC = () => {
     const { currentUser } = useChannels();
 
     return (
-        <div className="p-4 border-t border-gray-700">
+        <div className="p-3 border-t border-gray-700">
             <div className="flex items-center justify-between text-gray-400">
                 <div className="flex items-center">
                     <img src={currentUser.profileImage} alt={currentUser.nickname} className="w-8 h-8 rounded-full mr-2" />
