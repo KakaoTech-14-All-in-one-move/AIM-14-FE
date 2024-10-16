@@ -44,18 +44,20 @@ const AudioWaveform = ({ isRecording }: AudioWaveformProps) => {
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center h-full">
-      <BigMicIcon className="w-20 h-20 mb-6 text-white" />
+    <div className="flex flex-col items-center justify-center h-full w-full">
+      {/* Mic Icon with adjusted position */}
+      <BigMicIcon className="w-16 h-16 mb-8 mt-4 text-white max-w-full max-h-full" /> {/* Increased margin-bottom and margin-top */}
 
-      <div className="flex justify-center items-end space-x-1 h-40 mt-4">
+      {/* Waveform */}
+      <div className="flex justify-center items-end space-x-1 h-full w-full max-h-40 mt-4">
         {frequencies.slice(0, 32).map((value, index) => (
           <div
             key={`left-${index}`}
             style={{
               height: `${value}%`,
-              width: '4px',
-              maxHeight: '140px', // 막대 최대 길이 조금 더 길게
-              backgroundColor: isRecording ? "#FEE500" : "#FFFFFF", // 녹음 중이면 노란색, 기본은 하얀색
+              width: '3px',
+              maxHeight: '120px', // Adjusted to fit small view
+              backgroundColor: isRecording ? "#FEE500" : "#FFFFFF", // Yellow when recording, white otherwise
               transition: 'height 0.1s ease-in-out, background-color 0.2s ease-in-out',
             }}
             className="rounded-sm"
@@ -66,9 +68,9 @@ const AudioWaveform = ({ isRecording }: AudioWaveformProps) => {
             key={`right-${index}`}
             style={{
               height: `${value}%`,
-              width: '4px',
-              maxHeight: '140px', // 막대 최대 길이 조금 더 길게
-              backgroundColor: isRecording ? "#FEE500" : "#FFFFFF", // 녹음 중이면 노란색, 기본은 하얀색
+              width: '3px',
+              maxHeight: '120px', // Adjusted to fit small view
+              backgroundColor: isRecording ? "#FEE500" : "#FFFFFF",
               transition: 'height 0.1s ease-in-out, background-color 0.2s ease-in-out',
             }}
             className="rounded-sm"
