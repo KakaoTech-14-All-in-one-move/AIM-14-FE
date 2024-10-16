@@ -47,16 +47,16 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
     };
 
     return (
-        <div className="mt-2">
-            <div className="flex items-center justify-between text-gray-400 mb-1 cursor-pointer" onClick={() => toggleSection(type)}>
+        <div className="mt-5">
+            <div className="flex items-center justify-between text-gray-400 mb-1 cursor-pointer ml-2" onClick={() => toggleSection(type)}>
                 <div className="flex items-center">
                     <ChevronDown size={12} className={`mr-1 transform transition-transform ${openSections[type] ? '' : '-rotate-90'}`} />
                     <span className="uppercase text-xs font-semibold">{type === 'text' ? '채팅' : type === 'voice' ? '음성' : '화상'} 채널</span>
                 </div>
-                <Plus size={16} className="hover:text-gray-200" onClick={(e) => { e.stopPropagation(); addChannel(type, `New ${type} channel`); }} />
+                <Plus size={13} className="hover:text-gray-200 mr-5 stroke-2" style={{ strokeWidth: 3 }} onClick={(e) => { e.stopPropagation(); addChannel(type, `New ${type} channel`); }} />
             </div>
             {openSections[type] && channels[type].map((channel: string) => (
-                <div key={channel} className="mb-1">
+                <div key={channel} className="mb-1 ml-3">
                     <div
                         className={`flex items-center text-gray-400 hover:bg-gray-700 hover:text-gray-200 px-2 py-1 rounded cursor-pointer ${type !== 'text' && activeChannels[type][channel] ? 'bg-gray-700 text-white' : ''}`}
                         onClick={() => handleChannelClick(channel)}
@@ -67,8 +67,8 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
                     </div>
                     {(type === 'voice' || type === 'video') && activeChannels[type][channel] && (
                         <div className="ml-6 mt-1 flex items-center text-gray-400">
-                            <img src={currentUser.profileImage} alt={currentUser.nickname} className="w-6 h-6 rounded-full mr-2" />
-                            <span className="text-sm">{currentUser.nickname}</span>
+                            <img src={currentUser.profileImage} alt={currentUser.nickname} className="w-5 h-5 rounded-full mr-2" />
+                            <span className="text-sm font-semibold">{currentUser.nickname}</span>
                             <X size={16} className="ml-auto cursor-pointer hover:text-gray-200" onClick={() => leaveChannel(type, channel)} />
                         </div>
                     )}
