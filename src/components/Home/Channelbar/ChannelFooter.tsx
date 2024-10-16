@@ -9,7 +9,10 @@ const ChannelFooter: React.FC = () => {
         <div className="p-3 bg-discord800">
             <div className="flex items-center justify-between text-gray-400">
                 <div className="flex items-center">
-                    <img src={currentUser.profileImage} alt={currentUser.nickname} className="w-7 h-7 rounded-full mr-2" />
+                    <div className="relative mr-2">
+                        <img src={currentUser.profileImage} alt={currentUser.nickname} className="w-7 h-7 rounded-full" />
+                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-discord800"></div>
+                    </div>
                     <div className="flex flex-col leading-tight">
                         <span className='text-sm font-bold leading-none'>{currentUser.nickname}</span>
                         <span className='text-xs leading-none mt-px'>온라인</span>
