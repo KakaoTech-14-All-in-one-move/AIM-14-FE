@@ -27,7 +27,7 @@ export interface ChannelContextType {
 
 // Mock user data (in a real app, this would come from an API or authentication service)
 export const currentUser: User = {
-  nickname: '김영진',
+  nickname: 'teddy.kim(김영진)',
   profileImage: '/kakao_login_logo.png', // Using a placeholder image
   email: 'youngjin.kim@example.com',
 };
