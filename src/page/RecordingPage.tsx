@@ -91,13 +91,13 @@ const RecordingPage = () => {
             {screenStream ? (
               <ScreenSharing stream={screenStream} />
             ) : (
-              <p className="text-white">화면이 공유되고 있습니다</p> // 문구 추가
+              <p className="text-white">Waiting for screen sharing..</p> // 문구 추가
             )}
           </div>
 
           {/* 파일 첨부 영역 (하단 30%) */}
           <div className="bg-gray-600 flex flex-col items-center justify-center" style={{ height: '30%' }}>
-            <p className="text-white mb-2">Upload a file:</p>
+            <p className="text-white mb-2">대본 업로드</p>
             <input type="file" onChange={handleFileUpload} className="text-white" />
           </div>
         </div>
