@@ -1,51 +1,79 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import BigMicIcon from "../../icons/big-mic.tsx";
 
-const AudioWaveform = ({ stream }: { stream: MediaStream | null }) => {
-  const [volume, setVolume] = useState(0);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const dataArrayRef = useRef<Uint8Array | null>(null);
+interface AudioWaveformProps {
+  isRecording: boolean;
+}
+
+const AudioWaveform = ({ isRecording }: AudioWaveformProps) => {
+  const [frequencies, setFrequencies] = useState<number[]>(new Array(64).fill(0));
 
   useEffect(() => {
-    if (stream) {
-      const audioContext = new AudioContext();
-      const analyser = audioContext.createAnalyser();
-      const source = audioContext.createMediaStreamSource(stream);
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    let analyser: AnalyserNode;
+    let microphone: MediaStreamAudioSourceNode;
+    let dataArray: Uint8Array;
+    let animationFrameId: number;
 
-      source.connect(analyser);
-      analyser.fftSize = 256;
+    const handleSuccess = async (stream: MediaStream) => {
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 128;
+      microphone = audioContext.createMediaStreamSource(stream);
+      microphone.connect(analyser);
 
       const bufferLength = analyser.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
+      dataArray = new Uint8Array(bufferLength);
 
-      analyserRef.current = analyser;
-      dataArrayRef.current = dataArray;
-      audioContextRef.current = audioContext;
-
-      const tick = () => {
+      const updateWaveform = () => {
         analyser.getByteFrequencyData(dataArray);
-        const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
-        setVolume(average);
-        requestAnimationFrame(tick);
+        setFrequencies([...dataArray]);
+        animationFrameId = requestAnimationFrame(updateWaveform);
       };
 
-      tick();
-    }
-    return () => {
-      audioContextRef.current?.close();
+      updateWaveform();
     };
-  }, [stream]);
+
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(handleSuccess)
+      .catch((err) => console.error("Error accessing microphone:", err));
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      audioContext.close();
+    };
+  }, []);
 
   return (
-    <div className="flex items-center justify-center h-full">
-      <div className="bg-gray-800 p-4 rounded-lg">
-        <div className="text-white mb-2">Recording Audio</div>
-        <div className="w-48 h-10 bg-gray-700 rounded-md overflow-hidden">
+    <div className="flex flex-col items-center justify-center h-full">
+      <BigMicIcon className="w-20 h-20 mb-6 text-white" />
+
+      <div className="flex justify-center items-end space-x-1 h-40 mt-4">
+        {frequencies.slice(0, 32).map((value, index) => (
           <div
-            style={{ width: `${volume}%` }}
-            className="h-full bg-green-500"
+            key={`left-${index}`}
+            style={{
+              height: `${value}%`,
+              width: '4px',
+              maxHeight: '140px', // 막대 최대 길이 조금 더 길게
+              backgroundColor: isRecording ? "#FEE500" : "#FFFFFF", // 녹음 중이면 노란색, 기본은 하얀색
+              transition: 'height 0.1s ease-in-out, background-color 0.2s ease-in-out',
+            }}
+            className="rounded-sm"
           />
-        </div>
+        ))}
+        {frequencies.slice(32, 64).map((value, index) => (
+          <div
+            key={`right-${index}`}
+            style={{
+              height: `${value}%`,
+              width: '4px',
+              maxHeight: '140px', // 막대 최대 길이 조금 더 길게
+              backgroundColor: isRecording ? "#FEE500" : "#FFFFFF", // 녹음 중이면 노란색, 기본은 하얀색
+              transition: 'height 0.1s ease-in-out, background-color 0.2s ease-in-out',
+            }}
+            className="rounded-sm"
+          />
+        ))}
       </div>
     </div>
   );

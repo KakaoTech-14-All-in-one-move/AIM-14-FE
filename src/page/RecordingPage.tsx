@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import CameraRecording from "../components/record/CameraRecording";
 import ScreenSharing from "../components/record/ScreenSharing";
 import Controls from "../components/record/Controls";
+import AudioWaveform from "../components/record/AudioWaveform"; // 오디오 파형 추가
 
 const RecordingPage = () => {
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
@@ -9,6 +10,7 @@ const RecordingPage = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(true);
   const [isSharing, setIsSharing] = useState(false);
+  const [error, setError] = useState<string | null>(null); // 에러 상태 추가
 
   const startRecording = async () => {
     try {
@@ -17,15 +19,17 @@ const RecordingPage = () => {
         audio: true,
       });
       setCameraStream(stream);
-      setIsRecording(true);
+      setIsRecording(true); // 녹음 상태 true로 변경
+      setError(null); // 에러 리셋
     } catch (err) {
       console.error("Error accessing camera and microphone:", err);
+      setError("카메라 및 마이크 접근 중 문제가 발생했습니다.");
     }
   };
 
   const stopRecording = () => {
     cameraStream?.getTracks().forEach((track) => track.stop());
-    setIsRecording(false);
+    setIsRecording(false); // 녹음 상태 false로 변경
   };
 
   const toggleCamera = () => {
@@ -46,8 +50,10 @@ const RecordingPage = () => {
       });
       setScreenStream(stream);
       setIsSharing(true);
+      setError(null); // 에러 리셋
     } catch (err) {
       console.error("Error sharing screen:", err);
+      setError("화면 공유 중 문제가 발생했습니다.");
     }
   };
 
@@ -71,7 +77,10 @@ const RecordingPage = () => {
           {isCameraOn ? (
             <CameraRecording stream={cameraStream} />
           ) : (
-            <div className="flex items-center justify-center text-white">Audio Only</div>
+            // 오디오 전용 UI
+            <div className="flex items-center justify-center text-white h-full">
+              <AudioWaveform isRecording={isRecording} /> {/* isRecording 상태 전달 */}
+            </div>
           )}
         </div>
 
@@ -79,7 +88,11 @@ const RecordingPage = () => {
         <div className="w-1/2 h-full flex flex-col">
           {/* 화면 공유 영역 (상단 70%) */}
           <div className="flex-grow bg-gray-700 flex items-center justify-center" style={{ height: '70%' }}>
-            <ScreenSharing stream={screenStream} />
+            {screenStream ? (
+              <ScreenSharing stream={screenStream} />
+            ) : (
+              <p className="text-white">화면이 공유되고 있습니다</p> // 문구 추가
+            )}
           </div>
 
           {/* 파일 첨부 영역 (하단 30%) */}
@@ -89,6 +102,9 @@ const RecordingPage = () => {
           </div>
         </div>
       </div>
+
+      {/* 에러 메시지 출력 */}
+      {error && <div className="text-red-500 text-center p-4">{error}</div>}
 
       <Controls
         isRecording={isRecording}
