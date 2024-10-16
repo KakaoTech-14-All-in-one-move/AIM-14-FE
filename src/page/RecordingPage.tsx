@@ -87,16 +87,16 @@ const RecordingPage = () => {
 
   const getCameraClassName = () => {
     if (isCameraExpanded === 2) return "w-full h-full";
-    if (isCameraExpanded === 1) return "w-3/4 h-full rounded-lg"; // 1단계 확대 시 둥근 테두리 추가
-    if (isScreenSharingExpanded === 2) return "hidden"; // 화면 공유가 전체 화면일 때 숨김
-    return isScreenSharingExpanded === 1 ? "w-1/5 h-2/5 mx-auto mt-6" : "w-1/2 h-full";
+    if (isCameraExpanded === 1) return "w-3/4 h-full rounded-lg";
+    if (isScreenSharingExpanded === 2) return "hidden";
+    return isScreenSharingExpanded === 1 ? "w-1/5 h-2/5 mx-auto mt-6 rounded-lg" : "w-1/2 h-full"; // 작은 화면일 때 rounded-lg 추가
   };
 
   const getScreenSharingClassName = () => {
     if (isScreenSharingExpanded === 2) return "w-full h-full";
-    if (isScreenSharingExpanded === 1) return "w-3/4 h-full rounded-lg"; // 1단계 확대 시 둥근 테두리 추가
-    if (isCameraExpanded === 2) return "hidden"; // 카메라가 전체 화면일 때 숨김
-    return isCameraExpanded === 1 ? "w-1/5 h-2/5 mx-auto mt-6" : "w-1/2 h-full";
+    if (isScreenSharingExpanded === 1) return "w-3/4 h-full rounded-lg";
+    if (isCameraExpanded === 2) return "hidden";
+    return isCameraExpanded === 1 ? "w-1/5 h-2/5 mx-auto mt-6 rounded-lg" : "w-1/2 h-full"; // 작은 화면일 때 rounded-lg 추가
   };
 
   // 팝업 렌더링 함수
