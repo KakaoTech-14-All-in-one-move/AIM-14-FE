@@ -143,26 +143,26 @@ const RecordingPage = () => {
   };
 
   const getCameraClassName = () => {
-    if (isCameraExpanded === 2) return "w-full h-[calc(100%-80px)]";
-    if (isCameraExpanded === 1) return "w-3/4 h-[calc(100%-80px)] rounded-lg";
+    if (isCameraExpanded === 2) return "w-full h-full";
+    if (isCameraExpanded === 1) return "w-3/4 h-full rounded-lg";
     if (isScreenSharingExpanded === 2) return "hidden";
-    return isScreenSharingExpanded === 1 ? "w-1/5 h-2/5 mx-auto mt-6 rounded-lg" : "w-1/2 h-[calc(100%-80px)]";
+    return isScreenSharingExpanded === 1 ? "w-1/5 h-2/5 mx-auto mt-6 rounded-lg" : "w-1/2 h-full";
   };
 
   const getScreenSharingClassName = () => {
-    if (isScreenSharingExpanded === 2) return "w-full h-[calc(100%-80px)]";
-    if (isScreenSharingExpanded === 1) return "w-3/4 h-[calc(100%-80px)] rounded-lg";
+    if (isScreenSharingExpanded === 2) return "w-full h-full";
+    if (isScreenSharingExpanded === 1) return "w-3/4 h-full rounded-lg";
     if (isCameraExpanded === 2) return "hidden";
     return isCameraExpanded === 1
-      ? "w-1/5 h-2/5 mx-auto mt-6 rounded-lg"
-      : "w-1/2 h-[calc(100%-80px)]";
+      ? "w-1/5 h-2/5 mx-auto mt-6 rounded-lg border border-gray-300"
+      : "w-1/2 h-full";
   };
 
   const renderCameraPopup = () => (
-    <Draggable>
-      <div className="absolute bottom-4 right-4 w-48 h-32 bg-black text-sm p-2 rounded-lg border border-gray-600 shadow-lg z-50">
+    <Draggable bounds="parent">
+      <div className="absolute bottom-4 right-4 w-48 h-32 bg-black text-sm p-2 rounded-lg border border-gray-300 shadow-lg z-50 overflow-hidden">
         {isCameraOn ? (
-          <div className="relative">
+          <div className="relative w-full h-full">
             <CameraRecording stream={cameraStream} />
             {isRecording && (
               <div className="absolute top-2 left-2 flex items-center">
@@ -188,7 +188,7 @@ const RecordingPage = () => {
 
   const renderScreenSharingPopup = () => (
     <Draggable>
-      <div className="absolute bottom-4 right-4 w-48 h-32 bg-gray-700 text-sm p-2 rounded-lg border border-gray-600 shadow-lg z-50">
+      <div className="absolute bottom-4 right-4 w-48 h-32 bg-gray-700 text-sm p-2 rounded-lg border border-gray-300 shadow-lg z-50">
         {screenStream ? (
           <ScreenSharing stream={screenStream} />
         ) : (
