@@ -26,18 +26,18 @@ const Controls = ({
   stopSharing: () => void;
 }) => {
   return (
-    <div className="w-full h-16 bg-gray-800 flex justify-center items-center space-x-6">
-      {/* 녹화 시작/중지 버튼 */}
+    <div className="w-full h-16 bg-[#1E1F22] flex justify-center items-center space-x-6">
+      {/* Start/Stop Recording Button */}
       <button onClick={isRecording ? stopRecording : startRecording} className="bg-white p-2 rounded-full">
         {isRecording ? <StopIcon /> : isCameraOn ? <RecordIcon /> : <MicIcon />}
       </button>
 
-      {/* 카메라 on/off 버튼 */}
+      {/* Camera On/Off Button */}
       <button onClick={toggleCamera} className="bg-white p-2 rounded-full">
         {isCameraOn ? <CameraOnIcon /> : <CameraOffIcon />}
       </button>
 
-      {/* 화면 공유/취소 버튼 */}
+      {/* Screen Share/Cancel Button */}
       <button onClick={isSharing ? stopSharing : startSharing} className="bg-white p-2 rounded-full">
         {isSharing ? <CancelIcon /> : <ShareIcon />}
       </button>
