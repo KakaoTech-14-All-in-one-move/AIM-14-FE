@@ -96,7 +96,9 @@ const RecordingPage = () => {
     if (isScreenSharingExpanded === 2) return "w-full h-full";
     if (isScreenSharingExpanded === 1) return "w-3/4 h-full rounded-lg";
     if (isCameraExpanded === 2) return "hidden";
-    return isCameraExpanded === 1 ? "w-1/5 h-2/5 mx-auto mt-6 rounded-lg" : "w-1/2 h-full"; // 작은 화면일 때 rounded-lg 추가
+    return isCameraExpanded === 1
+      ? "w-1/5 h-2/5 mx-auto mt-6 rounded-lg"
+      : "w-1/2 h-full";
   };
 
   // 팝업 렌더링 함수
@@ -130,71 +132,22 @@ const RecordingPage = () => {
 
   return (
     <div className="h-screen w-full flex flex-col bg-gray-900">
-      {/* Upper Section (Camera and Screen Sharing) */}
       <div className="flex-grow flex relative">
-        {/* Camera Area */}
-        <div className={`relative transition-all duration-500 ${getCameraClassName()} bg-black flex-shrink-0`}>
-          {isCameraOn ? (
-            <CameraRecording stream={cameraStream} />
-          ) : (
-            <div className="flex items-center justify-center text-white h-full">
-              <AudioWaveform isRecording={isRecording} />
-            </div>
-          )}
-
-          {/* 기본 화면: 확대 버튼만 보이게 */}
-          {isCameraExpanded === 0 && isScreenSharingExpanded === 0 && (
-            <button
-              onClick={toggleCameraExpand}
-              className="absolute top-2 right-2 text-white hover:bg-gray-700 p-1 rounded-full"
-            >
-              <FiArrowUpRight size={24} />
-            </button>
-          )}
-
-          {/* 1단 확대: 확대/축소 둘 다 보이게 */}
-          {isCameraExpanded === 1 && (
-            <>
-              <button
-                onClick={toggleCameraExpand}
-                className="absolute top-2 right-2 text-white hover:bg-gray-700 p-1 rounded-full"
-              >
-                <FiArrowUpRight size={24} />
-              </button>
-              <button
-                onClick={() => setIsCameraExpanded(0)}
-                className="absolute top-2 right-12 text-white hover:bg-gray-700 p-1 rounded-full"
-              >
-                <FiArrowDownLeft size={24} />
-              </button>
-            </>
-          )}
-
-          {/* 2단 확대: 축소 아이콘만 보이게 */}
-          {isCameraExpanded === 2 && (
-            <button
-              onClick={() => setIsCameraExpanded(0)}
-              className="absolute top-2 right-2 text-white hover:bg-gray-700 p-1 rounded-full"
-            >
-              <FiArrowDownLeft size={24} />
-            </button>
-          )}
-
-          {/* 전체 화면일 때 팝업 */}
-          {isCameraExpanded === 2 && renderScreenSharingPopup()}
-        </div>
-
         {/* Screen Sharing Area */}
-        <div className={`relative transition-all duration-500 ${getScreenSharingClassName()} bg-gray-700 flex-shrink-0 border border-black`}>
+        <div
+          className={`relative transition-all duration-500 ${getScreenSharingClassName()} bg-gray-700 flex-shrink-0 border border-black`}
+        >
           {screenStream ? (
             <ScreenSharing stream={screenStream} />
           ) : (
-            <p className="text-white flex items-center justify-center h-full text-sm">
-              Waiting for screen sharing...
-            </p>
+            <div
+              className="text-white flex items-center justify-center h-full text-sm"
+              style={{ backgroundColor: "#2B2D31" }} // Set background color
+            >
+              {isSharing ? "Initializing screen share..." : "Screen sharing not started"}
+            </div>
           )}
 
-          {/* 기본 화면: 확대 버튼만 보이게 */}
           {isScreenSharingExpanded === 0 && isCameraExpanded === 0 && (
             <button
               onClick={toggleScreenSharingExpand}
@@ -204,7 +157,6 @@ const RecordingPage = () => {
             </button>
           )}
 
-          {/* 1단 확대: 확대/축소 둘 다 보이게 */}
           {isScreenSharingExpanded === 1 && (
             <>
               <button
@@ -222,7 +174,6 @@ const RecordingPage = () => {
             </>
           )}
 
-          {/* 2단 확대: 축소 아이콘만 보이게 */}
           {isScreenSharingExpanded === 2 && (
             <button
               onClick={() => setIsScreenSharingExpanded(0)}
@@ -232,12 +183,58 @@ const RecordingPage = () => {
             </button>
           )}
 
-          {/* 전체 화면일 때 카메라 팝업 */}
           {isScreenSharingExpanded === 2 && renderCameraPopup()}
+        </div>
+
+        {/* Camera Area */}
+        <div className={`relative transition-all duration-500 ${getCameraClassName()} bg-black flex-shrink-0`}>
+          {isCameraOn ? (
+            <CameraRecording stream={cameraStream} />
+          ) : (
+            <div className="flex items-center justify-center text-white h-full">
+              <AudioWaveform isRecording={isRecording} />
+            </div>
+          )}
+
+          {isCameraExpanded === 0 && isScreenSharingExpanded === 0 && (
+            <button
+              onClick={toggleCameraExpand}
+              className="absolute top-2 right-2 text-white hover:bg-gray-700 p-1 rounded-full"
+            >
+              <FiArrowUpRight size={24} />
+            </button>
+          )}
+
+          {isCameraExpanded === 1 && (
+            <>
+              <button
+                onClick={toggleCameraExpand}
+                className="absolute top-2 right-2 text-white hover:bg-gray-700 p-1 rounded-full"
+              >
+                <FiArrowUpRight size={24} />
+              </button>
+              <button
+                onClick={() => setIsCameraExpanded(0)}
+                className="absolute top-2 right-12 text-white hover:bg-gray-700 p-1 rounded-full"
+              >
+                <FiArrowDownLeft size={24} />
+              </button>
+            </>
+          )}
+
+          {isCameraExpanded === 2 && (
+            <button
+              onClick={() => setIsCameraExpanded(0)}
+              className="absolute top-2 right-2 text-white hover:bg-gray-700 p-1 rounded-full"
+            >
+              <FiArrowDownLeft size={24} />
+            </button>
+          )}
+
+          {isCameraExpanded === 2 && renderScreenSharingPopup()}
         </div>
       </div>
 
-      {/* Lower Section (Controls) */}
       <div className="flex-shrink-0">
         {error && <div className="text-red-500 text-center p-4">{error}</div>}
         <Controls
