@@ -4,7 +4,6 @@ import ScreenSharing from "../components/record/ScreenSharing";
 import Controls from "../components/record/Controls";
 import AudioWaveform from "../components/record/AudioWaveform";
 import { FiArrowUpRight, FiArrowDownLeft } from "react-icons/fi";
-import DownloadIcon from "../icons/download";
 import Draggable from "react-draggable";
 
 const RecordingPage = () => {
@@ -23,6 +22,49 @@ const RecordingPage = () => {
   useEffect(() => {
     initializeCamera();
   }, []);
+
+  const initializeCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+      setCameraStream(stream);
+      setError(null);
+    } catch (err) {
+      console.error("Error accessing camera and microphone:", err);
+      setError("There was an issue accessing the camera and microphone.");
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      setRecordedChunks([]);
+      setShowDownload(false);
+
+      const stream = isCameraOn
+        ? cameraStream
+        : await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      if (stream) {
+        const mediaRecorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = mediaRecorder;
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            setRecordedChunks((prev) => [...prev, event.data]);
+          }
+        };
+
+        mediaRecorder.start();
+        setIsRecording(true);
+        setError(null);
+      }
+    } catch (err) {
+      console.error("Error starting recording:", err);
+      setError("There was an issue starting the recording.");
+    }
+  };
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
@@ -100,51 +142,20 @@ const RecordingPage = () => {
     }
   };
 
-  useEffect(() => {
-    initializeCamera();
-  }, []);
-
-  const initializeCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      });
-      setCameraStream(stream);
-      setError(null);
-    } catch (err) {
-      console.error("Error accessing camera and microphone:", err);
-      setError("There was an issue accessing the camera and microphone.");
-    }
+  const getCameraClassName = () => {
+    if (isCameraExpanded === 2) return "w-full h-[calc(100%-80px)]";
+    if (isCameraExpanded === 1) return "w-3/4 h-[calc(100%-80px)] rounded-lg";
+    if (isScreenSharingExpanded === 2) return "hidden";
+    return isScreenSharingExpanded === 1 ? "w-1/5 h-2/5 mx-auto mt-6 rounded-lg" : "w-1/2 h-[calc(100%-80px)]";
   };
 
-  const startRecording = async () => {
-    try {
-      setRecordedChunks([]);
-      setShowDownload(false);
-
-      const stream = isCameraOn
-        ? cameraStream
-        : await navigator.mediaDevices.getUserMedia({ audio: true });
-
-      if (stream) {
-        const mediaRecorder = new MediaRecorder(stream);
-        mediaRecorderRef.current = mediaRecorder;
-
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            setRecordedChunks((prev) => [...prev, event.data]);
-          }
-        };
-
-        mediaRecorder.start();
-        setIsRecording(true);
-        setError(null);
-      }
-    } catch (err) {
-      console.error("Error starting recording:", err);
-      setError("There was an issue starting the recording.");
-    }
+  const getScreenSharingClassName = () => {
+    if (isScreenSharingExpanded === 2) return "w-full h-[calc(100%-80px)]";
+    if (isScreenSharingExpanded === 1) return "w-3/4 h-[calc(100%-80px)] rounded-lg";
+    if (isCameraExpanded === 2) return "hidden";
+    return isCameraExpanded === 1
+      ? "w-1/5 h-2/5 mx-auto mt-6 rounded-lg"
+      : "w-1/2 h-[calc(100%-80px)]";
   };
 
   const renderCameraPopup = () => (
@@ -189,26 +200,10 @@ const RecordingPage = () => {
     </Draggable>
   );
 
-  const getCameraClassName = () => {
-    if (isCameraExpanded === 2) return "w-full h-[calc(100%-80px)]"; // 수정된 부분
-    if (isCameraExpanded === 1) return "w-3/4 h-[calc(100%-80px)] rounded-lg"; // 수정된 부분
-    if (isScreenSharingExpanded === 2) return "hidden";
-    return isScreenSharingExpanded === 1 ? "w-1/5 h-2/5 mx-auto mt-6 rounded-lg" : "w-1/2 h-[calc(100%-80px)]"; // 수정된 부분
-  };
-
-  const getScreenSharingClassName = () => {
-    if (isScreenSharingExpanded === 2) return "w-full h-[calc(100%-80px)]"; // 수정된 부분
-    if (isScreenSharingExpanded === 1) return "w-3/4 h-[calc(100%-80px)] rounded-lg"; // 수정된 부분
-    if (isCameraExpanded === 2) return "hidden";
-    return isCameraExpanded === 1
-      ? "w-1/5 h-2/5 mx-auto mt-6 rounded-lg"
-      : "w-1/2 h-[calc(100%-80px)]"; // 수정된 부분
-  };
-
   return (
     <div className="h-screen w-full flex flex-col" style={{ backgroundColor: "#1E1F22" }}>
-      <div className="flex-grow flex relative">
-        {/* Camera Area - Moved to the left */}
+      <div className="flex-grow flex relative overflow-hidden">
+        {/* Camera Area */}
         <div className={`relative transition-all duration-500 ${getCameraClassName()} bg-black flex-shrink-0`}>
           {isCameraOn ? (
             <div className="relative h-full">
@@ -233,24 +228,36 @@ const RecordingPage = () => {
           )}
 
           {isCameraExpanded === 0 && isScreenSharingExpanded === 0 && (
-            <button onClick={toggleCameraExpand} className="absolute top-2 right-2 text-white hover:bg-gray-700 p-1 rounded-full">
+            <button
+              onClick={toggleCameraExpand}
+              className="absolute top-2 right-2 text-white hover:bg-gray-700 p-1 rounded-full"
+            >
               <FiArrowUpRight size={24} />
             </button>
           )}
 
           {isCameraExpanded === 1 && (
             <>
-              <button onClick={toggleCameraExpand} className="absolute top-2 right-2 text-white hover:bg-gray-700 p-1 rounded-full">
+              <button
+                onClick={toggleCameraExpand}
+                className="absolute top-2 right-2 text-white hover:bg-gray-700 p-1 rounded-full"
+              >
                 <FiArrowUpRight size={24} />
               </button>
-              <button onClick={() => setIsCameraExpanded(0)} className="absolute top-2 right-12 text-white hover:bg-gray-700 p-1 rounded-full">
+              <button
+                onClick={() => setIsCameraExpanded(0)}
+                className="absolute top-2 right-12 text-white hover:bg-gray-700 p-1 rounded-full"
+              >
                 <FiArrowDownLeft size={24} />
               </button>
             </>
           )}
 
           {isCameraExpanded === 2 && (
-            <button onClick={() => setIsCameraExpanded(0)} className="absolute top-2 right-2 text-white hover:bg-gray-700 p-1 rounded-full">
+            <button
+              onClick={() => setIsCameraExpanded(0)}
+              className="absolute top-2 right-2 text-white hover:bg-gray-700 p-1 rounded-full"
+            >
               <FiArrowDownLeft size={24} />
             </button>
           )}
@@ -258,8 +265,10 @@ const RecordingPage = () => {
           {isCameraExpanded === 2 && renderScreenSharingPopup()}
         </div>
 
-        {/* Screen Sharing Area - Moved to the right */}
-        <div className={`relative transition-all duration-500 ${getScreenSharingClassName()} bg-gray-700 flex-shrink-0 border border-black`}>
+        {/* Screen Sharing Area */}
+        <div
+          className={`relative transition-all duration-500 ${getScreenSharingClassName()} bg-gray-700 flex-shrink-0 border border-black`}
+        >
           {screenStream ? (
             <ScreenSharing stream={screenStream} />
           ) : (
@@ -269,24 +278,36 @@ const RecordingPage = () => {
           )}
 
           {isScreenSharingExpanded === 0 && isCameraExpanded === 0 && (
-            <button onClick={toggleScreenSharingExpand} className="absolute top-2 right-2 text-white hover:bg-gray-700 p-1 rounded-full">
+            <button
+              onClick={toggleScreenSharingExpand}
+              className="absolute top-2 right-2 text-white hover:bg-gray-700 p-1 rounded-full"
+            >
               <FiArrowUpRight size={24} />
             </button>
           )}
 
           {isScreenSharingExpanded === 1 && (
             <>
-              <button onClick={toggleScreenSharingExpand} className="absolute top-2 right-2 text-white hover:bg-gray-700 p-1 rounded-full">
+              <button
+                onClick={toggleScreenSharingExpand}
+                className="absolute top-2 right-2 text-white hover:bg-gray-700 p-1 rounded-full"
+              >
                 <FiArrowUpRight size={24} />
               </button>
-              <button onClick={() => setIsScreenSharingExpanded(0)} className="absolute top-2 right-12 text-white hover:bg-gray-700 p-1 rounded-full">
+              <button
+                onClick={() => setIsScreenSharingExpanded(0)}
+                className="absolute top-2 right-12 text-white hover:bg-gray-700 p-1 rounded-full"
+              >
                 <FiArrowDownLeft size={24} />
               </button>
             </>
           )}
 
           {isScreenSharingExpanded === 2 && (
-            <button onClick={() => setIsScreenSharingExpanded(0)} className="absolute top-2 right-2 text-white hover:bg-gray-700 p-1 rounded-full">
+            <button
+              onClick={() => setIsScreenSharingExpanded(0)}
+              className="absolute top-2 right-2 text-white hover:bg-gray-700 p-1 rounded-full"
+            >
               <FiArrowDownLeft size={24} />
             </button>
           )}
@@ -295,10 +316,10 @@ const RecordingPage = () => {
         </div>
       </div>
 
-      {/* Controls Area - Fixed at bottom */}
-      <div className="flex-shrink-0 h-20"> {/* 고정된 높이 추가 */}
+      {/* Controls Area */}
+      <div className="flex-shrink-0 h-20">
         {error && <div className="text-red-500 text-center p-4">{error}</div>}
-        <div className="flex justify-center items-center gap-4 p-4 bg-gray-800">
+        <div className="flex justify-center items-center gap-4 p-4 bg-[#1E1F22]">
           <Controls
             isRecording={isRecording}
             startRecording={startRecording}
@@ -308,16 +329,9 @@ const RecordingPage = () => {
             isSharing={isSharing}
             startSharing={startSharing}
             stopSharing={stopSharing}
+            isRecordingComplete={showDownload}
+            downloadRecording={downloadRecording}
           />
-          {showDownload && (
-            <button
-              onClick={downloadRecording}
-              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full flex items-center gap-2"
-            >
-              <DownloadIcon />
-              Download
-            </button>
-          )}
         </div>
       </div>
     </div>
