@@ -19,20 +19,31 @@ const Controls = ({
                     stopSharing,
                     isRecordingComplete,
                     downloadRecording,
-                    onFeedbackClick, // AI Feedback 클릭 핸들러 추가
+                    onFeedbackClick,
+                    recordedFile, // 녹음된 파일
+                    attachedFile, // 첨부된 파일
                   }: {
   isRecording: boolean;
-  startRecording: () => void;
+  startRecording: () => Promise<void>;
   stopRecording: () => void;
   isCameraOn: boolean;
   toggleCamera: () => void;
   isSharing: boolean;
-  startSharing: () => void;
+  startSharing: () => Promise<void>;
   stopSharing: () => void;
   isRecordingComplete: boolean;
   downloadRecording: () => void;
-  onFeedbackClick: () => void; // 클릭 핸들러 타입 정의 추가
+  onFeedbackClick: (recordedFile: Blob, attachedFile?: File) => void; // 클릭 핸들러 타입 정의 수정
+  recordedFile: Blob;
+  attachedFile?: File;
 }) => {
+  const handleFeedbackClick = () => {
+    if (recordedFile) {
+      // 녹음된 파일과 첨부 파일을 API로 전송
+      onFeedbackClick(recordedFile, attachedFile);
+    }
+  };
+
   return (
     <div className="w-full h-16 bg-[#1E1F22] flex justify-center items-center space-x-6">
       {/* Start/Stop Recording Button */}
@@ -61,14 +72,16 @@ const Controls = ({
         </button>
       )}
 
-      {/* AI Feedback Button - 우측 끝에 위치 */}
-      <button
-        onClick={onFeedbackClick}
-        className="ml-auto bg-[#FEE500] hover:bg-yellow-400 text-[#3B1E1E] px-4 py-2 rounded-full flex items-center gap-2"
-      >
-        <FeedbackIcon />
-        <span>Feedback</span>
-      </button>
+      {/* AI Feedback Button - 녹화가 완료되었을 때만 표시 */}
+      {isRecordingComplete && (
+        <button
+          onClick={handleFeedbackClick}
+          className="bg-[#FEE500] hover:bg-yellow-400 text-[#3B1E1E] px-4 py-2 rounded-full flex items-center gap-2"
+        >
+          <FeedbackIcon />
+          <span>Feedback</span>
+        </button>
+      )}
     </div>
   );
 };
