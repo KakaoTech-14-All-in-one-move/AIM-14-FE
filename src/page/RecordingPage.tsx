@@ -3,6 +3,7 @@ import CameraRecording from "../components/record/CameraRecording";
 import ScreenSharing from "../components/record/ScreenSharing";
 import Controls from "../components/record/Controls";
 import AudioWaveform from "../components/record/AudioWaveform";
+import FileUploadBox from '../components/record/FileUploadBox';
 import { FiArrowUpRight, FiArrowDownLeft } from "react-icons/fi";
 import Draggable from "react-draggable";
 
@@ -151,7 +152,7 @@ const RecordingPage = () => {
 
   const getScreenSharingClassName = () => {
     if (isScreenSharingExpanded === 2) return "w-full h-[70%]"; // Adjusted to occupy 70% of the height
-    if (isScreenSharingExpanded === 1) return "w-3/4 h-[70%] rounded-lg";
+    if (isScreenSharingExpanded === 1) return "w-3/4 h-[65%] rounded-lg mb-4";
     if (isCameraExpanded === 2) return "hidden";
     return isCameraExpanded === 1
       ? "w-1/5 h-[30%] mx-auto mt-6 rounded-lg border border-gray-300"
@@ -313,6 +314,11 @@ const RecordingPage = () => {
           )}
 
           {isScreenSharingExpanded === 2 && renderCameraPopup()}
+
+          {/* File Upload Box Area */}
+          <div className="w-full bg-[#1E1F22] border-t border-gray-700 flex-shrink-0 flex items-center justify-center p-4">
+            <FileUploadBox handleFileUpload={(file) => console.log("File uploaded:", file)} />
+          </div>
         </div>
       </div>
 
