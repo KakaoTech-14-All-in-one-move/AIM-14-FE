@@ -5,7 +5,8 @@ import RecordIcon from "../../icons/record";
 import MicIcon from "../../icons/mic";
 import ShareIcon from "../../icons/share";
 import CancelIcon from "../../icons/cancel";
-import DownloadIcon from "../../icons/download"; // DownloadIcon 추가
+import DownloadIcon from "../../icons/download";
+import FeedbackIcon from "../../icons/feedback"; // AI Feedback 아이콘 추가
 
 const Controls = ({
                     isRecording,
@@ -16,8 +17,9 @@ const Controls = ({
                     isSharing,
                     startSharing,
                     stopSharing,
-                    isRecordingComplete, // 녹화 완료 여부 추가
-                    downloadRecording, // 다운로드 함수 추가
+                    isRecordingComplete,
+                    downloadRecording,
+                    onFeedbackClick, // AI Feedback 클릭 핸들러 추가
                   }: {
   isRecording: boolean;
   startRecording: () => void;
@@ -27,8 +29,9 @@ const Controls = ({
   isSharing: boolean;
   startSharing: () => void;
   stopSharing: () => void;
-  isRecordingComplete: boolean; // 타입 정의 추가
-  downloadRecording: () => void; // 다운로드 함수 타입 정의 추가
+  isRecordingComplete: boolean;
+  downloadRecording: () => void;
+  onFeedbackClick: () => void; // 클릭 핸들러 타입 정의 추가
 }) => {
   return (
     <div className="w-full h-16 bg-[#1E1F22] flex justify-center items-center space-x-6">
@@ -47,7 +50,7 @@ const Controls = ({
         {isSharing ? <CancelIcon /> : <ShareIcon />}
       </button>
 
-      {/* Download Button - 녹화가 완료되었을 때 배경을 변경 */}
+      {/* Download Button - 녹화가 완료되었을 때만 표시 */}
       {isRecordingComplete && (
         <button
           onClick={downloadRecording}
@@ -57,6 +60,15 @@ const Controls = ({
           <span>Download</span>
         </button>
       )}
+
+      {/* AI Feedback Button - 우측 끝에 위치 */}
+      <button
+        onClick={onFeedbackClick}
+        className="ml-auto bg-[#FEE500] hover:bg-yellow-400 text-[#3B1E1E] px-4 py-2 rounded-full flex items-center gap-2"
+      >
+        <FeedbackIcon />
+        <span>Feedback</span>
+      </button>
     </div>
   );
 };
