@@ -18,6 +18,7 @@ const RecordingPage = () => {
   const [isScreenSharingExpanded, setIsScreenSharingExpanded] = useState(0);
   const [showDownload, setShowDownload] = useState(false);
   const [recordedChunks, setRecordedChunks] = useState<Blob[]>([]);
+  const [attachedFile, setAttachedFile] = useState<File | undefined>();
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 
   useEffect(() => {
@@ -201,6 +202,27 @@ const RecordingPage = () => {
     </Draggable>
   );
 
+  const handleFeedbackClick = (recordedFile: Blob, attachedFile?: File) => {
+    // 녹음된 파일과 첨부 파일을 특정 API로 전송하는 로직을 구현합니다.
+    const formData = new FormData();
+    formData.append("recordedFile", recordedFile);
+    if (attachedFile) {
+      formData.append("attachedFile", attachedFile);
+    }
+
+    fetch("YOUR_API_ENDPOINT", {
+      method: "POST",
+      body: formData,
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        console.log("Feedback submitted successfully:", data);
+      })
+      .catch((error) => {
+        console.error("Error submitting feedback:", error);
+      });
+  };
+
   return (
     <div className="h-screen w-full flex flex-col" style={{ backgroundColor: "#1E1F22" }}>
       <div className="flex-grow flex relative overflow-hidden">
@@ -317,7 +339,7 @@ const RecordingPage = () => {
 
           {/* File Upload Box Area */}
           <div className="w-full bg-[#1E1F22] border-t border-gray-700 flex-shrink-0 flex items-center justify-center p-4">
-            <FileUploadBox handleFileUpload={(file) => console.log("File uploaded:", file)} />
+            <FileUploadBox handleFileUpload={(file) => setAttachedFile(file || undefined)} />
           </div>
         </div>
       </div>
@@ -337,6 +359,9 @@ const RecordingPage = () => {
             stopSharing={stopSharing}
             isRecordingComplete={showDownload}
             downloadRecording={downloadRecording}
+            onFeedbackClick={handleFeedbackClick}
+            recordedFile={new Blob(recordedChunks, { type: isCameraOn ? "video/webm" : "audio/webm" })}
+            attachedFile={attachedFile}
           />
         </div>
       </div>

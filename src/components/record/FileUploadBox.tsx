@@ -42,7 +42,7 @@ const FileUploadBox: React.FC<FileUploadBoxProps> = ({ handleFileUpload }) => {
 
   return (
     <div
-      className={`mt-4 w-full p-6 bg-gray-50 border-t border-gray-600 ${
+      className={`mt-6 w-full p-6 bg-gray-50 border-t border-gray-600 ${
         isDragActive ? 'border-2 border-dashed border-blue-500' : 'border-dashed border-2 border-gray-400'
       } flex justify-center items-center flex-col h-40 cursor-pointer`}
       onDragOver={onDragOver}
