@@ -152,12 +152,12 @@ const RecordingPage = () => {
   };
 
   const getScreenSharingClassName = () => {
-    if (isScreenSharingExpanded === 2) return "w-full h-[70%]"; // Adjusted to occupy 70% of the height
+    if (isScreenSharingExpanded === 2) return "w-full h-full";
     if (isScreenSharingExpanded === 1) return "w-3/4 h-[65%] rounded-lg mb-4";
     if (isCameraExpanded === 2) return "hidden";
     return isCameraExpanded === 1
       ? "w-1/5 h-[30%] mx-auto mt-6 rounded-lg border border-gray-300"
-      : "w-1/2 h-[70%]"; // Set the height to 70%
+      : "w-1/2 h-[70%]";
   };
 
   const renderCameraPopup = () => (
@@ -203,7 +203,6 @@ const RecordingPage = () => {
   );
 
   const handleFeedbackClick = (recordedFile: Blob, attachedFile?: File) => {
-    // 녹음된 파일과 첨부 파일을 특정 API로 전송하는 로직을 구현합니다.
     const formData = new FormData();
     formData.append("recordedFile", recordedFile);
     if (attachedFile) {
@@ -337,10 +336,12 @@ const RecordingPage = () => {
 
           {isScreenSharingExpanded === 2 && renderCameraPopup()}
 
-          {/* File Upload Box Area */}
-          <div className="w-full bg-[#1E1F22] border-t border-gray-700 flex-shrink-0 flex items-center justify-center p-4">
-            <FileUploadBox handleFileUpload={(file) => setAttachedFile(file || undefined)} />
-          </div>
+          {/* File Upload Box Area - Only show when not fully expanded */}
+          {isScreenSharingExpanded !== 2 && (
+            <div className="w-full bg-[#1E1F22] border-t border-gray-700 flex-shrink-0 flex items-center justify-center p-4">
+              <FileUploadBox handleFileUpload={(file) => setAttachedFile(file || undefined)} />
+            </div>
+          )}
         </div>
       </div>
 
