@@ -150,12 +150,12 @@ const RecordingPage = () => {
   };
 
   const getScreenSharingClassName = () => {
-    if (isScreenSharingExpanded === 2) return "w-full h-full";
-    if (isScreenSharingExpanded === 1) return "w-3/4 h-full rounded-lg";
+    if (isScreenSharingExpanded === 2) return "w-full h-[70%]"; // Adjusted to occupy 70% of the height
+    if (isScreenSharingExpanded === 1) return "w-3/4 h-[70%] rounded-lg";
     if (isCameraExpanded === 2) return "hidden";
     return isCameraExpanded === 1
-      ? "w-1/5 h-2/5 mx-auto mt-6 rounded-lg border border-gray-300"
-      : "w-1/2 h-full";
+      ? "w-1/5 h-[30%] mx-auto mt-6 rounded-lg border border-gray-300"
+      : "w-1/2 h-[70%]"; // Set the height to 70%
   };
 
   const renderCameraPopup = () => (
@@ -187,8 +187,8 @@ const RecordingPage = () => {
   );
 
   const renderScreenSharingPopup = () => (
-    <Draggable>
-      <div className="absolute bottom-4 right-4 w-48 h-32 bg-gray-700 text-sm p-2 rounded-lg border border-gray-300 shadow-lg z-50">
+    <Draggable bounds="parent">
+      <div className="absolute bottom-4 left-4 w-48 h-32 bg-gray-700 text-sm p-2 rounded-lg border border-gray-300 shadow-lg z-50 overflow-hidden">
         {screenStream ? (
           <ScreenSharing stream={screenStream} />
         ) : (
