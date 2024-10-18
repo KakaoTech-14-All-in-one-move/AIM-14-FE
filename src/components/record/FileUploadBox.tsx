@@ -7,6 +7,7 @@ interface FileUploadBoxProps {
 
 const FileUploadBox: React.FC<FileUploadBoxProps> = ({ handleFileUpload }) => {
   const [isDragActive, setIsDragActive] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const onDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -24,6 +25,7 @@ const FileUploadBox: React.FC<FileUploadBoxProps> = ({ handleFileUpload }) => {
     const file = e.dataTransfer.files[0];
     if (file) {
       handleFileUpload(file);
+      setUploadedFile(file);
     }
   };
 
@@ -37,6 +39,7 @@ const FileUploadBox: React.FC<FileUploadBoxProps> = ({ handleFileUpload }) => {
     const file = e.target.files?.[0];
     if (file) {
       handleFileUpload(file);
+      setUploadedFile(file);
     }
   };
 
@@ -52,7 +55,11 @@ const FileUploadBox: React.FC<FileUploadBoxProps> = ({ handleFileUpload }) => {
     >
       <div className="text-center">
         <FaFileUpload size={50} color="#007bff" className="mx-auto" />
-        <h2 className="mt-4 text-gray-800 font-semibold">Drag and drop your file here or click to upload</h2>
+        {uploadedFile ? (
+          <p className="mt-4 text-gray-800 font-semibold">Uploaded file: {uploadedFile.name}</p>
+        ) : (
+          <h2 className="mt-4 text-gray-800 font-semibold">Drag and drop your file here or click to upload</h2>
+        )}
       </div>
       {/* Hidden file input */}
       <input type="file" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} />
