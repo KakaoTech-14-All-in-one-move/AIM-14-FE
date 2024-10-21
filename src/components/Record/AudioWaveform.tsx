@@ -46,7 +46,7 @@ const AudioWaveform = ({ isRecording }: AudioWaveformProps) => {
   return (
     <div className="flex flex-col items-center justify-center h-full w-full">
       {/* Mic Icon with adjusted position */}
-      <BigMicIcon className="w-16 h-16 mb-8 mt-4 text-white max-w-full max-h-full" /> {/* Increased margin-bottom and margin-top */}
+      <BigMicIcon /> {/* Increased margin-bottom and margin-top */}
 
       {/* Waveform */}
       <div className="flex justify-center items-end space-x-1 h-full w-full max-h-40 mt-4">
