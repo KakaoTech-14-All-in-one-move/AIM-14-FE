@@ -160,7 +160,8 @@ const Index = () => {
           </div>
         ) : (
           <div className="text-white flex items-center justify-center h-full relative">
-            <AudioWaveform isRecording={isRecording} />
+            <AudioWaveform isRecording={isRecording}
+                           isScreenSharingExpanded={isScreenSharingExpanded} isCameraExpanded={isCameraExpanded}/>
             {isRecording && (
               <div className="absolute top-2 left-2 flex items-center">
                 <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse mr-2" />
@@ -257,7 +258,8 @@ const Index = () => {
             </div>
           ) : (
             <div className="flex items-center justify-center text-white h-full relative">
-              <AudioWaveform isRecording={isRecording} />
+              <AudioWaveform isRecording={isRecording}
+                             isScreenSharingExpanded={isScreenSharingExpanded} isCameraExpanded={isCameraExpanded}/>
               {isRecording && (
                 <div className="absolute top-4 left-4 flex items-center">
                   <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse mr-2" />
