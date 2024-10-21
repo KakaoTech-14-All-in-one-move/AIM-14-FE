@@ -144,30 +144,10 @@ const Index = () => {
     }
   };
 
-  const getCameraClassName = () => {
-    if (isCameraExpanded === 2) return "w-full h-full";
-    if (isCameraExpanded === 1) return "w-3/4 h-full rounded-lg";
-    if (isScreenSharingExpanded === 2) return "hidden";
-    return isScreenSharingExpanded === 1 ? "w-1/5 h-2/5 mx-auto mt-6 rounded-lg" : "w-1/2 h-full";
-  };
-
-  const getScreenSharingClassName = () => {
-    if (isScreenSharingExpanded === 2) return "w-full h-full";
-    if (isScreenSharingExpanded === 1) return "w-3/4 h-full rounded-lg"; // 수정된 부분
-    if (isCameraExpanded === 2) return "hidden";
-    return isCameraExpanded === 1
-      ? "w-[22.5%] h-[30%] mx-auto mt-6 ml-6 rounded-lg border border-gray-700"
-      : "w-1/2 h-[72.3%] p-2";
-  };
-
-  const getFileUploadBoxClassName = () => {
-    if (isCameraExpanded === 1) return "p-0 mt-6";
-    return "pl-1/2 pt-1.5";
-  }
-
   const renderCameraPopup = () => (
     <Draggable bounds="parent">
-      <div className="absolute bottom-4 right-4 w-48 h-32 bg-black text-sm p-2 rounded-lg border border-gray-300 shadow-lg z-50 overflow-hidden">
+      <div
+        className="absolute bottom-4 right-4 w-48 h-32 bg-black text-sm p-2 rounded-lg border border-gray-300 shadow-lg z-50 overflow-hidden">
         {isCameraOn ? (
           <div className="relative w-full h-full">
             <CameraRecording stream={cameraStream} />
@@ -195,7 +175,8 @@ const Index = () => {
 
   const renderScreenSharingPopup = () => (
     <Draggable bounds="parent">
-      <div className="absolute bottom-4 left-4 w-48 h-32 bg-gray-700 text-sm p-2 rounded-lg border border-gray-300 shadow-lg z-50 overflow-hidden">
+      <div
+        className="absolute bottom-4 left-4 w-48 h-32 bg-gray-700 text-sm p-2 rounded-lg border border-gray-300 shadow-lg z-50 overflow-hidden">
         {screenStream ? (
           <ScreenSharing stream={screenStream} />
         ) : (
@@ -227,11 +208,32 @@ const Index = () => {
       });
   };
 
+  const getCameraClassName = () => {
+    if (isCameraExpanded === 2) return "flex-1 w-full h-full";
+    if (isCameraExpanded === 1) return "flex-[0.5] h-full rounded-lg";
+    if (isScreenSharingExpanded === 2) return "hidden";
+    return isScreenSharingExpanded === 1
+      ? "flex-[0.35] w-[35%] h-[40%] mx-auto mt-6 rounded-lg"
+      : "";
+  };
+
+  const getScreenSharingClassName = () => {
+    if (isScreenSharingExpanded === 2) return "flex-1 w-full h-full";
+    if (isScreenSharingExpanded === 1) return "flex-[0.5] h-full rounded-lg";
+    if (isCameraExpanded === 2) return "hidden";
+    return isCameraExpanded === 1
+      ? "flex-[0.35] h-[30%] mx-auto mt-6 ml-6 rounded-lg border border-gray-700"
+      : "";
+  };
+
   return (
     <div className="h-screen w-full flex flex-col" style={{ backgroundColor: "#1E1F22" }}>
       <div className="flex-grow flex relative overflow-hidden">
-        {/* Camera Area */}
-        <div className={`relative transition-all duration-500 ${getCameraClassName()} bg-black flex-shrink-0`}>
+
+        {/* 좌측 영역 (카메라) */}
+        <div
+          className={`flex-1 flex flex-col relative transition-all duration-500 border border-gray-600 rounded-lg bg-[#1E1F22]
+                    flex-shrink-0 m-2 mt-3 ${getCameraClassName()}`}>
           {isCameraOn ? (
             <div className="relative h-full">
               <CameraRecording stream={cameraStream} />
@@ -292,68 +294,71 @@ const Index = () => {
           {isCameraExpanded === 2 && renderScreenSharingPopup()}
         </div>
 
-        {/* Screen Sharing Area */}
+        {/* 우측 영역 */}
         <div
-          className={`relative transition-all duration-500 ${getScreenSharingClassName()} 
-          bg-[#1E1F22] flex-shrink-0`}
-        >
-          {screenStream ? (
-            <ScreenSharing stream={screenStream} />
-          ) : (
-            <div className="text-white flex items-center justify-center h-full text-sm" style={{ backgroundColor: "#1E1F22" }}>
-              {isSharing ? "Initializing screen share..." : "Screen sharing not started"}
-            </div>
-          )}
+          className="flex-1 flex flex-col relative transition-all duration-500 bg-[#1E1F22]
+                    flex-shrink-0 ml-1 m-2 mt-3">
+          {/* 화면 공유 영역 */}
+          <div className={`flex-[0.7] relative transition-all duration-500 border border-gray-600 rounded-lg 
+                        p-1 mb-1 ${getScreenSharingClassName()}`}>
+            {screenStream ? (
+              <ScreenSharing stream={screenStream} />
+            ) : (
+              <div className="text-white flex items-center justify-center h-full text-sm"
+                   style={{ backgroundColor: "#1E1F22" }}>
+                {isSharing ? "Initializing screen share..." : "Screen sharing not started"}
+              </div>
+            )}
 
-          {isScreenSharingExpanded === 0 && isCameraExpanded === 0 && (
-            <button
-              onClick={toggleScreenSharingExpand}
-              className="absolute top-2 right-2 text-white hover:bg-gray-700 p-1 rounded-full"
-            >
-              <FiArrowUpRight size={24} />
-            </button>
-          )}
-
-          {isScreenSharingExpanded === 1 && (
-            <>
+            {isScreenSharingExpanded === 0 && isCameraExpanded === 0 && (
               <button
                 onClick={toggleScreenSharingExpand}
                 className="absolute top-2 right-2 text-white hover:bg-gray-700 p-1 rounded-full"
               >
                 <FiArrowUpRight size={24} />
               </button>
+            )}
+
+            {isScreenSharingExpanded === 1 && (
+              <>
+                <button
+                  onClick={toggleScreenSharingExpand}
+                  className="absolute top-2 right-2 text-white hover:bg-gray-700 p-1 rounded-full"
+                >
+                  <FiArrowUpRight size={24} />
+                </button>
+                <button
+                  onClick={() => setIsScreenSharingExpanded(0)}
+                  className="absolute top-2 right-12 text-white hover:bg-gray-700 p-1 rounded-full"
+                >
+                  <FiArrowDownLeft size={24} />
+                </button>
+              </>
+            )}
+
+            {isScreenSharingExpanded === 2 && (
               <button
                 onClick={() => setIsScreenSharingExpanded(0)}
-                className="absolute top-2 right-12 text-white hover:bg-gray-700 p-1 rounded-full"
+                className="absolute top-2 right-2 text-white hover:bg-gray-700 p-1 rounded-full"
               >
                 <FiArrowDownLeft size={24} />
               </button>
-            </>
-          )}
+            )}
 
-          {isScreenSharingExpanded === 2 && (
-            <button
-              onClick={() => setIsScreenSharingExpanded(0)}
-              className="absolute top-2 right-2 text-white hover:bg-gray-700 p-1 rounded-full"
-            >
-              <FiArrowDownLeft size={24} />
-            </button>
-          )}
+            {isScreenSharingExpanded === 2 && renderCameraPopup()}
+          </div>
 
-          {isScreenSharingExpanded === 2 && renderCameraPopup()}
-
-          {/* File Upload Box Area - Only show when not fully expanded and screen sharing is not at level 1 */}
-          {isScreenSharingExpanded !== 2 && isScreenSharingExpanded !== 1 && (
-            <div className={`w-full bg-[#1E1F22] border-gray-700 flex-shrink-0 flex 
-                            items-center justify-center ${getFileUploadBoxClassName()}`}>
-              <FileUploadBox handleFileUpload={(file) => setAttachedFile(file || undefined)} />
-            </div>
-          )}
+          {/* 파일 업로드 영역 */}
+          <div
+            className="flex-[0.3] relative transition-all duration-500 rounded-b-lg
+                      flex items-center justify-center mt-2">
+            <FileUploadBox handleFileUpload={(file) => setAttachedFile(file || undefined)} />
+          </div>
         </div>
       </div>
 
-      {/* Controls Area */}
-      <div className="flex-shrink-0 h-20">
+      {/* 컨트롤 영역 */}
+      <div className="flex-shrink-0 h-15">
         {error && <div className="text-red-500 text-center p-4">{error}</div>}
         <div className="flex justify-center items-center gap-4 p-4 bg-[#1E1F22]">
           <Controls
@@ -375,6 +380,5 @@ const Index = () => {
       </div>
     </div>
   );
-};
-
+}
 export default Index;
