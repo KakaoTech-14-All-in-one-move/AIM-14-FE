@@ -45,9 +45,9 @@ const FileUploadBox: React.FC<FileUploadBoxProps> = ({ handleFileUpload }) => {
 
   return (
     <div
-      className={`mt-6 w-full p-6 bg-gray-50 border-t border-gray-600 ${
-        isDragActive ? 'border-2 border-dashed border-blue-500' : 'border-dashed border-2 border-gray-400'
-      } flex justify-center items-center flex-col h-40 cursor-pointer`}
+      className={`mt-0.5 w-full h-64 bg-[#232428] border border-gray-600 rounded-lg ${
+        isDragActive ? 'border-2 border-blue-500 ' : 'border border-gray-400'
+      } flex justify-center items-center flex-col cursor-pointer`}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
@@ -56,9 +56,9 @@ const FileUploadBox: React.FC<FileUploadBoxProps> = ({ handleFileUpload }) => {
       <div className="text-center">
         <FaFileUpload size={50} color="#007bff" className="mx-auto" />
         {uploadedFile ? (
-          <p className="mt-4 text-gray-800 font-semibold">Uploaded file: {uploadedFile.name}</p>
+          <p className="mt-4 text-white font-semibold">Uploaded file: {uploadedFile.name}</p>
         ) : (
-          <h2 className="mt-4 text-gray-800 font-semibold">Drag and drop your file here or click to upload</h2>
+          <h2 className="mt-4 text-white font-semibold">Drag and drop your file here or click to upload</h2>
         )}
       </div>
       {/* Hidden file input */}
