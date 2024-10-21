@@ -1,6 +1,5 @@
 import StopIcon from "../../common/icons/stop";
 import CameraOnIcon from "../../common/icons/camera-on";
-import CameraOffIcon from "../../common/icons/camera-off";
 import RecordIcon from "../../common/icons/record";
 import MicIcon from "../../common/icons/mic";
 import ShareIcon from "../../common/icons/share";
@@ -48,12 +47,12 @@ const Controls = ({
     <div className="w-full h-16 bg-[#1E1F22] flex justify-center items-center space-x-6">
       {/* Start/Stop Recording Button */}
       <button onClick={isRecording ? stopRecording : startRecording} className="bg-white p-2 rounded-full">
-        {isRecording ? <StopIcon /> : isCameraOn ? <RecordIcon /> : <MicIcon />}
+        {isRecording ? <StopIcon /> : <RecordIcon />}
       </button>
 
       {/* Camera On/Off Button */}
       <button onClick={toggleCamera} className="bg-white p-2 rounded-full">
-        {isCameraOn ? <CameraOnIcon /> : <CameraOffIcon />}
+        {isCameraOn ? <CameraOnIcon /> : <MicIcon />}
       </button>
 
       {/* Screen Share/Cancel Button */}
