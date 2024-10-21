@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from "react";
-import CameraRecording from "../components/record/CameraRecording";
-import ScreenSharing from "../components/record/ScreenSharing";
-import Controls from "../components/record/Controls";
-import AudioWaveform from "../components/record/AudioWaveform";
-import FileUploadBox from '../components/record/FileUploadBox';
+import CameraRecording from "./CameraRecording.tsx";
+import ScreenSharing from "./ScreenSharing.tsx";
+import Controls from "./Controls.tsx";
+import AudioWaveform from "./AudioWaveform.tsx";
+import FileUploadBox from './FileUploadBox.tsx';
 import { FiArrowUpRight, FiArrowDownLeft } from "react-icons/fi";
 import Draggable from "react-draggable";
 
-const RecordingPage = () => {
+const Index = () => {
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -370,4 +370,4 @@ const RecordingPage = () => {
   );
 };
 
-export default RecordingPage;
+export default Index;
