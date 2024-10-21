@@ -147,7 +147,7 @@ const Index = () => {
   const renderCameraPopup = () => (
     <Draggable bounds="parent">
       <div
-        className="absolute bottom-4 right-4 w-48 h-32 bg-black text-sm p-2 rounded-lg border border-gray-300 shadow-lg z-50 overflow-hidden">
+        className="absolute bottom-4 right-4 w-48 h-32 bg-black text-sm rounded-lg border border-gray-300 shadow-lg z-50 overflow-hidden">
         {isCameraOn ? (
           <div className="relative w-full h-full">
             <CameraRecording stream={cameraStream} />
@@ -176,7 +176,7 @@ const Index = () => {
   const renderScreenSharingPopup = () => (
     <Draggable bounds="parent">
       <div
-        className="absolute bottom-4 left-4 w-48 h-32 bg-gray-700 text-sm p-2 rounded-lg border border-gray-300 shadow-lg z-50 overflow-hidden">
+        className="absolute bottom-4 left-4 w-48 h-32 bg-gray-700 text-sm rounded-lg border border-gray-300 shadow-lg z-50 overflow-hidden">
         {screenStream ? (
           <ScreenSharing stream={screenStream} />
         ) : (
@@ -213,12 +213,12 @@ const Index = () => {
     if (isCameraExpanded === 1) return "flex-1 rounded-lg";
     if (isScreenSharingExpanded === 2) return "hidden";
     return isScreenSharingExpanded === 1
-      ? "flex-[0.35] w-[35%] h-[40%] mx-auto mt-6 rounded-lg"
+      ? "flex-[0.35] w-[35%] h-[40%] mx-auto mt-6 ml-2 mr-2 rounded-lg"
       : "";
   };
 
   const getRightSideClassName = () => {
-    if (isCameraExpanded === 1) return "flex-[0.35] h-full mx-auto mt-6 ml-6 rounded-lg";
+    if (isCameraExpanded === 1) return "flex-[0.35] h-full mx-auto mt-6 ml-6 rounded-lg mr-2";
     if (isCameraExpanded === 2) return 'hidden';
   }
 
@@ -311,11 +311,11 @@ const Index = () => {
                     flex-shrink-0 ml-1 m-2 mt-3 ${getRightSideClassName()}`}>
           {/* 화면 공유 영역 */}
           <div className={`relative transition-all duration-500 border border-gray-600 rounded-lg 
-                        p-1 mb-1 ${getScreenSharingClassName()}`}>
+                        mb-1 ${getScreenSharingClassName()}`} style={{ overflow: 'hidden' }}>
             {screenStream ? (
               <ScreenSharing stream={screenStream} />
             ) : (
-              <div className="text-white flex items-center justify-center h-full text-sm"
+              <div className="text-white h-full flex items-center justify-center text-sm"
                    style={{ backgroundColor: "#1E1F22" }}>
                 {isSharing ? "Initializing screen share..." : "Screen sharing not started"}
               </div>
