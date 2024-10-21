@@ -14,7 +14,7 @@ const ScreenSharing = ({ stream }: { stream: MediaStream | null }) => {
       <video
         ref={videoRef}
         autoPlay
-        className="w-full h-full object-cover border-4 border-gray-700 rounded-md"
+        className="w-full h-full object-cover border-2 border-gray-700 rounded-md"
       />
     </div>
   );

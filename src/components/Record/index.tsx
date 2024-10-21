@@ -156,9 +156,14 @@ const Index = () => {
     if (isScreenSharingExpanded === 1) return "w-3/4 h-full rounded-lg"; // 수정된 부분
     if (isCameraExpanded === 2) return "hidden";
     return isCameraExpanded === 1
-      ? "w-1/5 h-[30%] mx-auto mt-6 rounded-lg border border-gray-300"
-      : "w-1/2 h-[71.5%]";
+      ? "w-[22.5%] h-[30%] mx-auto mt-6 ml-6 rounded-lg border border-gray-700"
+      : "w-1/2 h-[72.3%] p-2";
   };
+
+  const getFileUploadBoxClassName = () => {
+    if (isCameraExpanded === 1) return "p-0 mt-6";
+    return "pl-1/2 pt-1.5";
+  }
 
   const renderCameraPopup = () => (
     <Draggable bounds="parent">
@@ -290,12 +295,12 @@ const Index = () => {
         {/* Screen Sharing Area */}
         <div
           className={`relative transition-all duration-500 ${getScreenSharingClassName()} 
-          bg-gray-700 flex-shrink-0 border border-black`}
+          bg-[#1E1F22] flex-shrink-0`}
         >
           {screenStream ? (
             <ScreenSharing stream={screenStream} />
           ) : (
-            <div className="text-white flex items-center justify-center h-full text-sm" style={{ backgroundColor: "#2B2D31" }}>
+            <div className="text-white flex items-center justify-center h-full text-sm" style={{ backgroundColor: "#1E1F22" }}>
               {isSharing ? "Initializing screen share..." : "Screen sharing not started"}
             </div>
           )}
@@ -339,7 +344,8 @@ const Index = () => {
 
           {/* File Upload Box Area - Only show when not fully expanded and screen sharing is not at level 1 */}
           {isScreenSharingExpanded !== 2 && isScreenSharingExpanded !== 1 && (
-            <div className="w-full bg-[#1E1F22] border-t border-gray-700 flex-shrink-0 flex items-center justify-center p-2">
+            <div className={`w-full bg-[#1E1F22] border-gray-700 flex-shrink-0 flex 
+                            items-center justify-center ${getFileUploadBoxClassName()}`}>
               <FileUploadBox handleFileUpload={(file) => setAttachedFile(file || undefined)} />
             </div>
           )}
