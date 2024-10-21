@@ -65,7 +65,7 @@ const Controls = ({
       {isRecordingComplete && (
         <button
           onClick={downloadRecording}
-          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full flex items-center gap-2"
+          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-3 rounded-full flex items-center gap-2"
         >
           <DownloadIcon />
           <span>Download</span>
