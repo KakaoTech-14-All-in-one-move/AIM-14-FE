@@ -1,12 +1,12 @@
-import StopIcon from "../../icons/stop";
-import CameraOnIcon from "../../icons/camera-on";
-import CameraOffIcon from "../../icons/camera-off";
-import RecordIcon from "../../icons/record";
-import MicIcon from "../../icons/mic";
-import ShareIcon from "../../icons/share";
-import CancelIcon from "../../icons/cancel";
-import DownloadIcon from "../../icons/download";
-import FeedbackIcon from "../../icons/feedback"; // AI Feedback 아이콘 추가
+import StopIcon from "../../common/icons/stop";
+import CameraOnIcon from "../../common/icons/camera-on";
+import CameraOffIcon from "../../common/icons/camera-off";
+import RecordIcon from "../../common/icons/record";
+import MicIcon from "../../common/icons/mic";
+import ShareIcon from "../../common/icons/share";
+import CancelIcon from "../../common/icons/cancel";
+import DownloadIcon from "../../common/icons/download";
+import FeedbackIcon from "../../common/icons/feedback"; // AI Feedback 아이콘 추가
 
 const Controls = ({
                     isRecording,

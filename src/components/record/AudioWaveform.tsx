@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import BigMicIcon from "../../icons/big-mic.tsx";
+import BigMicIcon from "../../common/icons/big-mic.tsx";
 
 interface AudioWaveformProps {
   isRecording: boolean;

@@ -1,4 +1,4 @@
-import recordIcon from '../icons/record.png';
+import recordIcon from './record.png';
 
 const RecordIcon = () => (
   <img width="20" height="20" src={recordIcon} alt="record" />
