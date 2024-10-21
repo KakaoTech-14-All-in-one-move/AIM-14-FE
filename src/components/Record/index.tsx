@@ -209,22 +209,33 @@ const Index = () => {
   };
 
   const getCameraClassName = () => {
-    if (isCameraExpanded === 2) return "flex-1 w-full h-full";
-    if (isCameraExpanded === 1) return "flex-[0.5] h-full rounded-lg";
+    if (isCameraExpanded === 2) return "flex-1 w-full";
+    if (isCameraExpanded === 1) return "flex-1 rounded-lg";
     if (isScreenSharingExpanded === 2) return "hidden";
     return isScreenSharingExpanded === 1
       ? "flex-[0.35] w-[35%] h-[40%] mx-auto mt-6 rounded-lg"
       : "";
   };
 
+  const getRightSideClassName = () => {
+    if (isCameraExpanded === 1) return "flex-[0.35] h-full mx-auto mt-6 ml-6 rounded-lg";
+    if (isCameraExpanded === 2) return 'hidden';
+  }
+
   const getScreenSharingClassName = () => {
     if (isScreenSharingExpanded === 2) return "flex-1 w-full h-full";
-    if (isScreenSharingExpanded === 1) return "flex-[0.5] h-full rounded-lg";
+    if (isScreenSharingExpanded === 1) return "flex-1 h-full rounded-lg";
     if (isCameraExpanded === 2) return "hidden";
     return isCameraExpanded === 1
-      ? "flex-[0.35] h-[30%] mx-auto mt-6 ml-6 rounded-lg border border-gray-700"
-      : "";
+      ? "flex-[0.35] h-[30%] rounded-lg border-2 border-gray-600"
+      : "flex-[0.7]";
   };
+
+  const getFileUploadBoxClassName = () => {
+    if (isScreenSharingExpanded === 1 || isScreenSharingExpanded === 2 || isCameraExpanded === 2) return "hidden";
+    if (isCameraExpanded === 1) return "flex-[0.35] h-[30%] mt-6 rounded-lg border border-gray-700"
+    return "";
+  }
 
   return (
     <div className="h-screen w-full flex flex-col" style={{ backgroundColor: "#1E1F22" }}>
@@ -296,10 +307,10 @@ const Index = () => {
 
         {/* 우측 영역 */}
         <div
-          className="flex-1 flex flex-col relative transition-all duration-500 bg-[#1E1F22]
-                    flex-shrink-0 ml-1 m-2 mt-3">
+          className={`flex-1 flex flex-col relative transition-all duration-500 bg-[#1E1F22]
+                    flex-shrink-0 ml-1 m-2 mt-3 ${getRightSideClassName()}`}>
           {/* 화면 공유 영역 */}
-          <div className={`flex-[0.7] relative transition-all duration-500 border border-gray-600 rounded-lg 
+          <div className={`relative transition-all duration-500 border border-gray-600 rounded-lg 
                         p-1 mb-1 ${getScreenSharingClassName()}`}>
             {screenStream ? (
               <ScreenSharing stream={screenStream} />
@@ -350,8 +361,8 @@ const Index = () => {
 
           {/* 파일 업로드 영역 */}
           <div
-            className="flex-[0.3] relative transition-all duration-500 rounded-b-lg
-                      flex items-center justify-center mt-2">
+            className={`flex-[0.3] relative transition-all duration-500 rounded-b-lg
+                      flex items-center justify-center mt-2 ${getFileUploadBoxClassName()}`}>
             <FileUploadBox handleFileUpload={(file) => setAttachedFile(file || undefined)} />
           </div>
         </div>
