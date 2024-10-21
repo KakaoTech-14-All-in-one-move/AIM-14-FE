@@ -6,7 +6,7 @@ import { HomeIcon } from '@/components/Home/Sidebar/icons/HomeIcon';
 
 const Sidebar: React.FC = () => {
   const { servers, addServer, removeServer } = useServerStore();
-  const [selectedServer, setSelectedServer] = useState<number>(-1);  // -1은 홈을 나타냄
+  const [selectedServer, setSelectedServer] = useState<number>(-1); // -1은 홈을 나타냄
 
   return (
     <div className="h-screen w-16 flex flex-col bg-discord900 shadow-lg">

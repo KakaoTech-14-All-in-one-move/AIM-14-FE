@@ -6,7 +6,7 @@ import SocialLoginButton from '@/components/Login/SocialLoginButton';
 import RegisterMember from '@/components/Login/RegisterMember';
 
 const LoginForm: React.FC = () => {
-  const { username, password, setEmail, setPassword, login } = useStore();
+  const { email, password, setEmail, setPassword, login } = useStore();
   const navigate = useNavigate();
   const { openRegister } = useMemberStore(); // 팝업 여는 함수
 
@@ -26,8 +26,8 @@ const LoginForm: React.FC = () => {
           <div className="space-y-1">
             <label className="text-sm font-medium text-gray-300">이메일</label>
             <input
-              type="text"
-              value={username}
+              type="email"
+              value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-2 border rounded-md bg-discord700 text-white border-discord600
                focus:border-yellow-300 focus:ring-yellow-300 focus:outline-none"
