@@ -245,7 +245,7 @@ const Index = () => {
         {/* 좌측 영역 (카메라) */}
         <div
           className={`flex-1 flex flex-col relative transition-all duration-500 border border-gray-600 rounded-lg bg-[#232428]
-                    flex-shrink-0 m-2 mt-3 ${getCameraClassName()}`}>
+                    flex-shrink-0 m-2 mt-3 ml-2.5 ${getCameraClassName()}`}>
           {isCameraOn ? (
             <div className="relative h-full">
               <CameraRecording stream={cameraStream} />
@@ -310,7 +310,7 @@ const Index = () => {
         {/* 우측 영역 */}
         <div
           className={`flex-1 flex flex-col relative transition-all duration-500 bg-[#1E1F22]
-                    flex-shrink-0 ml-1 m-2 mt-3 ${getRightSideClassName()}`}>
+                    flex-shrink-0 ml-1 m-2 mt-3 mr-2.5 ${getRightSideClassName()}`}>
           {/* 화면 공유 영역 */}
           <div className={`relative transition-all duration-500 border border-gray-600 rounded-lg 
                         mb-1 ${getScreenSharingClassName()}`} style={{ overflow: 'hidden' }}>
