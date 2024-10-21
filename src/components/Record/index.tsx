@@ -244,7 +244,7 @@ const Index = () => {
 
         {/* 좌측 영역 (카메라) */}
         <div
-          className={`flex-1 flex flex-col relative transition-all duration-500 border border-gray-600 rounded-lg bg-[#1E1F22]
+          className={`flex-1 flex flex-col relative transition-all duration-500 border border-gray-600 rounded-lg bg-[#232428]
                     flex-shrink-0 m-2 mt-3 ${getCameraClassName()}`}>
           {isCameraOn ? (
             <div className="relative h-full">
@@ -318,7 +318,7 @@ const Index = () => {
               <ScreenSharing stream={screenStream} />
             ) : (
               <div className="text-white h-full flex items-center justify-center text-sm"
-                   style={{ backgroundColor: "#1E1F22" }}>
+                   style={{ backgroundColor: "#232428" }}>
                 {isSharing ? "Initializing screen share..." : "Screen sharing not started"}
               </div>
             )}
