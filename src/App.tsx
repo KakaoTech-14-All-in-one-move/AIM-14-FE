@@ -2,7 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import Home from '../src/components/Home';
 import Login from '../src/components/Login';
-import Index from './components/record';
+import Index from './components/Record';
 import { useStore } from './stores/login';
 
 const App: React.FC = () => {
