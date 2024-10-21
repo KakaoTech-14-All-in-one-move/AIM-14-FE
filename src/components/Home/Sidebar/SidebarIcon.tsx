@@ -11,7 +11,12 @@ interface SidebarIconProps {
 }
 
 export const SidebarIcon: React.FC<SidebarIconProps> = ({
-  icon, text, isSelected, onClick, onRemove, noLeftBar,
+  icon,
+  text,
+  isSelected,
+  onClick,
+  onRemove,
+  noLeftBar,
 }) => {
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
