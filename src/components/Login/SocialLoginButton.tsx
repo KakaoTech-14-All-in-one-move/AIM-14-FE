@@ -25,7 +25,7 @@ const SocialLoginButton: React.FC<SocialLoginButtonProps> = ({ provider }) => {
   const getButtonContent = () => {
     switch (provider) {
       case 'google':
-        return <img src="/google_login_logo.png" alt="Google Login" className="h-12" />;
+        return <img src="/google_login_logo.webp" alt="Google Login" className="h-12 bg-white rounded-full" />;
       case 'naver':
         return <img src="/naver_login_logo.png" alt="Naver Login" className="h-12" />;
       case 'kakao':
