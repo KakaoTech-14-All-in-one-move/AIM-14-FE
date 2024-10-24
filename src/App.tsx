@@ -9,9 +9,7 @@ const App: React.FC = () => {
     <Router>
       <ToastProvider>
         <AuthEventHandler />
-        <div className="min-h-screen bg-discord900">
-          <AppRoutes />
-        </div>
+        <AppRoutes />
       </ToastProvider>
     </Router>
   );
