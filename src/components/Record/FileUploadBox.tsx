@@ -17,9 +17,7 @@ const FileUploadBox: React.FC<FileUploadBoxProps> = ({ handleFileUpload }) => {
     setIsDragActive(true);
   };
 
-  const onDragLeave = () => {
-    setIsDragActive(false);
-  };
+  const onDragLeave = () => setIsDragActive(false);
 
   const onDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -62,7 +60,7 @@ const FileUploadBox: React.FC<FileUploadBoxProps> = ({ handleFileUpload }) => {
   return (
     <div
       style={{
-        border: `1px solid ${isDragActive ? '#FEE500' : '#4A5568'}`, // 드래그 중: 노란색, 기본: 회색
+        border: `1px solid ${isDragActive ? '#FEE500' : '#4A5568'}`,
       }}
       className="w-full h-full bg-[#232428] rounded-lg mx-auto flex justify-center items-center flex-col cursor-pointer transition-all duration-300"
       onDragOver={onDragOver}
@@ -70,7 +68,11 @@ const FileUploadBox: React.FC<FileUploadBoxProps> = ({ handleFileUpload }) => {
       onDrop={onDrop}
       onClick={handleFileInputClick}
     >
-      <div className="text-center relative">
+      <div
+        className={`text-center relative transition-all duration-500 ${
+          isUploadComplete ? 'mt-4' : ''
+        }`}
+      >
         {isUploadComplete && uploadedFile ? (
           <FaCheckCircle
             size={50}
@@ -101,7 +103,7 @@ const FileUploadBox: React.FC<FileUploadBoxProps> = ({ handleFileUpload }) => {
         )}
       </div>
 
-      {uploadedFile && (
+      {uploadedFile && !isUploadComplete && (
         <div className="w-3/4 bg-gray-300 rounded-full h-2 mt-4 overflow-hidden">
           <div
             className="bg-[#FEE500] h-full transition-all duration-500"
@@ -110,7 +112,12 @@ const FileUploadBox: React.FC<FileUploadBoxProps> = ({ handleFileUpload }) => {
         </div>
       )}
 
-      <input type="file" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} />
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        style={{ display: 'none' }}
+      />
     </div>
   );
 };
