@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 import useMessageStore from '@/stores/messageStore';
-import { useStore as useLoginStore } from '@/stores/login';
+import { useAuthStore } from '@/stores/authStore';  // import 수정
 
 const ChatInput: React.FC = () => {
   const [message, setMessage] = useState('');
   const addMessage = useMessageStore((state) => state.addMessage);
-  const { username, isLoggedIn } = useLoginStore();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);  // isAuthenticated 사용
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (message.trim() && isLoggedIn) {
+    if (message.trim() && isAuthenticated) {  // isAuthenticated 사용
       addMessage({
         author: username,
         content: message.trim(),
@@ -18,7 +18,7 @@ const ChatInput: React.FC = () => {
     }
   };
 
-  if (!isLoggedIn) {
+  if (!isAuthenticated) {  // isAuthenticated 사용
     return <div className="p-4 bg-discord700 text-gray-100">로그인이 필요합니다.</div>;
   }
 
