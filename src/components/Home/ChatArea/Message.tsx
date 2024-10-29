@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { useStore } from '@/stores/login';
+import { useAuthStore } from '@/stores/authStore';
 
 interface MessageProps {
   author: string;
@@ -7,11 +7,12 @@ interface MessageProps {
   showHeader: boolean;
   isCurrentUser: boolean;
   userColor: string;
+  profileImage?: string;  // 프로필 이미지 prop 추가
 }
 
 const Message: React.FC<MessageProps> = React.memo(
-  ({ author, contents, showHeader, isCurrentUser, userColor }) => {
-    const { profileImage } = useStore();
+  ({ author, contents, showHeader, isCurrentUser, userColor, profileImage }) => {
+    const user = useAuthStore((state) => state.user);
 
     const formatDate = useMemo(() => {
       return (dateString: string) => {
@@ -30,16 +31,29 @@ const Message: React.FC<MessageProps> = React.memo(
       return author.split('(')[0].split('.')[0][0].toUpperCase();
     }, [author]);
 
+    // 프로필 이미지 결정
+    const displayProfileImage = useMemo(() => {
+      if (isCurrentUser) {
+        return user?.profileImage || '/default-profile.png';
+      }
+      return profileImage || '/default-profile.png';
+    }, [isCurrentUser, user, profileImage]);
+
     return (
       <div className="flex mb-4">
         {showHeader && (
           <div className="flex-shrink-0 mr-3 self-start pt-1">
-            {isCurrentUser ? (
-              <img
-                src={profileImage}
-                alt={author}
-                className="w-10 h-10 rounded-full object-cover"
-              />
+            {isCurrentUser || displayProfileImage !== '/default-profile.png' ? (
+              <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center">
+                <img
+                  src={displayProfileImage}
+                  alt={author}
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    e.currentTarget.src = '/default-profile.png';
+                  }}
+                />
+              </div>
             ) : (
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
