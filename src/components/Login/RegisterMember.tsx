@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { useMemberStore } from '@/stores/memberStore';
 import { useAuth } from '@/hooks/useAuth';
-import type { RegisterRequest } from '@/types/auth';
+import { useMemberStore } from '@/stores/memberStore';
+import type { RegisterRequest } from '@/types/auth.types';
 
 interface FormErrors {
   email?: string;
@@ -139,16 +139,16 @@ const RegisterMember: React.FC = () => {
   if (!isRegisterOpen) return null;
 
   const getInputClassName = (fieldName: keyof FormErrors) => `
-    w-full px-4 py-2 border rounded-md bg-discord500 text-white
-    ${!isLoading && errors[fieldName]
+   w-full px-4 py-2 border rounded-md bg-discord500 text-white
+   ${!isLoading && errors[fieldName]
       ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
       : 'border-discord600 focus:border-yellow-300 focus:ring-yellow-300'
     }
-    focus:outline-none
-  `;
+   focus:outline-none
+ `;
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50 ">
+    <div className="fixed inset-0 flex items-center justify-center z-50">
       <div className="w-full max-w-md p-8 space-y-6 rounded-xl bg-discord700">
         <h2 className="text-2xl font-bold text-center text-kakaoYellow pb-3">회원가입</h2>
         <form className="space-y-6 mt-4" onSubmit={handleSubmit}>
@@ -217,8 +217,8 @@ const RegisterMember: React.FC = () => {
             type="submit"
             disabled={isLoading}
             className="w-full px-4 py-2 font-medium text-kakaoBrown bg-kakaoYellow rounded-md 
-                     hover:bg-yellow-400 focus:outline-none focus:ring-2 focus:ring-kakaoBrown
-                     disabled:opacity-50 disabled:cursor-not-allowed"
+                    hover:bg-yellow-400 focus:outline-none focus:ring-2 focus:ring-kakaoBrown
+                    disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? '처리중...' : '회원가입'}
           </button>
