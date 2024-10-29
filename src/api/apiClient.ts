@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/stores/authStore';
-import type { ApiResponse } from '@/types/auth.types';
+import type { ApiResponse } from '@/types/auth';
 
 export class ApiClient {
   private readonly client: AxiosInstance;
@@ -50,7 +50,7 @@ export class ApiClient {
             }
 
             const response = await this.publicClient.post<ApiResponse<{ accessToken: string }>>(
-              '/api/v1/auth/refresh',
+              '/auth/refresh',
               {
                 refreshToken,
               },
@@ -117,11 +117,6 @@ export class ApiClient {
     if (axios.isAxiosError(error)) {
       const message = error.response?.data?.message || '서버 오류가 발생했습니다.';
       console.error('API Error:', message);
-
-      if (error.response?.status === 401) {
-        const event = new CustomEvent('auth:loginRequired');
-        window.dispatchEvent(event);
-      }
     }
   }
 }
