@@ -1,12 +1,15 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
+import { useAuthStore } from '@/stores/authStore';
 
 export const AuthEventHandler: React.FC = () => {
   const navigate = useNavigate();
+  const clearAuth = useAuthStore((state) => state.clearAuth);
 
   useEffect(() => {
     const handleLoginRequired = () => {
+      clearAuth();
       toast.error('세션이 만료되었습니다. 다시 로그인해주세요.');
       navigate('/login');
     };
@@ -22,7 +25,7 @@ export const AuthEventHandler: React.FC = () => {
       window.removeEventListener('auth:loginRequired', handleLoginRequired);
       window.removeEventListener('auth:error', handleAuthError as EventListener);
     };
-  }, [navigate]);
+  }, [navigate, clearAuth]);
 
   return null;
 };
