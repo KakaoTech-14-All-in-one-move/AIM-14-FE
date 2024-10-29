@@ -1,16 +1,16 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuthStore } from '@/stores/authStore';
 
 export const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated } = useAuth();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (isAuthenticated()) {
+    if (isAuthenticated) {
       navigate('/home');
     }
   }, [isAuthenticated, navigate]);
 
-  return !isAuthenticated() ? <>{children}</> : null;
+  return !isAuthenticated ? <>{children}</> : null;
 };
