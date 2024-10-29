@@ -3,7 +3,7 @@ import { useAuthStore } from '@/stores/authStore';
 
 interface Message {
   id: string;
-  profileImage: string;
+  profile_image: string;
   author: string;
   content: string;
   timestamp: string;
@@ -11,21 +11,21 @@ interface Message {
 
 interface MessageStore {
   messages: Message[];
-  addMessage: (message: Omit<Message, 'id' | 'timestamp' | 'profileImage'>) => void;
+  addMessage: (message: Omit<Message, 'id' | 'timestamp' | 'profile_image'>) => void;
 }
 
 const defaultMessages: Message[] = [
   {
     id: '1',
     author: 'david.lee(이찬영)',
-    profileImage: '/google_login_logo.webp',
+    profile_image: '/google_login_logo.webp',
     content: '감사합니다 🙂',
     timestamp: '2024-10-17T06:33:00Z',
   },
   {
     id: '2',
     author: 'teddy.kim(김영진)',
-    profileImage: '/kakao_login_logo.png',
+    profile_image: '/kakao_login_logo.png',
     content:
       '저희 피그마 누가 요청한 것 같은데, 아시는 분 계시면 Approve나 Deny 눌러주세요! (x 버튼 누르면 자동으로 Deny 될까봐 못 누르는 중..)',
     timestamp: '2024-10-17T07:32:00Z',
@@ -33,7 +33,7 @@ const defaultMessages: Message[] = [
   {
     id: '3',
     author: 'Ella.kim(김혜현)',
-    profileImage: '/naver_login_logo.png',
+    profile_image: '/naver_login_logo.png',
     content: 'Deny하죠',
     timestamp: '2024-10-17T07:33:00Z',
   },
@@ -49,7 +49,7 @@ const useMessageStore = create<MessageStore>((set) => ({
           ...message,
           id: Date.now().toString(),
           timestamp: new Date().toISOString(),
-          profileImage: useAuthStore.getState().user?.profileImage || '/default-profile.png',
+          profile_image: useAuthStore.getState().user?.profile_image || '/default-profile.png',
         },
       ],
     })),

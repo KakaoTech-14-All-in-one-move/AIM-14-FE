@@ -7,11 +7,11 @@ interface MessageProps {
   showHeader: boolean;
   isCurrentUser: boolean;
   userColor: string;
-  profileImage?: string;  // 프로필 이미지 prop 추가
+  profile_image?: string;  // 프로필 이미지 prop 추가
 }
 
 const Message: React.FC<MessageProps> = React.memo(
-  ({ author, contents, showHeader, isCurrentUser, userColor, profileImage }) => {
+  ({ author, contents, showHeader, isCurrentUser, userColor, profile_image }) => {
     const user = useAuthStore((state) => state.user);
 
     const formatDate = useMemo(() => {
@@ -32,21 +32,21 @@ const Message: React.FC<MessageProps> = React.memo(
     }, [author]);
 
     // 프로필 이미지 결정
-    const displayProfileImage = useMemo(() => {
+    const displayprofile_image = useMemo(() => {
       if (isCurrentUser) {
-        return user?.profileImage || '/default-profile.png';
+        return user?.profile_image || '/default-profile.png';
       }
-      return profileImage || '/default-profile.png';
-    }, [isCurrentUser, user, profileImage]);
+      return profile_image || '/default-profile.png';
+    }, [isCurrentUser, user, profile_image]);
 
     return (
       <div className="flex mb-4">
         {showHeader && (
           <div className="flex-shrink-0 mr-3 self-start pt-1">
-            {isCurrentUser || displayProfileImage !== '/default-profile.png' ? (
+            {isCurrentUser || displayprofile_image !== '/default-profile.png' ? (
               <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center">
                 <img
-                  src={displayProfileImage}
+                  src={displayprofile_image}
                   alt={author}
                   className="w-full h-full object-contain"
                   onError={(e) => {

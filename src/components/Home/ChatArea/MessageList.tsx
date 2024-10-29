@@ -6,7 +6,7 @@ import Message from '@/components/Home/ChatArea/Message';
 interface GroupedMessage {
   id: string;
   author: string;
-  profileImage?: string;  // profileImage 추가
+  profile_image?: string;  // profile_image 추가
   contents: { id: string; content: string; timestamp: string }[];
   showHeader: boolean;
 }
@@ -30,7 +30,7 @@ const MessageList: React.FC = () => {
         acc.push({
           id: message.id,
           author: message.author,
-          profileImage: message.profileImage,  // profileImage 포함
+          profile_image: message.profile_image,  // profile_image 포함
           contents: [{ id: message.id, content: message.content, timestamp: message.timestamp }],
           showHeader: true,
         });
@@ -55,7 +55,7 @@ const MessageList: React.FC = () => {
           showHeader={group.showHeader}
           isCurrentUser={user ? group.author === user.username : false}
           userColor="#ffffff"
-          profileImage={group.profileImage}  // profileImage 전달
+          profile_image={group.profile_image}  // profile_image 전달
         />
       ))}
       <div ref={messagesEndRef} />

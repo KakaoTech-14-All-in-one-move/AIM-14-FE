@@ -10,7 +10,7 @@ export interface LoginResponse {
     user: {
       email: string;
       username: string;
-      profileImage: string;
+      profile_image: string;
     };
   };
   status: number;
@@ -35,7 +35,7 @@ export interface RegisterResponse {
   user: {
     email: string;
     username: string;
-    profileImage: string;
+    profile_image: string;
   };
 }
 

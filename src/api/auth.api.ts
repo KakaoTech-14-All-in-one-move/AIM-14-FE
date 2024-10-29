@@ -28,7 +28,7 @@ export const authApi = {
 
   async checkEmail(email: string) {
     return await apiClient.publicClient.get<ApiResponse<CheckEmailResponse>>(
-      `/api/v1/auth/check-email?email=${email}`,
+      `/api/v1/auth/check?email=${email}`,
     );
   },
 

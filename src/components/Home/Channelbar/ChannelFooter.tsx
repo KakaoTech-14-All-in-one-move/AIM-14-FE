@@ -11,7 +11,7 @@ const ChannelFooter: React.FC = () => {
         <div className="flex items-center">
           <div className="relative mr-2">
             <img
-              src={currentUser.profileImage}
+              src={currentUser.profile_image}
               alt={currentUser.nickname}
               className="w-7 h-7 rounded-full"
             />
