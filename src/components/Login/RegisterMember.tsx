@@ -17,6 +17,13 @@ interface FormData {
   username: string;
 }
 
+interface FormValidState {
+  email: boolean;
+  password: boolean;
+  passwordConfirm: boolean;
+  username: boolean;
+}
+
 const RegisterMember: React.FC = () => {
   const { isRegisterOpen, closeRegister } = useMemberStore();
   const { checkEmail, register, isLoading } = useAuth();
@@ -27,16 +34,24 @@ const RegisterMember: React.FC = () => {
     username: '',
   });
   const [errors, setErrors] = useState<FormErrors>({});
+  const [validFields, setValidFields] = useState<FormValidState>({
+    email: false,
+    password: false,
+    passwordConfirm: false,
+    username: false,
+  });
 
   const validateEmail = async (email: string) => {
     if (!email) {
       setErrors(prev => ({ ...prev, email: '이메일을 입력해주세요' }));
+      setValidFields(prev => ({ ...prev, email: false }));
       return false;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       setErrors(prev => ({ ...prev, email: '올바른 이메일 형식이 아닙니다' }));
+      setValidFields(prev => ({ ...prev, email: false }));
       return false;
     }
 
@@ -44,52 +59,63 @@ const RegisterMember: React.FC = () => {
       const exists = await checkEmail(email);
       if (exists) {
         setErrors(prev => ({ ...prev, email: '이미 사용중인 이메일입니다' }));
+        setValidFields(prev => ({ ...prev, email: false }));
         return false;
       }
       setErrors(prev => ({ ...prev, email: undefined }));
+      setValidFields(prev => ({ ...prev, email: true }));
       return true;
     } catch (error) {
       setErrors(prev => ({ ...prev, email: '이메일 확인 중 오류가 발생했습니다' }));
+      setValidFields(prev => ({ ...prev, email: false }));
       return false;
     }
   };
 
   const validatePassword = (password: string, passwordConfirm: string): boolean => {
+    let isValid = true;
+
     if (!password) {
       setErrors(prev => ({ ...prev, password: '비밀번호를 입력해주세요' }));
-      return false;
-    }
-
-    if (password.length < 8) {
+      isValid = false;
+    } else if (password.length < 8) {
       setErrors(prev => ({ ...prev, password: '비밀번호는 8자 이상이어야 합니다' }));
-      return false;
+      isValid = false;
+    } else {
+      setErrors(prev => ({ ...prev, password: undefined }));
     }
 
     if (password !== passwordConfirm) {
       setErrors(prev => ({ ...prev, passwordConfirm: '비밀번호가 일치하지 않습니다' }));
-      return false;
+      isValid = false;
+    } else if (passwordConfirm && password.length >= 8) {
+      setErrors(prev => ({ ...prev, passwordConfirm: undefined }));
     }
 
-    setErrors(prev => ({
+    setValidFields(prev => ({
       ...prev,
-      password: undefined,
-      passwordConfirm: undefined
+      password: isValid && password.length >= 8,
+      passwordConfirm: isValid && password === passwordConfirm && password.length >= 8
     }));
-    return true;
+
+    return isValid;
   };
 
   const validateUsername = (username: string): boolean => {
     if (!username) {
       setErrors(prev => ({ ...prev, username: '닉네임을 입력해주세요' }));
+      setValidFields(prev => ({ ...prev, username: false }));
       return false;
     }
 
     if (username.length < 2) {
       setErrors(prev => ({ ...prev, username: '닉네임은 2자 이상이어야 합니다' }));
+      setValidFields(prev => ({ ...prev, username: false }));
       return false;
     }
 
     setErrors(prev => ({ ...prev, username: undefined }));
+    setValidFields(prev => ({ ...prev, username: true }));
     return true;
   };
 
@@ -97,9 +123,13 @@ const RegisterMember: React.FC = () => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
 
-    // 에러 메시지 초기화
-    if (errors[name as keyof FormErrors]) {
-      setErrors(prev => ({ ...prev, [name]: undefined }));
+    if (name === 'password' || name === 'passwordConfirm') {
+      validatePassword(
+        name === 'password' ? value : formData.password,
+        name === 'passwordConfirm' ? value : formData.passwordConfirm
+      );
+    } else if (name === 'username') {
+      validateUsername(value);
     }
   };
 
@@ -112,7 +142,6 @@ const RegisterMember: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    // 모든 필드 유효성 검사
     const isEmailValid = await validateEmail(formData.email);
     const isPasswordValid = validatePassword(formData.password, formData.passwordConfirm);
     const isUsernameValid = validateUsername(formData.username);
@@ -131,7 +160,6 @@ const RegisterMember: React.FC = () => {
       await register(registerData);
       closeRegister();
     } catch (error) {
-      // 에러는 useAuth 내에서 처리됨
       console.error('Registration failed:', error);
     }
   };
@@ -139,13 +167,15 @@ const RegisterMember: React.FC = () => {
   if (!isRegisterOpen) return null;
 
   const getInputClassName = (fieldName: keyof FormErrors) => `
-   w-full px-4 py-2 border rounded-md bg-discord500 text-white
-   ${!isLoading && errors[fieldName]
+    w-full px-4 py-2 border rounded-md bg-discord500 text-white
+    ${!isLoading && errors[fieldName]
       ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
-      : 'border-discord600 focus:border-yellow-300 focus:ring-yellow-300'
+      : validFields[fieldName]
+        ? 'border-green-500 focus:border-green-500 focus:ring-green-500'
+        : 'border-discord600 focus:border-yellow-300 focus:ring-yellow-300'
     }
-   focus:outline-none
- `;
+    focus:outline-none
+  `;
 
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50">
