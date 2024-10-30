@@ -16,15 +16,15 @@ export const useAuth = () => {
       const response = await authApi.login(data);
       console.log('Login response:', response);
 
-      if (response?.accessToken && response?.refreshToken) {
+      if (response?.tokenInfo.accessToken && response?.tokenInfo.refreshToken) {
         // 직접 response에서 토큰 값을 가져옴
-        setTokens(response.accessToken, response.refreshToken);
+        setTokens(response.tokenInfo.accessToken, response.tokenInfo.refreshToken);
 
         // 임시 user 객체 생성 (실제 데이터에 맞게 수정 필요)
         const user = {
-          email: data.email,
-          username: 'teddy.kim(김영진)', // 또는 적절한 기본값
-          profile_image: '/kakao_login_logo.png', // 기본 프로필 이미지
+          email: response.userInfo.email,
+          username: response.userInfo.username, // 또는 적절한 기본값
+          profile_image: response.userInfo.profile_image, // 기본 프로필 이미지
         };
         setUser(user);
 
