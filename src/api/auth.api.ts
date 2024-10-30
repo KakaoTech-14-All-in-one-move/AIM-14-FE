@@ -21,7 +21,7 @@ export const authApi = {
 
   async register(data: RegisterRequest) {
     return await apiClient.publicClient.post<ApiResponse<RegisterResponse>>(
-      '/api/v1/auth/register',
+      '/api/v1/auth/signup',
       data,
     );
   },
