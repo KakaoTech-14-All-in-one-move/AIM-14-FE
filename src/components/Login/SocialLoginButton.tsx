@@ -9,11 +9,11 @@ const SocialLoginButton: React.FC<SocialLoginButtonProps> = ({ provider }) => {
     // TODO: oauth url로 변경
     switch (provider) {
       case 'google':
-        return 'https://google.com';
+        return "http://localhost:8080/oauth2/authorization/google";
       case 'naver':
-        return 'https://naver.com';
+        return "http://localhost:8080/oauth2/authorization/naver";
       case 'kakao':
-        return 'https://localhost:5173/home';
+        return "http://localhost:8080/oauth2/authorization/kakao";
     }
   };
 
