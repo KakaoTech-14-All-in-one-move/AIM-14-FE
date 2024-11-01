@@ -30,7 +30,7 @@ const ChatInput: React.FC = () => {
         type="text"
         value={message}
         onChange={(e) => setMessage(e.target.value)}
-        placeholder={`#💬-일반에 메시지 보내기)`}
+        placeholder={`#💬-일반에 메시지 보내기`}
         className="w-full bg-discord700 text-gray-100 px-4 py-2 rounded focus:outline-none placeholder-gray-400"
       />
     </form>
