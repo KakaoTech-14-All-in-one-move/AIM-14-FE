@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuthStore } from '@/stores/authStore';  // 경로는 실제 위치에 맞게 수정
+import { useAuthStore } from '@/stores/authStore';
 
 export const OAuth2Callback = () => {
     const navigate = useNavigate();
@@ -20,11 +20,10 @@ export const OAuth2Callback = () => {
         // Zustand store에 토큰 저장
         setTokens(accessToken, refreshToken);
 
-        // 사용자 정보 저장
         const userInfo = {
             email: params.get('email') || '',
             username: params.get('username') || '',
-            profile_image: ''  // 필요한 경우 수정
+            profile_image: ''
         };
 
         setUser(userInfo);
