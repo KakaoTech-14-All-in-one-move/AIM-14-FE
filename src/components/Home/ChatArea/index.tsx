@@ -5,7 +5,7 @@ import ChatInput from '@/components/Home/ChatArea/ChatInput';
 
 const ChatArea: React.FC = () => {
   return (
-    <div className="flex flex-col h-full bg-discord500">
+    <div className="flex flex-col h-full bg-discord500 flex-grow">
       <ChatHeader />
       <MessageList />
       <ChatInput />
