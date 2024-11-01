@@ -6,7 +6,6 @@ interface SocialLoginButtonProps {
 
 const SocialLoginButton: React.FC<SocialLoginButtonProps> = ({ provider }) => {
   const getOAuthUrl = () => {
-    // TODO: oauth url로 변경
     switch (provider) {
       case 'google':
         return "http://localhost:8080/oauth2/authorization/google";
