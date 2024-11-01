@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { useAuthStore } from '@/stores/authStore';
+import { generateProfileImageUrl } from '@/components/Login/DefaultProfileImage';
 
 interface MessageProps {
   author: string;
@@ -7,7 +8,7 @@ interface MessageProps {
   showHeader: boolean;
   isCurrentUser: boolean;
   userColor: string;
-  profile_image?: string;  // 프로필 이미지 prop 추가
+  profile_image?: string;
 }
 
 const Message: React.FC<MessageProps> = React.memo(
@@ -27,48 +28,44 @@ const Message: React.FC<MessageProps> = React.memo(
       };
     }, []);
 
-    const initials = useMemo(() => {
-      return author.split('(')[0].split('.')[0][0].toUpperCase();
-    }, [author]);
-
-    // 프로필 이미지 결정
-    const displayprofile_image = useMemo(() => {
+    const displayProfileImage = useMemo(() => {
       if (isCurrentUser) {
-        return user?.profile_image || '/default-profile.png';
+        return user?.profile_image || generateProfileImageUrl(user?.username, 40);
       }
-      return profile_image || '/default-profile.png';
-    }, [isCurrentUser, user, profile_image]);
+      return profile_image || generateProfileImageUrl(author.split('(')[0], 40);
+    }, [isCurrentUser, user, profile_image, author]);
 
     return (
       <div className="flex mb-4">
         {showHeader && (
           <div className="flex-shrink-0 mr-3 self-start pt-1">
-            {isCurrentUser || displayprofile_image !== '/default-profile.png' ? (
-              <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center overflow-hidden">
+              {profile_image ? (
                 <img
-                  src={displayprofile_image}
+                  src={profile_image}
                   alt={author}
-                  className="w-full h-full object-contain"
+                  className="w-full h-full object-cover"
                   onError={(e) => {
-                    e.currentTarget.src = '/default-profile.png';
+                    e.currentTarget.src = generateProfileImageUrl(author.split('(')[0], 40);
                   }}
                 />
-              </div>
-            ) : (
-              <div
-                className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
-                style={{ backgroundColor: userColor }}
-              >
-                {initials}
-              </div>
-            )}
+              ) : (
+                <img
+                  src={displayProfileImage}
+                  alt={author}
+                  className="w-full h-full object-cover"
+                />
+              )}
+            </div>
           </div>
         )}
         <div className="flex-1 min-w-0">
           {showHeader && (
             <div className="mb-1 flex items-baseline">
               <span className="font-bold text-gray-100 mr-2">{author}</span>
-              <span className="text-xs text-gray-400">{formatDate(contents[0].timestamp)}</span>
+              <span className="text-xs text-gray-400">
+                {formatDate(contents[0].timestamp)}
+              </span>
             </div>
           )}
           <div className="flex flex-col">
@@ -81,7 +78,7 @@ const Message: React.FC<MessageProps> = React.memo(
         </div>
       </div>
     );
-  },
+  }
 );
 
 export default Message;
