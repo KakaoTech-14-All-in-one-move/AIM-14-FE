@@ -8,9 +8,7 @@ const Home: React.FC = () => {
     <div className="flex h-screen">
       <Sidebar />
       <Channelbar />
-      <div className="flex-1 bg-discord500">
-        <ChatArea />
-      </div>
+      <ChatArea />
     </div>
   );
 };

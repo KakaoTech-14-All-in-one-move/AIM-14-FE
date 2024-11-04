@@ -1,18 +1,19 @@
 import React, { useEffect, useRef, useMemo, useCallback } from 'react';
 import useMessageStore from '@/stores/messageStore';
+import { useAuthStore } from '@/stores/authStore';
 import Message from '@/components/Home/ChatArea/Message';
-import { useStore } from '@/stores/login';
 
 interface GroupedMessage {
   id: string;
   author: string;
+  profile_image?: string;  // profile_image 추가
   contents: { id: string; content: string; timestamp: string }[];
   showHeader: boolean;
 }
 
 const MessageList: React.FC = () => {
   const messages = useMessageStore((state) => state.messages);
-  const { username, userColors, setUserColor } = useStore();
+  const user = useAuthStore((state) => state.user);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
   const scrollToBottom = useCallback(() => {
@@ -29,6 +30,7 @@ const MessageList: React.FC = () => {
         acc.push({
           id: message.id,
           author: message.author,
+          profile_image: message.profile_image,  // profile_image 포함
           contents: [{ id: message.id, content: message.content, timestamp: message.timestamp }],
           showHeader: true,
         });
@@ -43,18 +45,6 @@ const MessageList: React.FC = () => {
     }, [] as GroupedMessage[]);
   }, [messages]);
 
-  const getOrCreateUserColor = useCallback(
-    (author: string) => {
-      if (!userColors[author]) {
-        const randomColor = `hsl(${Math.random() * 360}, 70%, 50%)`;
-        setUserColor(author, randomColor);
-        return randomColor;
-      }
-      return userColors[author];
-    },
-    [userColors, setUserColor],
-  );
-
   return (
     <div className="flex-1 overflow-y-auto p-4">
       {groupedMessages.map((group) => (
@@ -63,8 +53,9 @@ const MessageList: React.FC = () => {
           author={group.author}
           contents={group.contents}
           showHeader={group.showHeader}
-          isCurrentUser={group.author === username}
-          userColor={getOrCreateUserColor(group.author)}
+          isCurrentUser={user ? group.author === user.username : false}
+          userColor="#ffffff"
+          profile_image={group.profile_image}  // profile_image 전달
         />
       ))}
       <div ref={messagesEndRef} />

@@ -6,14 +6,13 @@ interface SocialLoginButtonProps {
 
 const SocialLoginButton: React.FC<SocialLoginButtonProps> = ({ provider }) => {
   const getOAuthUrl = () => {
-    // TODO: oauth url로 변경
     switch (provider) {
       case 'google':
-        return 'https://google.com';
+        return "http://localhost:8080/oauth2/authorization/google";
       case 'naver':
-        return 'https://naver.com';
+        return "http://localhost:8080/oauth2/authorization/naver";
       case 'kakao':
-        return 'https://localhost:5173/home';
+        return "http://localhost:8080/oauth2/authorization/kakao";
     }
   };
 
@@ -25,7 +24,7 @@ const SocialLoginButton: React.FC<SocialLoginButtonProps> = ({ provider }) => {
   const getButtonContent = () => {
     switch (provider) {
       case 'google':
-        return <img src="/google_login_logo.png" alt="Google Login" className="h-12" />;
+        return <img src="/google_login_logo.webp" alt="Google Login" className="h-12 bg-white rounded-full" />;
       case 'naver':
         return <img src="/naver_login_logo.png" alt="Naver Login" className="h-12" />;
       case 'kakao':

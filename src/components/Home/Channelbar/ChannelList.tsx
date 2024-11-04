@@ -97,7 +97,7 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
             {(type === 'voice' || type === 'video') && activeChannels[type][channel] && (
               <div className="ml-6 mt-1 flex items-center text-gray-400">
                 <img
-                  src={currentUser.profileImage}
+                  src={currentUser.profile_image}
                   alt={currentUser.nickname}
                   className="w-5 h-5 rounded-full mr-2"
                 />
