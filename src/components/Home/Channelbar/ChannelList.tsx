@@ -145,23 +145,21 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
               </div>
             )}
           </div>
-          {(type === 'voice' || type === 'video') &&
-            activeChannels[type][channel] &&
-            expandedChannels.has(channel) && (
-              <div className="ml-6 mt-1 flex items-center text-gray-400">
-                <img
-                  src={currentUser.profileImage}
-                  alt={currentUser.nickname}
-                  className="w-5 h-5 rounded-full mr-[0.9rem]"
-                />
-                <span className="text-sm font-semibold">{currentUser.nickname}</span>
-                <X
-                  size={16}
-                  className="ml-auto cursor-pointer hover:text-gray-200"
-                  onClick={() => leaveChannel(type, channel)}
-                />
-              </div>
-            )}
+          {(type === 'voice' || type === 'video') && activeChannels[type][channel] && (
+            <div className="ml-6 mt-1 flex items-center text-gray-400">
+              <img
+                src={currentUser.profile_image}
+                alt={currentUser.nickname}
+                className="w-5 h-5 rounded-full mr-2"
+              />
+              <span className="text-sm font-semibold">{currentUser.nickname}</span>
+              <X
+                size={16}
+                className="ml-auto cursor-pointer hover:text-gray-200"
+                onClick={() => leaveChannel(type, channel)}
+              />
+            </div>
+          )}
         </div>
       ))}
 
