@@ -55,11 +55,14 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
 
   const handleChannelClick = async (channelName: string) => {
     if (type === 'voice' || type === 'video') {
+      // 채널 확장/축소 토글 먼저 수행
+      toggleChannelExpand(channelName);
+
       const otherType = type === 'voice' ? 'video' : 'voice';
       const hasActiveOtherChannel = Object.values(activeChannels[otherType]).some(active => active);
 
+      // 이미 활성화된 채널이면 토글만 하고 리턴
       if (activeChannels[type][channelName]) {
-        toggleChannelExpand(channelName);
         return;
       }
 
@@ -76,10 +79,8 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
           if (type === 'voice' && channelName === '일반') {
             await joinChannel(type, channelName);
             navigate(`/voice/${GENERAL_VOICE_CHANNEL_ID}`);
-            setExpandedChannels(new Set([channelName]));
           } else {
             joinChannel(type, channelName);
-            setExpandedChannels(new Set([channelName]));
           }
         }
         return;
@@ -88,10 +89,8 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
       if (type === 'voice' && channelName === '일반') {
         await joinChannel(type, channelName);
         navigate(`/voice/${GENERAL_VOICE_CHANNEL_ID}`);
-        setExpandedChannels(new Set([channelName]));
       } else {
         joinChannel(type, channelName);
-        setExpandedChannels(new Set([channelName]));
       }
     }
   };
@@ -152,25 +151,33 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
             <Icon size={18} className="mr-[0.9rem]" />
             <span className="flex-grow">{channel}</span>
             {(type === 'voice' || type === 'video') && activeChannels[type][channel] && (
-              <div className="mr-[0.9rem]">
-                <div className="w-2 h-2 rounded-full bg-green-400" />
-              </div>
+              <>
+                <div className="mr-[0.9rem]">
+                  <div className="w-2 h-2 rounded-full bg-green-400" />
+                </div>
+                <ChevronDown
+                  size={12}
+                  className={`transform transition-transform ${expandedChannels.has(channel) ? '' : '-rotate-90'}`}
+                />
+              </>
             )}
           </div>
-          {(type === 'voice' || type === 'video') && activeChannels[type][channel] && (
-            <div className="ml-6 mt-1 flex items-center text-gray-400">
-              <img
-                src={currentUser.profile_image || "/default-profile.png"}
-                alt={username}
-                className="w-5 h-5 rounded-full mr-2"
-              />
-              <span className="text-sm font-semibold">{username}</span>
-              <div className="ml-auto mr-4 flex items-center gap-2">
-                {isMuted && <MicOff size={16} className="text-red-500" />}
-                {isDeafened && <HeadphoneOff size={16} className="text-red-500" />}
+          {(type === 'voice' || type === 'video') &&
+            activeChannels[type][channel] &&
+            expandedChannels.has(channel) && (
+              <div className="ml-6 mt-1 flex items-center text-gray-400">
+                <img
+                  src={currentUser.profile_image || "/default-profile.png"}
+                  alt={username}
+                  className="w-5 h-5 rounded-full mr-2"
+                />
+                <span className="text-sm font-semibold">{username}</span>
+                <div className="ml-auto mr-4 flex items-center gap-2">
+                  {isMuted && <MicOff size={16} className="text-red-500" />}
+                  {isDeafened && <HeadphoneOff size={16} className="text-red-500" />}
+                </div>
               </div>
-            </div>
-          )}
+            )}
         </div>
       ))}
 
