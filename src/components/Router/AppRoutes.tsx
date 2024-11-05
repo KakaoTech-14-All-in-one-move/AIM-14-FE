@@ -7,6 +7,7 @@ import { PublicRoute } from '@/components/router/PublicRoute';
 import { AuthEventHandler } from '@/components/router/AuthEventHandler';
 import { OAuth2Callback } from '@/components/login/OAuth2Callback';
 import Record from '../Record';
+import Voice from '../Voice';
 
 export const AppRoutes: React.FC = () => {
   // 전역적으로 인증 상태 체크
@@ -49,6 +50,30 @@ export const AppRoutes: React.FC = () => {
           }
         />
         <Route
+          path="/feedback"
+          element={
+            <ProtectedRoute>
+              <Record/>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/voice/:channelId"
+          element={
+            <ProtectedRoute>
+              <Voice/>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/video/:channelId"
+          element={
+            <ProtectedRoute>
+              <Voice/>
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/"
           element={
             isAuthenticated() ? (
@@ -56,14 +81,6 @@ export const AppRoutes: React.FC = () => {
             ) : (
               <Navigate to="/login" replace />
             )
-          }
-        />
-        <Route
-          path="/feedback"
-          element={
-            <PublicRoute>
-              <Record/>
-            </PublicRoute>
           }
         />
         <Route path="*" element={<Navigate to="/login" replace />} />
