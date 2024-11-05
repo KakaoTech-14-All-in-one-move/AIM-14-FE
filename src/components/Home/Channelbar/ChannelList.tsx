@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronDown, Plus, MicOff, HeadphoneOff } from 'lucide-react';
+import { ChevronDown, HeadphoneOff, MicOff, Plus } from 'lucide-react';
 import { ChannelType } from './types';
 import { useChannels } from './ChannelContext';
 import { useVoiceChat } from '../../../hooks/useVoiceChat';
+import { useAuthStore } from '../../../stores/authStore';
 import ContextMenu from './ContextMenu';
 
-const GENERAL_VOICE_CHANNEL_ID = "5143992e-9dcd-45fe-bcc7-e337417b0cfe";
+const GENERAL_VOICE_CHANNEL_ID = '5143992e-9dcd-45fe-bcc7-e337417b0cfe';
 
 const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({ type, icon: Icon }) => {
   const navigate = useNavigate();
@@ -15,26 +16,13 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
   const {
     channels, addChannel, openSections, toggleSection,
     activeChannels, joinChannel, leaveChannel, currentUser,
-    renameChannel, deleteChannel
+    renameChannel, deleteChannel,
   } = useChannels();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; channel: string } | null>(null);
   const [expandedChannels, setExpandedChannels] = useState<Set<string>>(new Set());
-  const [username, setUsername] = useState<string>("");
+  const user = useAuthStore(state => state.user);
 
   useEffect(() => {
-    // Get username from localStorage
-    const storedData = localStorage.getItem('user');
-    if (storedData) {
-      try {
-        const parsedData = JSON.parse(storedData);
-        if (parsedData.username) {
-          setUsername(parsedData.username);
-        }
-      } catch (error) {
-        console.error('Error parsing localStorage data:', error);
-      }
-    }
-
     if (channelId === GENERAL_VOICE_CHANNEL_ID && type === 'voice') {
       joinChannel(type, '일반');
       setExpandedChannels(new Set(['일반']));
@@ -124,7 +112,8 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
       <div className="flex items-center justify-between text-gray-400 mb-1 cursor-pointer ml-2"
            onClick={() => toggleSection(type)}>
         <div className="flex items-center">
-          <ChevronDown size={12} className={`transform transition-transform ${openSections[type] ? '' : '-rotate-90'}`} />
+          <ChevronDown size={12}
+                       className={`transform transition-transform ${openSections[type] ? '' : '-rotate-90'}`} />
           <span className="uppercase text-xs font-semibold ml-[0.9rem]">
             {type === 'text' ? '채팅' : type === 'voice' ? '음성' : '화상'} 채널
           </span>
@@ -167,11 +156,11 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
             expandedChannels.has(channel) && (
               <div className="ml-6 mt-1 flex items-center text-gray-400">
                 <img
-                  src={currentUser.profile_image || "/default-profile.png"}
-                  alt={username}
+                  src={user?.profile_image || currentUser.profile_image}
+                  alt={user?.username}
                   className="w-5 h-5 rounded-full mr-2"
                 />
-                <span className="text-sm font-semibold">{username}</span>
+                <span className="text-sm font-semibold">{user?.username}</span>
                 <div className="ml-auto mr-4 flex items-center gap-2">
                   {isMuted && <MicOff size={16} className="text-red-500" />}
                   {isDeafened && <HeadphoneOff size={16} className="text-red-500" />}

@@ -1,9 +1,11 @@
 import React from 'react';
 import { Settings } from 'lucide-react';
 import { useChannels } from '@/components/Home/Channelbar/ChannelContext';
+import { useAuthStore } from '../../../stores/authStore';
 
 const ChannelFooter: React.FC = () => {
   const { currentUser } = useChannels();
+  const user = useAuthStore(state => state.user);
 
   return (
     <div className="p-3 bg-discord800">
@@ -11,14 +13,14 @@ const ChannelFooter: React.FC = () => {
         <div className="flex items-center">
           <div className="relative mr-2">
             <img
-              src={currentUser.profile_image}
-              alt={currentUser.nickname}
+              src={user?.profile_image || currentUser.profile_image}
+              alt={user?.username}
               className="w-7 h-7 rounded-full"
             />
             <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-discord800"></div>
           </div>
           <div className="flex flex-col leading-tight">
-            <span className="text-sm font-bold leading-none">{currentUser.nickname}</span>
+            <span className="text-sm font-bold leading-none">{user?.username}</span>
             <span className="text-xs leading-none mt-px">온라인</span>
           </div>
         </div>
