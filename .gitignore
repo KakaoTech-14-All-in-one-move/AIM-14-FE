@@ -1,13 +1,4 @@
-
 .idea/
-
 node_modules/
-
-<<<<<<< HEAD
-.DS_Store
-=======
-.idea/
-
 .DS_Store
 
->>>>>>> c18de16 (refactor: refactored by github comments)
