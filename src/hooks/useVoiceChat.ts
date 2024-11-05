@@ -1,4 +1,3 @@
-// src/hooks/useVoiceChat.ts
 import { create } from 'zustand';
 
 interface User {
@@ -23,7 +22,7 @@ export const useVoiceChat = create<VoiceChatStore>((set) => ({
   users: [
     {
       id: '1',
-      nickname: 'teddy.kim',
+      nickname: '이정진',
       isSpeaking: false,
       isMuted: false,
       isDeafened: false
@@ -32,7 +31,6 @@ export const useVoiceChat = create<VoiceChatStore>((set) => ({
   isMuted: false,
   isDeafened: false,
   toggleMute: () => set((state) => {
-    // 상태를 변경하고 동시에 현재 유저의 상태도 업데이트
     const newMutedState = !state.isMuted;
     const updatedUsers = state.users.map(user =>
       user.id === '1' ? { ...user, isMuted: newMutedState } : user
@@ -43,7 +41,6 @@ export const useVoiceChat = create<VoiceChatStore>((set) => ({
     };
   }),
   toggleDeafen: () => set((state) => {
-    // 상태를 변경하고 동시에 현재 유저의 상태도 업데이트
     const newDeafenedState = !state.isDeafened;
     const updatedUsers = state.users.map(user =>
       user.id === '1' ? { ...user, isDeafened: newDeafenedState } : user

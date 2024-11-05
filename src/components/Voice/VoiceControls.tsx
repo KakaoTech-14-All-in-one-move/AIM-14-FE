@@ -1,4 +1,3 @@
-// src/components/Voice/VoiceControls.tsx
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { HeadphoneOff, Headphones, Mic, MicOff, PhoneOff, MonitorUp } from 'lucide-react';
@@ -14,7 +13,6 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ show }) => {
   const location = useLocation();
   const { isMuted, isDeafened, toggleMute, toggleDeafen } = useVoiceChat();
 
-  // location path를 체크하여 현재 채널 타입 확인
   const isVideoChannel = location.pathname.includes('/video/');
   const [isScreenSharing, setIsScreenSharing] = React.useState(false);
 
@@ -28,7 +26,6 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ show }) => {
         await navigator.mediaDevices.getDisplayMedia({ video: true });
         setIsScreenSharing(true);
       } else {
-        // 화면 공유 중지 로직
         setIsScreenSharing(false);
       }
     } catch (err) {

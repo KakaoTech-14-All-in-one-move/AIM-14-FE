@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronDown, Plus, X } from 'lucide-react';
+import { ChevronDown, Plus, MicOff, HeadphoneOff } from 'lucide-react';
 import { ChannelType } from './types';
 import { useChannels } from './ChannelContext';
+import { useVoiceChat } from '../../../hooks/useVoiceChat';
 import ContextMenu from './ContextMenu';
 
 const GENERAL_VOICE_CHANNEL_ID = "5143992e-9dcd-45fe-bcc7-e337417b0cfe";
@@ -10,6 +11,7 @@ const GENERAL_VOICE_CHANNEL_ID = "5143992e-9dcd-45fe-bcc7-e337417b0cfe";
 const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({ type, icon: Icon }) => {
   const navigate = useNavigate();
   const { channelId } = useParams();
+  const { isMuted, isDeafened } = useVoiceChat();
   const {
     channels, addChannel, openSections, toggleSection,
     activeChannels, joinChannel, leaveChannel, currentUser,
@@ -17,14 +19,27 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
   } = useChannels();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; channel: string } | null>(null);
   const [expandedChannels, setExpandedChannels] = useState<Set<string>>(new Set());
+  const [username, setUsername] = useState<string>("");
 
   useEffect(() => {
-    // 처음 입장 시에만 확장 상태 설정
+    // Get username from localStorage
+    const storedData = localStorage.getItem('user');
+    if (storedData) {
+      try {
+        const parsedData = JSON.parse(storedData);
+        if (parsedData.username) {
+          setUsername(parsedData.username);
+        }
+      } catch (error) {
+        console.error('Error parsing localStorage data:', error);
+      }
+    }
+
     if (channelId === GENERAL_VOICE_CHANNEL_ID && type === 'voice') {
       joinChannel(type, '일반');
       setExpandedChannels(new Set(['일반']));
     }
-  }, []);  // 빈 의존성 배열로 변경하여 처음 마운트될 때만 실행
+  }, []);
 
   const toggleChannelExpand = (channelName: string) => {
     setExpandedChannels(prev => {
@@ -43,7 +58,6 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
       const otherType = type === 'voice' ? 'video' : 'voice';
       const hasActiveOtherChannel = Object.values(activeChannels[otherType]).some(active => active);
 
-      // 현재 활성화된 채널인 경우 접기/펼치기만 수행
       if (activeChannels[type][channelName]) {
         toggleChannelExpand(channelName);
         return;
@@ -53,14 +67,12 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
         const confirmSwitch = window.confirm(`현재 ${otherType === 'voice' ? '음성' : '화상'} 채널에 접속 중입니다.\n통화를 종료하고 이동하시겠습니까?`);
 
         if (confirmSwitch) {
-          // 현재 활성화된 채널에서 나가기
           Object.entries(activeChannels[otherType]).forEach(([channel, active]) => {
             if (active) {
               leaveChannel(otherType, channel);
             }
           });
 
-          // 새로운 채널 입장
           if (type === 'voice' && channelName === '일반') {
             await joinChannel(type, channelName);
             navigate(`/voice/${GENERAL_VOICE_CHANNEL_ID}`);
@@ -148,16 +160,15 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
           {(type === 'voice' || type === 'video') && activeChannels[type][channel] && (
             <div className="ml-6 mt-1 flex items-center text-gray-400">
               <img
-                src={currentUser.profile_image}
-                alt={currentUser.nickname}
+                src={currentUser.profile_image || "/default-profile.png"}
+                alt={username}
                 className="w-5 h-5 rounded-full mr-2"
               />
-              <span className="text-sm font-semibold">{currentUser.nickname}</span>
-              <X
-                size={16}
-                className="ml-auto cursor-pointer hover:text-gray-200"
-                onClick={() => leaveChannel(type, channel)}
-              />
+              <span className="text-sm font-semibold">{username}</span>
+              <div className="ml-auto mr-4 flex items-center gap-2">
+                {isMuted && <MicOff size={16} className="text-red-500" />}
+                {isDeafened && <HeadphoneOff size={16} className="text-red-500" />}
+              </div>
             </div>
           )}
         </div>
