@@ -137,16 +137,16 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
             onClick={() => handleChannelClick(channel)}
             onContextMenu={(e) => handleContextMenu(e, channel)}
           >
-            <Icon size={18} className="mr-[0.9rem]" />
+            <Icon size={18} className="mr-1" />
             <span className="flex-grow">{channel}</span>
             {(type === 'voice' || type === 'video') && activeChannels[type][channel] && (
               <>
-                <div className="mr-[0.9rem]">
+                <div className="mr-3">
                   <div className="w-2 h-2 rounded-full bg-green-400" />
                 </div>
                 <ChevronDown
                   size={12}
-                  className={`transform transition-transform ${expandedChannels.has(channel) ? '' : '-rotate-90'}`}
+                  className={`mr-3 transform transition-transform ${expandedChannels.has(channel) ? '' : '-rotate-90'}`}
                 />
               </>
             )}
