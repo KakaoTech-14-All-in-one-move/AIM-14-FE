@@ -30,10 +30,11 @@ export class CallConnection {
     console.log('🌐 Attempting to connect to call server...', { serverId: this.currentServerId });
 
     try {
-      const response = await apiClient.get<CallServerResponse>(CALL_API.GET_WEBSOCKET_URL);
-      if (!response.url) throw new Error('WebSocket URL not received');
+      const response = await apiClient.client.get<CallServerResponse>(CALL_API.GET_WEBSOCKET_URL);
+      console.log('API Response:', response);
+      if (!response.data.url) throw new Error('WebSocket URL not received');
 
-      this.ws = new WebSocket(response.url);
+      this.ws = new WebSocket(response.data.url);
       this.setupWebSocketHandlers();
     } catch (error) {
       console.error('❌ Failed to connect to call server:', error);
