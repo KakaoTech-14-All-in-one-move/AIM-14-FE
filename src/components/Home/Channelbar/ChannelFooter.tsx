@@ -6,6 +6,7 @@ import { useAuthStore } from '../../../stores/authStore';
 const ChannelFooter: React.FC = () => {
   const { currentUser } = useChannels();
   const user = useAuthStore(state => state.user);
+  const DEFAULT_PROFILE_IMAGE = '/kakao_login_logo.png';
 
   return (
     <div className="p-3 bg-discord800">
@@ -13,7 +14,7 @@ const ChannelFooter: React.FC = () => {
         <div className="flex items-center">
           <div className="relative mr-2">
             <img
-              src={user?.profile_image || currentUser.profile_image}
+              src={user?.profile_image || DEFAULT_PROFILE_IMAGE}
               alt={user?.username}
               className="w-7 h-7 rounded-full"
             />
