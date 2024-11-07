@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronDown, HeadphoneOff, MicOff, Plus } from 'lucide-react';
 import { ChannelType } from './types';
 import { useChannels } from './ChannelContext';
-import { useVoiceChat } from '@/hooks/useVoiceChat';
 import { useAuthStore } from '@/stores/authStore';
 import { useCall } from '@/services/call/CallProvider';
 import { TEMP_CHANNEL_MAPPING } from '@/services/call/constants';
@@ -15,13 +14,14 @@ const DEFAULT_PROFILE_IMAGE = '/kakao_login_logo.png';
 const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({ type, icon: Icon }) => {
   const navigate = useNavigate();
   const { channelId } = useParams();
-  const { isMuted, isDeafened } = useVoiceChat();
   const {
     channels,
     addChannel,
     openSections,
     toggleSection,
-    activeChannels,
+    channelStates,
+    activateChannel,
+    deactivateChannel,
     joinChannel,
     leaveChannel,
     renameChannel,
@@ -31,9 +31,9 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; channel: string } | null>(null);
   const [expandedChannels, setExpandedChannels] = useState<Set<string>>(new Set());
   const user = useAuthStore(state => state.user);
-  const { connection, users } = useCall();
+  const { connection, users, currentUser } = useCall();
 
-  // 초기 채널 설정
+  // 초기 채널 설정 및 WebSocket 이벤트에 따른 상태 업데이트
   useEffect(() => {
     if (channelId === GENERAL_VOICE_CHANNEL_ID && type === 'voice') {
       joinChannel(type, '일반');
@@ -43,37 +43,21 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
 
   useEffect(() => {
     if (users && users.length > 0 && type === 'voice') {
-      const voiceChannelUsers = users.filter(user =>
+      const channelUsers = users.filter(user =>
         user.channel_type === 'VOICE' &&
-        user.channel_id === GENERAL_VOICE_CHANNEL_ID,
+        user.channel_id === GENERAL_VOICE_CHANNEL_ID &&
+        user.user_id !== currentUser?.user_id // 현재 사용자 제외
       );
 
-      if (voiceChannelUsers.length > 0) {
-        // 채널 확장
+      if (channelUsers.length > 0) {
+        activateChannel('voice', '일반');
         setExpandedChannels(prev => new Set([...prev, '일반']));
-
-        // 채널 활성화 (누군가 채널에 있다면)
-        joinChannel('voice', '일반');
+      } else if (!channelStates.voice.joined['일반']) {
+        // 다른 사용자가 없고 내가 참여중이지 않을 때만 비활성화
+        deactivateChannel('voice', '일반');
       }
     }
-  }, [users]);
-
-  useEffect(() => {
-    if (type === 'voice' && users) {
-      const hasUsersInVoiceChannel = users.some(user =>
-        user.channel_type === 'VOICE' &&
-        user.channel_id === GENERAL_VOICE_CHANNEL_ID,
-      );
-
-      if (hasUsersInVoiceChannel) {
-        joinChannel('voice', '일반');
-        setExpandedChannels(prev => new Set([...prev, '일반']));
-      } else {
-        // 채널에 아무도 없으면 비활성화 (선택사항)
-        // leaveChannel('voice', '일반');
-      }
-    }
-  }, [users, type]);
+  }, [users, currentUser]);
 
   const toggleChannelExpand = (channelName: string) => {
     setExpandedChannels(prev => {
@@ -95,82 +79,91 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
     const channelMembers = users.filter(member =>
       member.channel_id === TEMP_CHANNEL_MAPPING.channelId &&
       member.server_id === TEMP_CHANNEL_MAPPING.serverId &&
-      member.user_id !== user?.id,  // 현재 사용자 제외
+      member.user_id !== user?.id
     );
 
-    if (channelMembers.length === 0) return null;
+    return (
+      <>
+        {/* 현재 사용자가 참여중인 경우에만 표시 */}
+        {channelStates.voice.joined[channelName] && user && (
+          <div className="ml-6 mt-2 mb-2 flex items-center text-gray-400">
+            <img
+              src={user.profile_image || DEFAULT_PROFILE_IMAGE}
+              alt={user.username}
+              className="w-5 h-5 rounded-full mr-2"
+            />
+            <span className="text-sm font-semibold">{user.username}</span>
+            {/* 현재 사용자의 음성 상태는 useCall의 currentUser에서 가져옴 */}
+            {currentUser && (
+              <div className="ml-auto mr-4 flex items-center gap-2">
+                {currentUser.muted && <MicOff size={16} className="text-red-500" />}
+                {currentUser.deafened && <HeadphoneOff size={16} className="text-red-500" />}
+              </div>
+            )}
+          </div>
+        )}
 
-    return channelMembers.map(member => (
-      <div
-        key={member.user_id}
-        className="ml-6 mt-2 mb-2 flex items-center text-gray-400"
-      >
-        <img
-          src={DEFAULT_PROFILE_IMAGE}
-          alt={member.username}
-          className="w-5 h-5 rounded-full mr-2"
-        />
-        <span className="text-sm font-semibold">{member.username}</span>
-        <div className="ml-auto mr-4 flex items-center gap-2">
-          {member.muted && <MicOff size={16} className="text-red-500" />}
-          {member.deafened && <HeadphoneOff size={16} className="text-red-500" />}
-        </div>
-      </div>
-    ));
-  };
-
-  const isCurrentUserInChannel = (channelName: string) => {
-    if (!users || type !== 'voice') return false;
-
-    return users.some(user =>
-      user.user_id === user?.id &&
-      user.channel_id === GENERAL_VOICE_CHANNEL_ID &&
-      channelName === '일반'
+        {/* 다른 참여자들 표시 */}
+        {channelMembers.map(member => (
+          <div
+            key={member.user_id}
+            className="ml-6 mt-2 mb-2 flex items-center text-gray-400"
+          >
+            <img
+              src={DEFAULT_PROFILE_IMAGE}
+              alt={member.username}
+              className="w-5 h-5 rounded-full mr-2"
+            />
+            <span className="text-sm font-semibold">{member.username}</span>
+            <div className="ml-auto mr-4 flex items-center gap-2">
+              {member.muted && <MicOff size={16} className="text-red-500" />}
+              {member.deafened && <HeadphoneOff size={16} className="text-red-500" />}
+            </div>
+          </div>
+        ))}
+      </>
     );
   };
 
   const handleChannelClick = async (channelName: string) => {
     if (type !== 'voice' && type !== 'video') return;
 
-    toggleChannelExpand(channelName);
+    const mediaType = type as Exclude<ChannelType, 'text'>;  // type assertion 추가
+    const isJoined = channelStates[mediaType].joined[channelName];
 
-    // 이미 활성화된 채널이면 토글만 하고 리턴
-    if (activeChannels[type][channelName]) {
+    // 이미 참여중인 경우: 토글만 수행
+    if (isJoined) {
+      toggleChannelExpand(channelName);
       return;
     }
 
-    const handleJoinChannel = async () => {
-      await joinChannel(type, channelName);
-      if (type === 'voice' && channelName === '일반') {
-        // 실제 음성 채널 연결은 여기서만 수행
-        connection?.joinChannel(GENERAL_VOICE_CHANNEL_ID, 'VOICE');
-        navigate(`/voice/${GENERAL_VOICE_CHANNEL_ID}`);
-      }
-    };
+    // 다른 채널에 이미 참여중인지 확인
+    const hasActiveOtherChannel = Object.entries(channelStates[mediaType].joined)
+      .some(([name, joined]) => name !== channelName && joined);
 
-    const otherType = type === 'voice' ? 'video' : 'voice';
-    const hasActiveOtherChannel = Object.values(activeChannels[otherType]).some(active => active);
+    if (hasActiveOtherChannel) {
+      const confirmSwitch = window.confirm(
+        `현재 ${mediaType === 'voice' ? '음성' : '화상'} 채널에 접속 중입니다.\n통화를 종료하고 이동하시겠습니까?`
+      );
 
-    if (!hasActiveOtherChannel) {
-      await handleJoinChannel();
-      return;
+      if (!confirmSwitch) return;
+
+      // 현재 접속중인 채널에서 나가기
+      Object.entries(channelStates[mediaType].joined).forEach(([name, joined]) => {
+        if (joined) {
+          leaveChannel(mediaType, name);
+          connection?.leaveChannel();
+        }
+      });
     }
 
-    const confirmSwitch = window.confirm(
-      `현재 ${otherType === 'voice' ? '음성' : '화상'} 채널에 접속 중입니다.\n통화를 종료하고 이동하시겠습니까?`,
-    );
-
-    if (!confirmSwitch) return;
-
-    // 활성화된 다른 채널들 종료
-    Object.entries(activeChannels[otherType]).forEach(([channel, active]) => {
-      if (active) {
-        leaveChannel(otherType, channel);
-        connection?.leaveChannel();
-      }
-    });
-
-    await handleJoinChannel();
+    // 채널 참여 처리
+    if (mediaType === 'voice' && channelName === '일반') {
+      joinChannel(mediaType, channelName);
+      connection?.joinChannel(GENERAL_VOICE_CHANNEL_ID, 'VOICE');
+      navigate(`/voice/${GENERAL_VOICE_CHANNEL_ID}`);
+      toggleChannelExpand(channelName);
+    }
   };
 
   const handleContextMenu = (e: React.MouseEvent, channel: string) => {
@@ -199,8 +192,11 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
 
   return (
     <div className="mt-5">
-      <div className="flex items-center justify-between text-gray-400 mb-1 cursor-pointer ml-2"
-           onClick={() => toggleSection(type)}>
+      {/* 채널 섹션 헤더 */}
+      <div
+        className="flex items-center justify-between text-gray-400 mb-1 cursor-pointer ml-2"
+        onClick={() => toggleSection(type)}
+      >
         <div className="flex items-center">
           <ChevronDown
             size={12}
@@ -221,56 +217,49 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
         />
       </div>
 
+      {/* 채널 목록 */}
       {openSections[type] && channels[type].map((channel: string) => (
         <div key={channel} className="mb-1 ml-3">
           <div
             className={`flex items-center text-gray-400 hover:bg-gray-700 hover:text-gray-200 px-2 py-1 rounded cursor-pointer ${
-              type !== 'text' && activeChannels[type][channel] ? 'bg-gray-700 text-white' : ''
+              channelStates[type as 'voice' | 'video']?.active[channel] ? 'bg-gray-700' : ''
+            } ${
+              channelStates[type as 'voice' | 'video']?.joined[channel] ? 'text-white font-semibold' : ''
             }`}
             onClick={() => handleChannelClick(channel)}
             onContextMenu={(e) => handleContextMenu(e, channel)}
           >
             <Icon size={18} className="mr-1" />
             <span className="flex-grow">{channel}</span>
-            {(type === 'voice' || type === 'video') && activeChannels[type][channel] && (
+            {(type === 'voice' || type === 'video') && (
+              channelStates[type].active[channel] || channelStates[type].joined[channel]
+            ) && (
               <>
                 <div className="mr-3">
                   <div className="w-2 h-2 rounded-full bg-green-400" />
                 </div>
                 <ChevronDown
                   size={12}
-                  className={`mr-3 transform transition-transform ${expandedChannels.has(channel) ? '' : '-rotate-90'}`}
+                  className={`mr-3 transform transition-transform ${
+                    expandedChannels.has(channel) ? '' : '-rotate-90'
+                  }`}
                 />
               </>
             )}
           </div>
 
+          {/* 채널 멤버 목록 */}
           {(type === 'voice' || type === 'video') &&
-            activeChannels[type][channel] &&
+            (channelStates[type].active[channel] || channelStates[type].joined[channel]) &&
             expandedChannels.has(channel) && (
               <>
-                {isCurrentUserInChannel(channel) && (
-                  <div className="ml-6 mt-1 flex items-center text-gray-400">
-                    <img
-                      src={user?.profile_image || DEFAULT_PROFILE_IMAGE}
-                      alt={user?.username}
-                      className="w-5 h-5 rounded-full mr-2"
-                    />
-                    <span className="text-sm font-semibold">{user?.username}</span>
-                    <div className="ml-auto mr-4 flex items-center gap-2">
-                      {isMuted && <MicOff size={16} className="text-red-500" />}
-                      {isDeafened && <HeadphoneOff size={16} className="text-red-500" />}
-                    </div>
-                  </div>
-                )}
-
-                {/* 다른 채널 멤버들 표시 */}
                 {renderChannelMembers(channel)}
               </>
             )}
         </div>
       ))}
 
+      {/* 컨텍스트 메뉴 */}
       {contextMenu && (
         <ContextMenu
           x={contextMenu.x}

@@ -1,142 +1,138 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import {
-  ChannelContextType,
-  Channels,
-  ChannelType,
-  User,
-} from '@/components/Home/Channelbar/types';
-import { getUserData } from '@/components/Home/Channelbar/types';
-import { ServerData } from '../../../services/call/types.ts';
+import React, { createContext, useContext, useState } from 'react';
+import { ChannelContextType, Channels, ChannelStateType, ChannelType } from './types';
+import { useAuthStore } from '@/stores/authStore';
 
 export const ChannelContext = createContext<ChannelContextType | null>(null);
 
 export const ChannelProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const user = useAuthStore(state => state.user);  // user 정보를 authStore에서 가져옴
+
   const [channels, setChannels] = useState<Channels>({
     text: ['일반', '풀스택', '인공지능', '클라우드'],
     voice: ['일반'],
     video: ['일반'],
   });
+
   const [openSections, setOpenSections] = useState<Record<ChannelType, boolean>>({
     text: true,
     voice: true,
     video: true,
   });
-  const [activeChannels, setActiveChannels] = useState<
-    Record<Exclude<ChannelType, 'text'>, Record<string, boolean>>
-  >({
-    voice: {},
-    video: {},
+
+  const [channelStates, setChannelStates] = useState<ChannelStateType>({
+    voice: {
+      active: { '일반': false },
+      joined: { '일반': false }
+    },
+    video: {
+      active: { '일반': false },
+      joined: { '일반': false }
+    }
   });
-  const [currentUser] = useState<User>(getUserData());
-  const [serverData, setServerData] = useState<ServerData | null>(null);
 
-  useEffect(() => {
-    // 로그인 성공 후 서버 데이터 fetch 예시
-    // const fetchServerData = async () => {
-    //   try {
-    //     const response = await apiClient.get('/api/v1/servers/me');
-    //     setServerData(response.data);
-    //
-    //     // 받아온 채널 데이터로 channels 상태 업데이트
-    //     const channelsByType = response.data.channels.reduce((acc, channel) => ({
-    //       ...acc,
-    //       [channel.type]: [...(acc[channel.type] || []), channel.name]
-    //     }), {
-    //       text: [],
-    //       voice: [],
-    //       video: []
-    //     });
-    //     setChannels(channelsByType);
-    //   } catch (error) {
-    //     console.error('Failed to fetch server data:', error);
-    //   }
-    // };
-    //
-    // fetchServerData();
-  }, []);
-
-  // 채널 ID를 얻기 위한 유틸리티 함수 추가
-  const getChannelId = (channelName: string, type: ChannelType): string | undefined => {
-    return serverData?.channels.find(
-        (channel: { name: string; type: any; }) => channel.name === channelName && channel.type === type
-    )?.id;
-  };
-
+  // 기본 채널 관리 함수들
   const addChannel = (type: ChannelType, name: string) => {
-    setChannels((prevChannels: Channels) => ({
-      ...prevChannels,
-      [type]: [...prevChannels[type], name],
+    setChannels(prev => ({
+      ...prev,
+      [type]: [...prev[type], name],
     }));
   };
 
   const renameChannel = (type: ChannelType, oldName: string, newName: string) => {
-    setChannels((prevChannels: Channels) => ({
-      ...prevChannels,
-      [type]: prevChannels[type].map((channelName: string) =>
+    setChannels(prev => ({
+      ...prev,
+      [type]: prev[type].map(channelName =>
         channelName === oldName ? newName : channelName,
       ),
     }));
   };
 
   const deleteChannel = (type: ChannelType, channelName: string) => {
-    setChannels((prevChannels: Channels) => ({
-      ...prevChannels,
-      [type]: prevChannels[type].filter((name: string) => name !== channelName),
+    setChannels(prev => ({
+      ...prev,
+      [type]: prev[type].filter(name => name !== channelName),
     }));
+
     if (type !== 'text') {
-      setActiveChannels((prev) => ({
+      setChannelStates(prev => ({
         ...prev,
-        [type]: Object.fromEntries(
-          Object.entries(prev[type]).filter(([key]) => key !== channelName),
-        ),
+        [type]: {
+          active: Object.fromEntries(
+            Object.entries(prev[type].active).filter(([key]) => key !== channelName),
+          ),
+          joined: Object.fromEntries(
+            Object.entries(prev[type].joined).filter(([key]) => key !== channelName),
+          ),
+        },
       }));
     }
   };
 
   const toggleSection = (type: ChannelType) => {
-    setOpenSections((prev) => ({
+    setOpenSections(prev => ({
       ...prev,
       [type]: !prev[type],
     }));
   };
 
-  const joinChannel = (type: Exclude<ChannelType, 'text'>, channelName: string) => {
-    setActiveChannels((prev) => ({
+  // 채널 상태 관리 함수들
+  const activateChannel = (type: Exclude<ChannelType, 'text'>, channelName: string) => {
+    setChannelStates(prev => ({
       ...prev,
       [type]: {
         ...prev[type],
-        [channelName]: true,
+        active: { ...prev[type].active, [channelName]: true },
+      },
+    }));
+  };
+
+  const deactivateChannel = (type: Exclude<ChannelType, 'text'>, channelName: string) => {
+    setChannelStates(prev => ({
+      ...prev,
+      [type]: {
+        ...prev[type],
+        active: { ...prev[type].active, [channelName]: false },
+      },
+    }));
+  };
+
+  const joinChannel = (type: Exclude<ChannelType, 'text'>, channelName: string) => {
+    setChannelStates(prev => ({
+      ...prev,
+      [type]: {
+        ...prev[type],
+        joined: { ...prev[type].joined, [channelName]: true },
       },
     }));
   };
 
   const leaveChannel = (type: Exclude<ChannelType, 'text'>, channelName: string) => {
-    setActiveChannels((prev) => ({
+    setChannelStates(prev => ({
       ...prev,
       [type]: {
         ...prev[type],
-        [channelName]: false,
+        joined: { ...prev[type].joined, [channelName]: false },
       },
     }));
   };
 
-  return (
-    <ChannelContext.Provider
-      value={{
-        channels,
-        addChannel,
-        renameChannel,
-        deleteChannel,
-        openSections,
-        toggleSection,
-        activeChannels,
-        joinChannel,
-        leaveChannel,
-        currentUser,
-        getChannelId,
-        serverData
-      }}
-    >
+  const contextValue: ChannelContextType = {
+    channels,
+    addChannel,
+    renameChannel,
+    deleteChannel,
+    openSections,
+    toggleSection,
+    channelStates,
+    activateChannel,
+    deactivateChannel,
+    joinChannel,
+    leaveChannel,
+    currentUser: user  // user 정보를 context value에 포함
+  };
+
+    return (
+    <ChannelContext.Provider value={contextValue}>
       {children}
     </ChannelContext.Provider>
   );
