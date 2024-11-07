@@ -16,6 +16,14 @@ interface CallProviderProps {
   children: React.ReactNode;
 }
 
+export function useCall() {
+  const context = useContext(CallContext);
+  if (!context) {
+    throw new Error('useCall must be used within a CallProvider');
+  }
+  return context;
+}
+
 export function CallProvider({ children }: CallProviderProps) {
   const [state, setState] = useState<CallState>({
     users: [],
@@ -23,13 +31,16 @@ export function CallProvider({ children }: CallProviderProps) {
     connectionStatus: 'DISCONNECTED'
   });
   const connectionRef = useRef<CallConnection | null>(null);
-  const accessToken = useAuthStore(state => state.accessToken);
-  const user = useAuthStore(state => state.user);
+  const accessToken = useAuthStore((state: { accessToken: any; }) => state.accessToken);
+  const user = useAuthStore((state: { user: any; }) => state.user);
 
   useEffect(() => {
     if (accessToken && user) {
       const connection = new CallConnection(
-        (newState) => setState(newState),
+        (newState) => {
+          console.log('🔄 CallProvider state update:', newState);
+          setState(newState);
+        },
         accessToken
       );
 
@@ -61,12 +72,4 @@ export function CallProvider({ children }: CallProviderProps) {
       )}
     </CallContext.Provider>
   );
-}
-
-export function useCall() {
-  const context = useContext(CallContext);
-  if (!context) {
-    throw new Error('useCall must be used within a CallProvider');
-  }
-  return context;
 }

@@ -3,33 +3,77 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronDown, HeadphoneOff, MicOff, Plus } from 'lucide-react';
 import { ChannelType } from './types';
 import { useChannels } from './ChannelContext';
-import { useVoiceChat } from '../../../hooks/useVoiceChat';
-import { useAuthStore } from '../../../stores/authStore';
+import { useVoiceChat } from '@/hooks/useVoiceChat';
+import { useAuthStore } from '@/stores/authStore';
+import { useCall } from '@/services/call/CallProvider';
+import { TEMP_CHANNEL_MAPPING } from '@/services/call/constants';
 import ContextMenu from './ContextMenu';
-import { useCall } from '../../../services/call/CallProvider.tsx';
 
 const GENERAL_VOICE_CHANNEL_ID = '5143992e-9dcd-45fe-bcc7-e337417b0cfe';
+const DEFAULT_PROFILE_IMAGE = '/kakao_login_logo.png';
 
 const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({ type, icon: Icon }) => {
   const navigate = useNavigate();
   const { channelId } = useParams();
   const { isMuted, isDeafened } = useVoiceChat();
   const {
-    channels, addChannel, openSections, toggleSection,
-    activeChannels, joinChannel, leaveChannel, currentUser,
-    renameChannel, deleteChannel,
+    channels,
+    addChannel,
+    openSections,
+    toggleSection,
+    activeChannels,
+    joinChannel,
+    leaveChannel,
+    renameChannel,
+    deleteChannel,
   } = useChannels();
+
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; channel: string } | null>(null);
   const [expandedChannels, setExpandedChannels] = useState<Set<string>>(new Set());
   const user = useAuthStore(state => state.user);
-  const { connection } = useCall();
+  const { connection, users } = useCall();
 
+  // 초기 채널 설정
   useEffect(() => {
     if (channelId === GENERAL_VOICE_CHANNEL_ID && type === 'voice') {
       joinChannel(type, '일반');
       setExpandedChannels(new Set(['일반']));
     }
   }, []);
+
+  useEffect(() => {
+    if (users && users.length > 0 && type === 'voice') {
+      const voiceChannelUsers = users.filter(user =>
+        user.channel_type === 'VOICE' &&
+        user.channel_id === GENERAL_VOICE_CHANNEL_ID,
+      );
+
+      if (voiceChannelUsers.length > 0) {
+        // 채널 확장
+        setExpandedChannels(prev => new Set([...prev, '일반']));
+
+        // 채널 활성화 (누군가 채널에 있다면)
+        joinChannel('voice', '일반');
+      }
+    }
+  }, [users]);
+
+  useEffect(() => {
+    if (type === 'voice' && users) {
+      const hasUsersInVoiceChannel = users.some(user =>
+        user.channel_type === 'VOICE' &&
+        user.channel_id === GENERAL_VOICE_CHANNEL_ID,
+      );
+
+      if (hasUsersInVoiceChannel) {
+        joinChannel('voice', '일반');
+        setExpandedChannels(prev => new Set([...prev, '일반']));
+      } else {
+        // 채널에 아무도 없으면 비활성화 (선택사항)
+        // leaveChannel('voice', '일반');
+      }
+    }
+  }, [users, type]);
 
   const toggleChannelExpand = (channelName: string) => {
     setExpandedChannels(prev => {
@@ -43,10 +87,51 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
     });
   };
 
+  const renderChannelMembers = (channelName: string) => {
+    if (type !== 'voice' || channelName !== TEMP_CHANNEL_MAPPING.channelName || !users) {
+      return null;
+    }
+
+    const channelMembers = users.filter(member =>
+      member.channel_id === TEMP_CHANNEL_MAPPING.channelId &&
+      member.server_id === TEMP_CHANNEL_MAPPING.serverId &&
+      member.user_id !== user?.id,  // 현재 사용자 제외
+    );
+
+    if (channelMembers.length === 0) return null;
+
+    return channelMembers.map(member => (
+      <div
+        key={member.user_id}
+        className="ml-6 mt-2 mb-2 flex items-center text-gray-400"
+      >
+        <img
+          src={DEFAULT_PROFILE_IMAGE}
+          alt={member.username}
+          className="w-5 h-5 rounded-full mr-2"
+        />
+        <span className="text-sm font-semibold">{member.username}</span>
+        <div className="ml-auto mr-4 flex items-center gap-2">
+          {member.muted && <MicOff size={16} className="text-red-500" />}
+          {member.deafened && <HeadphoneOff size={16} className="text-red-500" />}
+        </div>
+      </div>
+    ));
+  };
+
+  const isCurrentUserInChannel = (channelName: string) => {
+    if (!users || type !== 'voice') return false;
+
+    return users.some(user =>
+      user.user_id === user?.id &&
+      user.channel_id === GENERAL_VOICE_CHANNEL_ID &&
+      channelName === '일반'
+    );
+  };
+
   const handleChannelClick = async (channelName: string) => {
     if (type !== 'voice' && type !== 'video') return;
 
-    // 채널 확장/축소 토글 먼저 수행
     toggleChannelExpand(channelName);
 
     // 이미 활성화된 채널이면 토글만 하고 리턴
@@ -56,24 +141,13 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
 
     const handleJoinChannel = async () => {
       await joinChannel(type, channelName);
-
-      // 현재는 일반 음성 채널만 구현
-      // TODO: 추후 채널 확장 시 고려사항
-      // 1. channels 객체에 각 채널별 ID 매핑 추가 필요
-      // 2. 채널 타입(voice/video)에 따른 분기 처리 필요
-      // 3. DB에서 채널 정보를 가져오는 API 연동 필요
       if (type === 'voice' && channelName === '일반') {
+        // 실제 음성 채널 연결은 여기서만 수행
         connection?.joinChannel(GENERAL_VOICE_CHANNEL_ID, 'VOICE');
         navigate(`/voice/${GENERAL_VOICE_CHANNEL_ID}`);
       }
-      // else {
-      //   const channelId = await getChannelId(type, channelName);
-      //   connection?.joinChannel(channelId, type.toUpperCase() as MediaChannelType);
-      //   navigate(`/${type}/${channelId}`);
-      // }
     };
 
-    // 다른 타입의 채널이 활성화되어 있는지 확인
     const otherType = type === 'voice' ? 'video' : 'voice';
     const hasActiveOtherChannel = Object.values(activeChannels[otherType]).some(active => active);
 
@@ -82,9 +156,8 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
       return;
     }
 
-    // 다른 타입의 채널이 활성화되어 있다면 확인 후 전환
     const confirmSwitch = window.confirm(
-      `현재 ${otherType === 'voice' ? '음성' : '화상'} 채널에 접속 중입니다.\n통화를 종료하고 이동하시겠습니까?`
+      `현재 ${otherType === 'voice' ? '음성' : '화상'} 채널에 접속 중입니다.\n통화를 종료하고 이동하시겠습니까?`,
     );
 
     if (!confirmSwitch) return;
@@ -129,8 +202,10 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
       <div className="flex items-center justify-between text-gray-400 mb-1 cursor-pointer ml-2"
            onClick={() => toggleSection(type)}>
         <div className="flex items-center">
-          <ChevronDown size={12}
-                       className={`transform transition-transform ${openSections[type] ? '' : '-rotate-90'}`} />
+          <ChevronDown
+            size={12}
+            className={`transform transition-transform ${openSections[type] ? '' : '-rotate-90'}`}
+          />
           <span className="uppercase text-xs font-semibold ml-[0.9rem]">
             {type === 'text' ? '채팅' : type === 'voice' ? '음성' : '화상'} 채널
           </span>
@@ -145,6 +220,7 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
           }}
         />
       </div>
+
       {openSections[type] && channels[type].map((channel: string) => (
         <div key={channel} className="mb-1 ml-3">
           <div
@@ -168,21 +244,29 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
               </>
             )}
           </div>
+
           {(type === 'voice' || type === 'video') &&
             activeChannels[type][channel] &&
             expandedChannels.has(channel) && (
-              <div className="ml-6 mt-1 flex items-center text-gray-400">
-                <img
-                  src={user?.profile_image || currentUser.profile_image}
-                  alt={user?.username}
-                  className="w-5 h-5 rounded-full mr-2"
-                />
-                <span className="text-sm font-semibold">{user?.username}</span>
-                <div className="ml-auto mr-4 flex items-center gap-2">
-                  {isMuted && <MicOff size={16} className="text-red-500" />}
-                  {isDeafened && <HeadphoneOff size={16} className="text-red-500" />}
-                </div>
-              </div>
+              <>
+                {isCurrentUserInChannel(channel) && (
+                  <div className="ml-6 mt-1 flex items-center text-gray-400">
+                    <img
+                      src={user?.profile_image || DEFAULT_PROFILE_IMAGE}
+                      alt={user?.username}
+                      className="w-5 h-5 rounded-full mr-2"
+                    />
+                    <span className="text-sm font-semibold">{user?.username}</span>
+                    <div className="ml-auto mr-4 flex items-center gap-2">
+                      {isMuted && <MicOff size={16} className="text-red-500" />}
+                      {isDeafened && <HeadphoneOff size={16} className="text-red-500" />}
+                    </div>
+                  </div>
+                )}
+
+                {/* 다른 채널 멤버들 표시 */}
+                {renderChannelMembers(channel)}
+              </>
             )}
         </div>
       ))}

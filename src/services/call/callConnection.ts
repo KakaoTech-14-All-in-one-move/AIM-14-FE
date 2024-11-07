@@ -1,5 +1,5 @@
-import { CallServerMessage, CallState, CallUserData, MediaChannelType } from './types';
-import { CALL_API, OP_CODES, RECONNECT_DELAY, DEFAULT_VOICE_STATE } from './constants';
+import { CallServerMessage, CallState, CallUserData, MediaChannelType, VoiceStateUpdate } from './types';
+import { CALL_API, OP_CODES, RECONNECT_DELAY } from './constants';
 import { apiClient } from '@/api/apiClient';
 
 interface CallServerResponse {
@@ -62,15 +62,12 @@ export class CallConnection {
       console.log('📨 Received message:', message);
 
       switch (message.op) {
-        case OP_CODES.INITIAL:
+        case OP_CODES.INITIAL_ACK:
           if (message.data?.heartbeat_interval) {
             console.log('💓 Setting up heartbeat with interval:', message.data.heartbeat_interval);
             this.setupHeartbeat(message.data.heartbeat_interval);
             this.sendOp(OP_CODES.HEARTBEAT);
             this.sendServerIdentification();
-          }
-          if (message.data?.user) {
-            this.updateCurrentUser(message.data.user);
           }
           break;
 
@@ -78,13 +75,21 @@ export class CallConnection {
           console.log('💓 Heartbeat acknowledged');
           break;
 
+        case OP_CODES.IDENTIFY_ACK:
+          console.log('🎯 Server identification acknowledged');
+          console.log('🔍 IDENTIFY_ACK data:', message.data);
+          // data 자체를 CallUserData로 처리
+          if (message.data && 'user_id' in message.data) {
+            console.log('🔄 Updating users with identify data');
+            this.updateUsers([message.data as CallUserData]);
+          }
+          break;
+
         case OP_CODES.JOIN_CHANNEL_ACK:
           console.log('🎯 Channel join acknowledged');
           if (message.data?.users) {
+            console.log('🔄 Updating users list:', message.data.users);
             this.updateUsers(message.data.users);
-          }
-          if (message.data?.user) {
-            this.updateCurrentUser(message.data.user);
           }
           break;
 
@@ -181,13 +186,13 @@ export class CallConnection {
     }
   }
 
-  updateState(state: Partial<typeof DEFAULT_VOICE_STATE>) {
+  updateState(state: VoiceStateUpdate) {
     if (this.currentChannelId) {
       console.log('🔄 Updating state:', state);
       this.sendOp(OP_CODES.STATE_UPDATE, {
         server_id: this.currentServerId,
         channel_id: this.currentChannelId,
-        ...state
+        ...state,
       });
     }
   }

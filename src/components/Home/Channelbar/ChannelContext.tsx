@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
   ChannelContextType,
   Channels,
@@ -6,6 +6,7 @@ import {
   User,
 } from '@/components/Home/Channelbar/types';
 import { getUserData } from '@/components/Home/Channelbar/types';
+import { ServerData } from '../../../services/call/types.ts';
 
 export const ChannelContext = createContext<ChannelContextType | null>(null);
 
@@ -27,6 +28,39 @@ export const ChannelProvider: React.FC<{ children: React.ReactNode }> = ({ child
     video: {},
   });
   const [currentUser] = useState<User>(getUserData());
+  const [serverData, setServerData] = useState<ServerData | null>(null);
+
+  useEffect(() => {
+    // 로그인 성공 후 서버 데이터 fetch 예시
+    // const fetchServerData = async () => {
+    //   try {
+    //     const response = await apiClient.get('/api/v1/servers/me');
+    //     setServerData(response.data);
+    //
+    //     // 받아온 채널 데이터로 channels 상태 업데이트
+    //     const channelsByType = response.data.channels.reduce((acc, channel) => ({
+    //       ...acc,
+    //       [channel.type]: [...(acc[channel.type] || []), channel.name]
+    //     }), {
+    //       text: [],
+    //       voice: [],
+    //       video: []
+    //     });
+    //     setChannels(channelsByType);
+    //   } catch (error) {
+    //     console.error('Failed to fetch server data:', error);
+    //   }
+    // };
+    //
+    // fetchServerData();
+  }, []);
+
+  // 채널 ID를 얻기 위한 유틸리티 함수 추가
+  const getChannelId = (channelName: string, type: ChannelType): string | undefined => {
+    return serverData?.channels.find(
+        (channel: { name: string; type: any; }) => channel.name === channelName && channel.type === type
+    )?.id;
+  };
 
   const addChannel = (type: ChannelType, name: string) => {
     setChannels((prevChannels: Channels) => ({
@@ -99,6 +133,8 @@ export const ChannelProvider: React.FC<{ children: React.ReactNode }> = ({ child
         joinChannel,
         leaveChannel,
         currentUser,
+        getChannelId,
+        serverData
       }}
     >
       {children}
