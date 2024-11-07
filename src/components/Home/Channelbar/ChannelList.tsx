@@ -6,6 +6,7 @@ import { useChannels } from './ChannelContext';
 import { useVoiceChat } from '../../../hooks/useVoiceChat';
 import { useAuthStore } from '../../../stores/authStore';
 import ContextMenu from './ContextMenu';
+import { useCall } from '../../../services/call/CallProvider.tsx';
 
 const GENERAL_VOICE_CHANNEL_ID = '5143992e-9dcd-45fe-bcc7-e337417b0cfe';
 
@@ -21,6 +22,7 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; channel: string } | null>(null);
   const [expandedChannels, setExpandedChannels] = useState<Set<string>>(new Set());
   const user = useAuthStore(state => state.user);
+  const { connection } = useCall();
 
   useEffect(() => {
     if (channelId === GENERAL_VOICE_CHANNEL_ID && type === 'voice') {
@@ -42,45 +44,60 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
   };
 
   const handleChannelClick = async (channelName: string) => {
-    if (type === 'voice' || type === 'video') {
-      // 채널 확장/축소 토글 먼저 수행
-      toggleChannelExpand(channelName);
+    if (type !== 'voice' && type !== 'video') return;
 
-      const otherType = type === 'voice' ? 'video' : 'voice';
-      const hasActiveOtherChannel = Object.values(activeChannels[otherType]).some(active => active);
+    // 채널 확장/축소 토글 먼저 수행
+    toggleChannelExpand(channelName);
 
-      // 이미 활성화된 채널이면 토글만 하고 리턴
-      if (activeChannels[type][channelName]) {
-        return;
-      }
-
-      if (hasActiveOtherChannel) {
-        const confirmSwitch = window.confirm(`현재 ${otherType === 'voice' ? '음성' : '화상'} 채널에 접속 중입니다.\n통화를 종료하고 이동하시겠습니까?`);
-
-        if (confirmSwitch) {
-          Object.entries(activeChannels[otherType]).forEach(([channel, active]) => {
-            if (active) {
-              leaveChannel(otherType, channel);
-            }
-          });
-
-          if (type === 'voice' && channelName === '일반') {
-            await joinChannel(type, channelName);
-            navigate(`/voice/${GENERAL_VOICE_CHANNEL_ID}`);
-          } else {
-            joinChannel(type, channelName);
-          }
-        }
-        return;
-      }
-
-      if (type === 'voice' && channelName === '일반') {
-        await joinChannel(type, channelName);
-        navigate(`/voice/${GENERAL_VOICE_CHANNEL_ID}`);
-      } else {
-        joinChannel(type, channelName);
-      }
+    // 이미 활성화된 채널이면 토글만 하고 리턴
+    if (activeChannels[type][channelName]) {
+      return;
     }
+
+    const handleJoinChannel = async () => {
+      await joinChannel(type, channelName);
+
+      // 현재는 일반 음성 채널만 구현
+      // TODO: 추후 채널 확장 시 고려사항
+      // 1. channels 객체에 각 채널별 ID 매핑 추가 필요
+      // 2. 채널 타입(voice/video)에 따른 분기 처리 필요
+      // 3. DB에서 채널 정보를 가져오는 API 연동 필요
+      if (type === 'voice' && channelName === '일반') {
+        connection?.joinChannel(GENERAL_VOICE_CHANNEL_ID, 'VOICE');
+        navigate(`/voice/${GENERAL_VOICE_CHANNEL_ID}`);
+      }
+      // else {
+      //   const channelId = await getChannelId(type, channelName);
+      //   connection?.joinChannel(channelId, type.toUpperCase() as MediaChannelType);
+      //   navigate(`/${type}/${channelId}`);
+      // }
+    };
+
+    // 다른 타입의 채널이 활성화되어 있는지 확인
+    const otherType = type === 'voice' ? 'video' : 'voice';
+    const hasActiveOtherChannel = Object.values(activeChannels[otherType]).some(active => active);
+
+    if (!hasActiveOtherChannel) {
+      await handleJoinChannel();
+      return;
+    }
+
+    // 다른 타입의 채널이 활성화되어 있다면 확인 후 전환
+    const confirmSwitch = window.confirm(
+      `현재 ${otherType === 'voice' ? '음성' : '화상'} 채널에 접속 중입니다.\n통화를 종료하고 이동하시겠습니까?`
+    );
+
+    if (!confirmSwitch) return;
+
+    // 활성화된 다른 채널들 종료
+    Object.entries(activeChannels[otherType]).forEach(([channel, active]) => {
+      if (active) {
+        leaveChannel(otherType, channel);
+        connection?.leaveChannel();
+      }
+    });
+
+    await handleJoinChannel();
   };
 
   const handleContextMenu = (e: React.MouseEvent, channel: string) => {

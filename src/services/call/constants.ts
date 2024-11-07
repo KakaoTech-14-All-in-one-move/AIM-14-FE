@@ -11,7 +11,19 @@ export const OP_CODES = {
   IDENTIFY: 2,
   IDENTIFY_ACK: 3,
   JOIN_CHANNEL: 3,
-  JOIN_CHANNEL_ACK: 4
+  JOIN_CHANNEL_ACK: 4,
+  LEAVE_CHANNEL: 4,
+  LEAVE_CHANNEL_ACK: 5,
+  STATE_UPDATE: 5,
+  STATE_UPDATE_ACK: 6
 } as const;
 
 export const RECONNECT_DELAY = 5000;
+
+export const DEFAULT_VOICE_STATE = {
+  muted: false,
+  deafened: false,
+  speaking: false,
+  cameraOn: false,
+  screenSharing: false
+};

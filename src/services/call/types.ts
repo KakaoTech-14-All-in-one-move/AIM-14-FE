@@ -1,5 +1,4 @@
-export type ChannelType = 'voice' | 'video' | 'text';
-export type MediaChannelType = 'voice' | 'video';
+export type MediaChannelType = 'VOICE' | 'VIDEO';
 
 export interface CallUserData {
   userId: string;

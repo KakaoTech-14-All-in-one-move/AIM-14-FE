@@ -1,5 +1,5 @@
-import { CallServerMessage, CallState, CallUserData } from './types';
-import { CALL_API, OP_CODES, RECONNECT_DELAY } from './constants';
+import { CallServerMessage, CallState, CallUserData, MediaChannelType } from './types';
+import { CALL_API, OP_CODES, RECONNECT_DELAY, DEFAULT_VOICE_STATE } from './constants';
 import { apiClient } from '@/api/apiClient';
 
 interface CallServerResponse {
@@ -66,7 +66,6 @@ export class CallConnection {
           if (message.data?.heartbeat_interval) {
             console.log('💓 Setting up heartbeat with interval:', message.data.heartbeat_interval);
             this.setupHeartbeat(message.data.heartbeat_interval);
-            // 즉시 첫 번째 heartbeat 전송
             this.sendOp(OP_CODES.HEARTBEAT);
             this.sendServerIdentification();
           }
@@ -79,11 +78,25 @@ export class CallConnection {
           console.log('💓 Heartbeat acknowledged');
           break;
 
-        case OP_CODES.IDENTIFY_ACK:
         case OP_CODES.JOIN_CHANNEL_ACK:
+          console.log('🎯 Channel join acknowledged');
           if (message.data?.users) {
             this.updateUsers(message.data.users);
           }
+          if (message.data?.user) {
+            this.updateCurrentUser(message.data.user);
+          }
+          break;
+
+        case OP_CODES.LEAVE_CHANNEL_ACK:
+          console.log('👋 Channel leave acknowledged');
+          if (message.data?.users) {
+            this.updateUsers(message.data.users);
+          }
+          break;
+
+        case OP_CODES.STATE_UPDATE_ACK:
+          console.log('🔄 State update acknowledged');
           if (message.data?.user) {
             this.updateCurrentUser(message.data.user);
           }
@@ -146,7 +159,7 @@ export class CallConnection {
     });
   }
 
-  joinChannel(channelId: string, channelType: 'VOICE' | 'VIDEO' = 'VOICE') {
+  joinChannel(channelId: string, channelType: MediaChannelType = 'VOICE') {
     console.log('🎯 Joining channel:', channelId);
     this.currentChannelId = channelId;
     this.sendOp(OP_CODES.JOIN_CHANNEL, {
@@ -154,6 +167,29 @@ export class CallConnection {
       channel_id: channelId,
       channel_type: channelType,
     });
+  }
+
+  leaveChannel() {
+    if (this.currentChannelId) {
+      console.log('👋 Leaving channel:', this.currentChannelId);
+      this.sendOp(OP_CODES.LEAVE_CHANNEL, {
+        server_id: this.currentServerId,
+        channel_id: this.currentChannelId,
+        channel_type: 'VOICE',
+      });
+      this.currentChannelId = null;
+    }
+  }
+
+  updateState(state: Partial<typeof DEFAULT_VOICE_STATE>) {
+    if (this.currentChannelId) {
+      console.log('🔄 Updating state:', state);
+      this.sendOp(OP_CODES.STATE_UPDATE, {
+        server_id: this.currentServerId,
+        channel_id: this.currentChannelId,
+        ...state
+      });
+    }
   }
 
   private updateUsers(users: CallUserData[]) {
