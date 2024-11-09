@@ -1,17 +1,18 @@
-// VoiceContent.tsx 수정
 import { UserBox } from './UserBox.tsx';
 import { VoiceControls } from './VoiceControls.tsx';
 import { useState } from 'react';
 import { useCall } from '../../services/call/CallProvider.tsx';
+import { useVoiceChat } from '@/hooks/useVoiceChat';  // 추가
 
 export const VoiceContent = () => {
   const [showControls, setShowControls] = useState(false);
-  const { users, currentUser } = useCall();
+  const { currentUser } = useCall();
+  const voiceChatStore = useVoiceChat();  // VoiceChat store 사용
 
-  // null 값을 필터링하고 타입 보장
+  // VoiceChat store의 users 사용
   const allUsers = currentUser
-    ? [...users.filter(u => u.user_id !== currentUser.user_id), currentUser].filter((user): user is CallUserData => user !== null)
-    : users;
+    ? [...voiceChatStore.users.filter(u => u.user_id !== currentUser.user_id), currentUser]
+    : voiceChatStore.users;
 
   if (!allUsers?.length) return null;
 
@@ -36,7 +37,8 @@ export const VoiceContent = () => {
                 nickname: user.username,
                 isSpeaking: user.speaking,
                 isMuted: user.muted,
-                isDeafened: user.deafened
+                isDeafened: user.deafened,
+                imageUrl: user.profile_image
               }}
             />
           ))}

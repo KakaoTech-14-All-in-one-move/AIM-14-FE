@@ -3,7 +3,7 @@ import { HeadphoneOff, Headphones, Mic, MicOff, PhoneOff } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useCall } from '../../services/call/CallProvider.tsx';
 import { useVoiceChat } from '@/hooks/useVoiceChat';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 interface VoiceControlsProps {
   show: boolean;
@@ -15,10 +15,19 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ show }) => {
   const { connection, currentUser } = useCall();
   const voiceChatStore = useVoiceChat();
 
-  // VoiceChat store와 현재 유저 상태 동기화
+  // 현재 유저의 마지막 상태를 참조하기 위한 ref
+  const latestStateRef = useRef({
+    muted: currentUser?.muted || false,
+    deafened: currentUser?.deafened || false
+  });
+
+  // 상태가 변경될 때마다 ref 업데이트
   useEffect(() => {
     if (currentUser) {
-      voiceChatStore.updateUserStatus(currentUser.user_id, currentUser);
+      latestStateRef.current = {
+        muted: currentUser.muted,
+        deafened: currentUser.deafened
+      };
     }
   }, [currentUser]);
 
@@ -31,29 +40,30 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ show }) => {
 
   const handleToggleMute = useCallback(() => {
     if (connection && currentUser) {
-      // 현재 채널과 유저 상태 확인
       if (!connection.isInChannel()) {
         console.log('Not in a channel yet');
         return;
       }
 
-      const newMutedState = !currentUser.muted;
+      // 최신 상태를 기반으로 업데이트
+      const newMutedState = !latestStateRef.current.muted;
+      latestStateRef.current.muted = newMutedState;
 
-      // UI 상태 즉시 업데이트
+      // 서버에 현재 누적된 전체 상태 전송
+      connection.updateState({
+        muted: latestStateRef.current.muted,
+        deafened: latestStateRef.current.deafened
+      });
+
+      // 임시 UI 업데이트 (서버 응답 전)
       voiceChatStore.updateUserStatus(currentUser.user_id, {
         ...currentUser,
         muted: newMutedState
       });
 
-      // 서버에 상태 업데이트 전송
-      connection.updateState({
-        muted: newMutedState,
-        deafened: currentUser.deafened
-      });
-
-      console.log('Mute state updated:', {
+      console.log('Requested state update:', {
         userId: currentUser.user_id,
-        newState: newMutedState
+        newState: latestStateRef.current
       });
     }
   }, [connection, currentUser, voiceChatStore]);
@@ -65,41 +75,42 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ show }) => {
         return;
       }
 
-      const newDeafenedState = !currentUser.deafened;
+      // 최신 상태를 기반으로 업데이트
+      const newDeafenedState = !latestStateRef.current.deafened;
+      latestStateRef.current.deafened = newDeafenedState;
 
-      // UI 상태 즉시 업데이트
-      voiceChatStore.updateUserStatus(currentUser.user_id, {
-        ...currentUser,
-        deafened: newDeafenedState,
-        // 귀머거리 상태가 되면 자동으로 음소거도 활성화
-        muted: newDeafenedState ? true : currentUser.muted
+      // 서버에 현재 누적된 전체 상태 전송
+      connection.updateState({
+        muted: latestStateRef.current.muted,
+        deafened: latestStateRef.current.deafened
       });
 
-      // 서버에 상태 업데이트 전송
-      connection.updateState({
-        muted: newDeafenedState ? true : currentUser.muted,
+      // 임시 UI 업데이트 (서버 응답 전)
+      voiceChatStore.updateUserStatus(currentUser.user_id, {
+        ...currentUser,
         deafened: newDeafenedState
       });
 
-      console.log('Deafen state updated:', {
+      console.log('Requested state update:', {
         userId: currentUser.user_id,
-        newState: newDeafenedState
+        newState: latestStateRef.current
       });
     }
   }, [connection, currentUser, voiceChatStore]);
 
-  // 현재 유저의 상태 가져오기
-  const currentUserState = voiceChatStore.users.find(
-    u => u.user_id === currentUser?.user_id
-  ) || currentUser;
-
-  console.log('Current user state:', currentUserState);
+  // currentUser와 store의 상태를 병합하여 최신 상태 사용
+  const currentUserState = useMemo(() => {
+    const storeUser = voiceChatStore.users.find(u => u.user_id === currentUser?.user_id);
+    return {
+      ...currentUser,
+      ...storeUser,
+      ...latestStateRef.current
+    };
+  }, [currentUser, voiceChatStore.users]);
 
   return (
-    <div
-      className={`absolute bottom-6 left-1/2 transform -translate-x-1/2 flex items-center space-x-2 
-       transition-opacity duration-200 ${show ? 'opacity-100' : 'opacity-0'}`}
-    >
+    <div className={`absolute bottom-6 left-1/2 transform -translate-x-1/2 flex items-center space-x-2 
+     transition-opacity duration-200 ${show ? 'opacity-100' : 'opacity-0'}`}>
       <ControlButton
         icon={currentUserState?.muted ? MicOff : Mic}
         onClick={handleToggleMute}

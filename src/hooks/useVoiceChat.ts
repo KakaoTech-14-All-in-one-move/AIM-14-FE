@@ -26,7 +26,6 @@ export const useVoiceChat = create<VoiceChatStore>((set, get) => ({
   addUser: (user) => {
     console.log('VoiceChat store addUser:', user);
     set(state => {
-      // 이미 존재하는 유저인지 확인
       if (state.users.some(u => u.user_id === user.user_id)) {
         return state;
       }
@@ -47,9 +46,9 @@ export const useVoiceChat = create<VoiceChatStore>((set, get) => ({
       users: state.users.map(user =>
         user.user_id === userId
           ? {
-            ...user,
-            ...updates,
-            // 명시적으로 상태 업데이트
+            ...user,  // 기존 상태 유지
+            ...updates,  // 새로운 상태로 업데이트
+            // 각 상태를 독립적으로 관리
             muted: updates.muted ?? user.muted,
             deafened: updates.deafened ?? user.deafened,
             speaking: updates.speaking ?? user.speaking,
@@ -59,14 +58,6 @@ export const useVoiceChat = create<VoiceChatStore>((set, get) => ({
           : user
       )
     }));
-
-    // isMuted와 isDeafened 상태도 함께 업데이트
-    if ('muted' in updates || 'deafened' in updates) {
-      set(state => ({
-        isMuted: updates.muted ?? state.isMuted,
-        isDeafened: updates.deafened ?? state.isDeafened
-      }));
-    }
   },
 
   toggleMute: () => {
@@ -76,13 +67,6 @@ export const useVoiceChat = create<VoiceChatStore>((set, get) => ({
 
   toggleDeafen: () => {
     console.log('VoiceChat store toggleDeafen');
-    set(state => {
-      const newDeafened = !state.isDeafened;
-      return {
-        isDeafened: newDeafened,
-        // 귀머거리 상태가 되면 자동으로 음소거도 활성화
-        isMuted: newDeafened ? true : state.isMuted
-      };
-    });
+    set(state => ({ isDeafened: !state.isDeafened }));
   }
 }));

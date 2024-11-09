@@ -1,13 +1,18 @@
-// src/components/Voice/UserBox.tsx
-import React from 'react';
-import { MicOff, HeadphoneOff } from 'lucide-react';
-import { User } from './types/voice';
+import { HeadphoneOff, MicOff } from 'lucide-react';
 
 interface UserBoxProps {
-  user: User;
+  user: {
+    id: string;
+    nickname: string;
+    isSpeaking: boolean;
+    isMuted: boolean;
+    isDeafened: boolean;
+    imageUrl?: string;
+  };
 }
 
 export const UserBox: React.FC<UserBoxProps> = ({ user }) => {
+  // useVoiceChat를 사용할 필요는 없음 - props로 받은 상태를 사용
   return (
     <div
       className={`relative w-full aspect-video bg-gray-900 rounded-xl overflow-hidden shadow-lg
@@ -24,7 +29,9 @@ export const UserBox: React.FC<UserBoxProps> = ({ user }) => {
           />
         ) : (
           <div className="w-40 h-40 rounded-full bg-gray-800 flex items-center justify-center">
-            <span className="text-5xl text-white">{user.nickname[0].toUpperCase()}</span>
+            <span className="text-5xl text-white">
+              {user.nickname[0].toUpperCase()}
+            </span>
           </div>
         )}
       </div>

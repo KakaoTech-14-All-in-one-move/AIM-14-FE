@@ -119,37 +119,50 @@ export class CallConnection {
     [OP_CODES.STATE_UPDATE_ACK]: (data: any) => {
       console.log('STATE_UPDATE_ACK received:', data);
 
-      if (!this.isCallUserData(data)) return;
+      if (!this.isCallUserData(data)) {
+        console.warn('Invalid user data in STATE_UPDATE_ACK:', data);
+        return;
+      }
+
+      // 응답으로 받은 user_id를 기준으로 상태 업데이트
+      const updatedUserId = data.user_id;
 
       this.updateUsers(prevUsers => {
-        // 상태 업데이트 시 기존 유저의 모든 상태를 보존하면서 새로운 상태만 업데이트
         return prevUsers.map(user =>
-          user.user_id === data.user_id
+          user.user_id === updatedUserId
             ? {
-              ...user,                    // 기존 상태 유지
-              ...data,                    // 새로운 상태로 업데이트
-              muted: data.muted !== undefined ? data.muted : user.muted,
-              deafened: data.deafened !== undefined ? data.deafened : user.deafened,
-              speaking: data.speaking !== undefined ? data.speaking : user.speaking,
-              camera_on: data.camera_on !== undefined ? data.camera_on : user.camera_on,
-              screen_sharing: data.screen_sharing !== undefined ? data.screen_sharing : user.screen_sharing
+              ...user,
+              ...data,
+              // 명시적으로 각 상태 업데이트
+              muted: data.muted ?? user.muted,
+              deafened: data.deafened ?? user.deafened,
+              speaking: data.speaking ?? user.speaking,
+              camera_on: data.camera_on ?? user.camera_on,
+              screen_sharing: data.screen_sharing ?? user.screen_sharing
             }
             : user
         );
       });
 
-      // currentUser도 동일한 방식으로 업데이트
-      if (this.state.currentUser?.user_id === data.user_id) {
+      // 현재 사용자의 상태도 업데이트
+      if (this.state.currentUser?.user_id === updatedUserId) {
         this.updateCurrentUser({
           ...this.state.currentUser,
           ...data,
-          muted: data.muted !== undefined ? data.muted : this.state.currentUser.muted,
-          deafened: data.deafened !== undefined ? data.deafened : this.state.currentUser.deafened,
-          speaking: data.speaking !== undefined ? data.speaking : this.state.currentUser.speaking,
-          camera_on: data.camera_on !== undefined ? data.camera_on : this.state.currentUser.camera_on,
-          screen_sharing: data.screen_sharing !== undefined ? data.screen_sharing : this.state.currentUser.screen_sharing
+          muted: data.muted ?? this.state.currentUser.muted,
+          deafened: data.deafened ?? this.state.currentUser.deafened,
+          speaking: data.speaking ?? this.state.currentUser.speaking,
+          camera_on: data.camera_on ?? this.state.currentUser.camera_on,
+          screen_sharing: data.screen_sharing ?? this.state.currentUser.screen_sharing
         });
       }
+
+      console.log('State updated for user:', {
+        userId: updatedUserId,
+        newState: data,
+        allUsers: this.state.users,
+        currentUser: this.state.currentUser
+      });
     },
 
     [OP_CODES.LEAVE_CHANNEL_ACK]: (data: any) => {

@@ -3,10 +3,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronDown, HeadphoneOff, MicOff, Plus } from 'lucide-react';
 import { ChannelType } from './types';
 import { useChannels } from './ChannelContext';
-import { useAuthStore } from '@/stores/authStore';
 import { useCall } from '@/services/call/CallProvider';
 import { TEMP_CHANNEL_MAPPING } from '@/services/call/constants';
 import ContextMenu from './ContextMenu';
+import { useVoiceChat } from '../../../hooks/useVoiceChat.ts';
 
 const GENERAL_VOICE_CHANNEL_ID = '5143992e-9dcd-45fe-bcc7-e337417b0cfe';
 const DEFAULT_PROFILE_IMAGE = '/kakao_login_logo.png';
@@ -30,8 +30,8 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; channel: string } | null>(null);
   const [expandedChannels, setExpandedChannels] = useState<Set<string>>(new Set());
-  const user = useAuthStore(state => state.user);
-  const { connection, users, currentUser } = useCall();
+  const { connection, users } = useCall();
+  const voiceChatStore = useVoiceChat();
 
   useEffect(() => {
     // 초기 채널 설정
@@ -42,25 +42,22 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
 
     // 채널 상태 업데이트
     if (type === 'voice') {
-      console.log('Checking channel status - Current users:', users);
+      console.log('Checking channel status - Current store users:', voiceChatStore.users);
 
-      const channelUsers = users?.filter(user =>
+      const channelUsers = voiceChatStore.users.filter(user =>
         user.channel_type === 'VOICE' &&
         user.channel_id === GENERAL_VOICE_CHANNEL_ID
-      ) || [];
+      );
 
       console.log('Channel users after filter:', channelUsers);
 
       if (channelUsers.length > 0) {
-        // 채널에 유저가 있으면 활성화
         console.log('Activating channel - users present');
         activateChannel('voice', '일반');
         setExpandedChannels(prev => new Set([...prev, '일반']));
       } else {
-        // 채널에 아무도 없으면 비활성화
         console.log('Deactivating channel - no users');
         deactivateChannel('voice', '일반');
-        // 옵션: 채널 접기
         setExpandedChannels(prev => {
           const newSet = new Set(prev);
           newSet.delete('일반');
@@ -68,14 +65,14 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
         });
       }
     }
-  }, [channelId, users, type]);
+  }, [channelId, voiceChatStore.users, type]);
 
   useEffect(() => {
     console.log('ChannelList users updated:', users);
     if (users && users.length > 0 && type === 'voice') {
-      const voiceChannelUsers = users.filter(user =>
+      const voiceChannelUsers = users.filter((user: { channel_type: string; channel_id: string; }) =>
         user.channel_type === 'VOICE' &&
-        user.channel_id === GENERAL_VOICE_CHANNEL_ID
+        user.channel_id === GENERAL_VOICE_CHANNEL_ID,
       );
 
       console.log('Voice channel users:', voiceChannelUsers);
@@ -100,13 +97,14 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
   };
 
   const renderChannelMembers = (channelName: string) => {
-    if (type !== 'voice' || channelName !== TEMP_CHANNEL_MAPPING.channelName || !users) {
+    if (type !== 'voice' || channelName !== TEMP_CHANNEL_MAPPING.channelName) {
       return null;
     }
 
-    console.log('Rendering channel members. Current users:', users);
+    console.log('Rendering channel members. Current store users:', voiceChatStore.users);
 
-    const channelMembers = users.filter(member =>
+    // users 대신 voiceChatStore.users 사용
+    const channelMembers = voiceChatStore.users.filter(member =>
       member.channel_id === TEMP_CHANNEL_MAPPING.channelId &&
       member.server_id === TEMP_CHANNEL_MAPPING.serverId
     );
@@ -155,7 +153,7 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
 
     if (hasActiveOtherChannel) {
       const confirmSwitch = window.confirm(
-        `현재 ${mediaType === 'voice' ? '음성' : '화상'} 채널에 접속 중입니다.\n통화를 종료하고 이동하시겠습니까?`
+        `현재 ${mediaType === 'voice' ? '음성' : '화상'} 채널에 접속 중입니다.\n통화를 종료하고 이동하시겠습니까?`,
       );
 
       if (!confirmSwitch) return;
