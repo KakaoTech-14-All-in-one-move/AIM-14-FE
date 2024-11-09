@@ -33,31 +33,59 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
   const user = useAuthStore(state => state.user);
   const { connection, users, currentUser } = useCall();
 
-  // 초기 채널 설정 및 WebSocket 이벤트에 따른 상태 업데이트
   useEffect(() => {
+    // 초기 채널 설정
     if (channelId === GENERAL_VOICE_CHANNEL_ID && type === 'voice') {
       joinChannel(type, '일반');
       setExpandedChannels(new Set(['일반']));
     }
-  }, []);
 
-  useEffect(() => {
-    if (users && users.length > 0 && type === 'voice') {
-      const channelUsers = users.filter(user =>
+    // 채널 상태 업데이트
+    if (type === 'voice') {
+      console.log('Checking channel status - Current users:', users);
+
+      const channelUsers = users?.filter(user =>
         user.channel_type === 'VOICE' &&
-        user.channel_id === GENERAL_VOICE_CHANNEL_ID &&
-        user.user_id !== currentUser?.user_id // 현재 사용자 제외
-      );
+        user.channel_id === GENERAL_VOICE_CHANNEL_ID
+      ) || [];
+
+      console.log('Channel users after filter:', channelUsers);
 
       if (channelUsers.length > 0) {
+        // 채널에 유저가 있으면 활성화
+        console.log('Activating channel - users present');
         activateChannel('voice', '일반');
         setExpandedChannels(prev => new Set([...prev, '일반']));
-      } else if (!channelStates.voice.joined['일반']) {
-        // 다른 사용자가 없고 내가 참여중이지 않을 때만 비활성화
+      } else {
+        // 채널에 아무도 없으면 비활성화
+        console.log('Deactivating channel - no users');
         deactivateChannel('voice', '일반');
+        // 옵션: 채널 접기
+        setExpandedChannels(prev => {
+          const newSet = new Set(prev);
+          newSet.delete('일반');
+          return newSet;
+        });
       }
     }
-  }, [users, currentUser]);
+  }, [channelId, users, type]);
+
+  useEffect(() => {
+    console.log('ChannelList users updated:', users);
+    if (users && users.length > 0 && type === 'voice') {
+      const voiceChannelUsers = users.filter(user =>
+        user.channel_type === 'VOICE' &&
+        user.channel_id === GENERAL_VOICE_CHANNEL_ID
+      );
+
+      console.log('Voice channel users:', voiceChannelUsers);
+
+      if (voiceChannelUsers.length > 0) {
+        activateChannel('voice', '일반');
+        setExpandedChannels(prev => new Set([...prev, '일반']));
+      }
+    }
+  }, [users]);
 
   const toggleChannelExpand = (channelName: string) => {
     setExpandedChannels(prev => {
@@ -71,16 +99,19 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
     });
   };
 
-  // ChannelList.tsx의 renderChannelMembers 함수 수정
   const renderChannelMembers = (channelName: string) => {
     if (type !== 'voice' || channelName !== TEMP_CHANNEL_MAPPING.channelName || !users) {
       return null;
     }
 
+    console.log('Rendering channel members. Current users:', users);
+
     const channelMembers = users.filter(member =>
       member.channel_id === TEMP_CHANNEL_MAPPING.channelId &&
       member.server_id === TEMP_CHANNEL_MAPPING.serverId
     );
+
+    console.log('Filtered channel members:', channelMembers);
 
     return (
       <>
@@ -104,6 +135,7 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
       </>
     );
   };
+
 
   const handleChannelClick = async (channelName: string) => {
     if (type !== 'voice' && type !== 'video') return;

@@ -38,8 +38,18 @@ export function CallProvider({ children }: CallProviderProps) {
     if (accessToken && user) {
       const connection = new CallConnection(
         (newState) => {
-          console.log('🔄 CallProvider state update:', newState);
-          setState(newState);
+          console.log('🔄 CallProvider receiving state update:', newState);
+          // 상태 업데이트를 함수형으로 변경하여 이전 상태 기준으로 업데이트
+          setState(prevState => {
+            console.log('Previous state:', prevState);
+            console.log('New state:', newState);
+            return {
+              ...prevState,
+              users: newState.users,
+              currentUser: newState.currentUser,
+              connectionStatus: newState.connectionStatus
+            };
+          });
         },
         accessToken
       );
@@ -53,6 +63,11 @@ export function CallProvider({ children }: CallProviderProps) {
       };
     }
   }, [accessToken, user]);
+
+  // 디버깅을 위한 상태 변화 감지
+  useEffect(() => {
+    console.log('CallProvider state changed:', state);
+  }, [state]);
 
   const value = {
     users: state.users,

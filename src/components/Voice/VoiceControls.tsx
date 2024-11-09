@@ -1,4 +1,3 @@
-// VoiceControls.tsx
 import { ControlButton } from './ControlButton.tsx';
 import { HeadphoneOff, Headphones, Mic, MicOff, PhoneOff } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -22,16 +21,25 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ show }) => {
 
   const handleToggleMute = () => {
     if (connection && currentUser) {
-      connection.updateState({ muted: !currentUser.muted });
+      // 현재 유저의 상태만 토글
+      connection.updateState({
+        muted: !currentUser.muted,
+        deafened: currentUser.deafened  // 기존 상태 유지
+      });
     }
   };
 
   const handleToggleDeafen = () => {
     if (connection && currentUser) {
-      connection.updateState({ deafened: !currentUser.deafened });
+      // 현재 유저의 상태만 토글
+      connection.updateState({
+        muted: currentUser.muted,  // 기존 상태 유지
+        deafened: !currentUser.deafened
+      });
     }
   };
 
+  // 현재 유저의 상태만 반영
   return (
     <div className={`absolute bottom-6 left-1/2 transform -translate-x-1/2 flex items-center space-x-2 
       transition-opacity duration-200 ${show ? 'opacity-100' : 'opacity-0'}`}>

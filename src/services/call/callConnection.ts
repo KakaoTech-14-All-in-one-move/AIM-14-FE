@@ -97,57 +97,104 @@ export class CallConnection {
         case OP_CODES.JOIN_CHANNEL_ACK:
           console.log('🎯 Channel join acknowledged');
           if (message.data && this.isCallUserData(message.data)) {
+            console.log('🔍 Join channel data:', message.data);
             const userData = message.data;
-            this.updateCurrentUser(userData);
 
-            const updatedUsers = [...this.state.users];
-            if (!updatedUsers.some(u => u.user_id === userData.user_id)) {
-              updatedUsers.push(userData);
+            // 내가 입장한 경우 currentUser 업데이트
+            if (!this.state.currentUser) {
+              console.log('👤 Setting current user:', userData);
+              this.updateCurrentUser(userData);
             }
-            this.updateUsers(updatedUsers);
+
+            // users 배열에 추가 또는 업데이트
+            const existingUserIndex = this.state.users.findIndex(u => u.user_id === userData.user_id);
+            if (existingUserIndex === -1) {
+              console.log('➕ Adding new user to users list:', userData);
+              this.updateUsers([...this.state.users, userData]);
+            } else {
+              console.log('🔄 Updating existing user in users list:', userData);
+              const updatedUsers = [...this.state.users];
+              updatedUsers[existingUserIndex] = userData;
+              this.updateUsers(updatedUsers);
+            }
+
+            console.log('📊 Current state after join:', {
+              currentUser: this.state.currentUser,
+              users: this.state.users
+            });
+          } else {
+            console.warn('⚠️ Received JOIN_CHANNEL_ACK without valid user data:', message.data);
           }
           break;
 
         case OP_CODES.LEAVE_CHANNEL_ACK:
           console.log('👋 Channel leave acknowledged');
-          if (message.data && 'user_id' in message.data) {
-            const leavingUserId = message.data.user_id;
+          console.log('🔍 Raw leave channel response:', message);
 
-            // 현재 유저가 떠나는 경우
+          if (!message.data) {
+            console.warn('⚠️ No data in leave channel response');
+            return;
+          }
+
+          if ('user_id' in message.data) {
+            const leavingUserId = message.data.user_id;
+            console.log('🚪 User leaving channel:', {
+              leavingUserId,
+              currentUserId: this.state.currentUser?.user_id,
+              currentUsers: this.state.users.map(u => ({ id: u.user_id, name: u.username }))
+            });
+
+            // users 배열에서 해당 유저 제거
+            const updatedUsers = this.state.users.filter(user => user.user_id !== leavingUserId);
+            console.log('📊 Users after filtering:', updatedUsers.map(u => ({ id: u.user_id, name: u.username })));
+
+            // 퇴장하는 유저가 현재 유저인 경우
             if (this.state.currentUser?.user_id === leavingUserId) {
-              this.state.currentUser = null;  // 현재 유저만 null로
+              console.log('🔄 Current user is leaving - resetting current user');
+              this.updateCurrentUser(null);
             }
 
-            // users 배열에서 해당 user_id만 제거
-            this.state.users = this.state.users.filter(
-              user => user.user_id !== leavingUserId
-            );
+            // users 배열 업데이트
+            this.updateUsers(updatedUsers);
 
-            this.notifyStateUpdate();
+            console.log('📊 Final state after leave:', {
+              currentUser: this.state.currentUser,
+              remainingUsers: this.state.users.map(u => ({ id: u.user_id, name: u.username }))
+            });
+          } else {
+            console.warn('⚠️ Invalid leave channel data format:', message.data);
           }
           break;
 
         case OP_CODES.STATE_UPDATE_ACK:
-          console.log('🔄 State update acknowledged');
           if (message.data && this.isCallUserData(message.data)) {
             const updatedUser = message.data;
 
-            // 현재 유저인 경우
+            // 내 상태가 변경된 경우
             if (this.state.currentUser?.user_id === updatedUser.user_id) {
-              // 기존 상태를 유지하면서 업데이트
               this.updateCurrentUser({
                 ...this.state.currentUser,
-                ...updatedUser
+                muted: updatedUser.muted !== undefined ? updatedUser.muted : this.state.currentUser.muted,
+                deafened: updatedUser.deafened !== undefined ? updatedUser.deafened : this.state.currentUser.deafened,
+                speaking: updatedUser.speaking !== undefined ? updatedUser.speaking : this.state.currentUser.speaking,
+                camera_on: updatedUser.camera_on !== undefined ? updatedUser.camera_on : this.state.currentUser.camera_on,
+                screen_sharing: updatedUser.screen_sharing !== undefined ? updatedUser.screen_sharing : this.state.currentUser.screen_sharing
               });
             }
 
-            // users 배열도 기존 상태를 유지하면서 업데이트
-            this.state.users = this.state.users.map(user =>
+            // users 배열에서 해당 유저 업데이트
+            this.updateUsers(this.state.users.map(user =>
               user.user_id === updatedUser.user_id
-                ? { ...user, ...updatedUser }
+                ? {
+                  ...user,
+                  muted: updatedUser.muted !== undefined ? updatedUser.muted : user.muted,
+                  deafened: updatedUser.deafened !== undefined ? updatedUser.deafened : user.deafened,
+                  speaking: updatedUser.speaking !== undefined ? updatedUser.speaking : user.speaking,
+                  camera_on: updatedUser.camera_on !== undefined ? updatedUser.camera_on : user.camera_on,
+                  screen_sharing: updatedUser.screen_sharing !== undefined ? updatedUser.screen_sharing : user.screen_sharing
+                }
                 : user
-            );
-            this.notifyStateUpdate();
+            ));
           }
           break;
 
@@ -217,11 +264,6 @@ export class CallConnection {
       channel_type: channelType,
     });
   }
-
-  private isLeaveChannelData(data: any): data is LeaveChannelData {
-    return 'user_id' in data && 'channel_id' in data && !('username' in data);
-  }
-
   leaveChannel() {
     if (this.currentChannelId) {
       console.log('👋 Leaving channel:', this.currentChannelId);
@@ -237,16 +279,23 @@ export class CallConnection {
   updateState(state: VoiceStateUpdate) {
     if (this.currentChannelId && this.state.currentUser) {
       console.log('🔄 Updating state:', state);
-      // 현재 상태를 보존하면서 새로운 상태만 업데이트
-      const updatedState = {
+
+      // 현재 유저의 현재 상태를 기반으로 새로운 상태만 업데이트
+      const currentState = {
         muted: this.state.currentUser.muted,
         deafened: this.state.currentUser.deafened,
         speaking: this.state.currentUser.speaking,
         camera_on: this.state.currentUser.camera_on,
-        screen_sharing: this.state.currentUser.screen_sharing,
-        ...state  // 새로운 상태로 덮어쓰기
+        screen_sharing: this.state.currentUser.screen_sharing
       };
 
+      // 변경하려는 상태만 업데이트하여 기존 상태와 병합
+      const updatedState = {
+        ...currentState,  // 기존 상태를 기반으로
+        ...state         // 새로운 상태만 덮어쓰기
+      };
+
+      // 모든 상태값을 포함하여 전송
       this.sendOp(OP_CODES.STATE_UPDATE, {
         server_id: this.currentServerId,
         channel_id: this.currentChannelId,
