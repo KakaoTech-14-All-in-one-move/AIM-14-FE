@@ -70,6 +70,12 @@ export class CallConnection {
     this.ws.onerror = this.handleError;
   }
 
+  public isInChannel(): boolean {
+    return !!this.currentChannelId &&
+      !!this.state.currentUser &&
+      this.ws?.readyState === WebSocket.OPEN;
+  }
+
   private handleOpen = () => {
     console.log('🌐 WebSocket connected');
     this.updateConnectionStatus('CONNECTED');
@@ -111,18 +117,38 @@ export class CallConnection {
     },
 
     [OP_CODES.STATE_UPDATE_ACK]: (data: any) => {
-      console.log('STATE_UPDATE_ACK received:', data);  // 디버깅 로그 추가
+      console.log('STATE_UPDATE_ACK received:', data);
 
       if (!this.isCallUserData(data)) return;
 
       this.updateUsers(prevUsers => {
+        // 상태 업데이트 시 기존 유저의 모든 상태를 보존하면서 새로운 상태만 업데이트
         return prevUsers.map(user =>
-          user.user_id === data.user_id ? { ...user, ...data } : user,
+          user.user_id === data.user_id
+            ? {
+              ...user,                    // 기존 상태 유지
+              ...data,                    // 새로운 상태로 업데이트
+              muted: data.muted !== undefined ? data.muted : user.muted,
+              deafened: data.deafened !== undefined ? data.deafened : user.deafened,
+              speaking: data.speaking !== undefined ? data.speaking : user.speaking,
+              camera_on: data.camera_on !== undefined ? data.camera_on : user.camera_on,
+              screen_sharing: data.screen_sharing !== undefined ? data.screen_sharing : user.screen_sharing
+            }
+            : user
         );
       });
 
+      // currentUser도 동일한 방식으로 업데이트
       if (this.state.currentUser?.user_id === data.user_id) {
-        this.updateCurrentUser({ ...this.state.currentUser, ...data });
+        this.updateCurrentUser({
+          ...this.state.currentUser,
+          ...data,
+          muted: data.muted !== undefined ? data.muted : this.state.currentUser.muted,
+          deafened: data.deafened !== undefined ? data.deafened : this.state.currentUser.deafened,
+          speaking: data.speaking !== undefined ? data.speaking : this.state.currentUser.speaking,
+          camera_on: data.camera_on !== undefined ? data.camera_on : this.state.currentUser.camera_on,
+          screen_sharing: data.screen_sharing !== undefined ? data.screen_sharing : this.state.currentUser.screen_sharing
+        });
       }
     },
 
@@ -319,17 +345,21 @@ export class CallConnection {
   }
 
   updateState(state: VoiceStateUpdate) {
-    if (!this.currentChannelId || !this.state.currentUser) {
-      console.warn('⚠️ Cannot update state: No active channel or user');
+    if (!this.isInChannel()) {
+      console.warn('⚠️ Cannot update state:', {
+        hasChannel: !!this.currentChannelId,
+        hasUser: !!this.state.currentUser,
+        connectionState: this.ws?.readyState
+      });
       return;
     }
 
     const currentState = {
-      muted: this.state.currentUser.muted,
-      deafened: this.state.currentUser.deafened,
-      speaking: this.state.currentUser.speaking,
-      camera_on: this.state.currentUser.camera_on,
-      screen_sharing: this.state.currentUser.screen_sharing,
+      muted: this.state.currentUser!.muted,
+      deafened: this.state.currentUser!.deafened,
+      speaking: this.state.currentUser!.speaking,
+      camera_on: this.state.currentUser!.camera_on,
+      screen_sharing: this.state.currentUser!.screen_sharing,
     };
 
     const updatedState = { ...currentState, ...state };

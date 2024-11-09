@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
-import { isEqual } from 'lodash';
 import { CallConnection } from './callConnection';
 import { CallState, CallUserData } from './types';
 import { useAuthStore } from '@/stores/authStore';
@@ -56,7 +55,8 @@ export function CallProvider({ children }: CallProviderProps) {
 
   // VoiceChat 스토어와 동기화
   useEffect(() => {
-    if (state.users.length > 0) {
+    if (state.users.length >= 0) {  // 0 이상으로 변경하여 빈 배열도 동기화
+      console.log('Syncing users with VoiceChat store:', state.users);
       useVoiceChat.getState().setUsers(state.users);
     }
   }, [state.users]);
