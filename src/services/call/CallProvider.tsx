@@ -1,7 +1,9 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
+import { isEqual } from 'lodash';
 import { CallConnection } from './callConnection';
 import { CallState, CallUserData } from './types';
 import { useAuthStore } from '@/stores/authStore';
+import { useVoiceChat } from '@/hooks/useVoiceChat';
 
 interface CallContextType {
   users: CallUserData[];
@@ -34,42 +36,64 @@ export function CallProvider({ children }: CallProviderProps) {
   const accessToken = useAuthStore((state: { accessToken: any; }) => state.accessToken);
   const user = useAuthStore((state: { user: any; }) => state.user);
 
-  useEffect(() => {
-    if (accessToken && user) {
-      const connection = new CallConnection(
-        (newState) => {
-          console.log('🔄 CallProvider receiving state update:', newState);
-          // 상태 업데이트를 함수형으로 변경하여 이전 상태 기준으로 업데이트
-          setState(prevState => {
-            console.log('Previous state:', prevState);
-            console.log('New state:', newState);
-            return {
-              ...prevState,
-              users: newState.users,
-              currentUser: newState.currentUser,
-              connectionStatus: newState.connectionStatus
-            };
-          });
-        },
-        accessToken
-      );
+  const handleStateUpdate = useCallback((newState: CallState) => {
+    console.log('CallProvider received state update:', newState);
 
-      connectionRef.current = connection;
-      connection.connect();
+    setState(prevState => {
+      console.log('Previous state:', prevState);
 
-      return () => {
-        connection.disconnect();
-        connectionRef.current = null;
+      const updatedState = {
+        ...prevState,
+        users: newState.users,
+        currentUser: newState.currentUser,
+        connectionStatus: newState.connectionStatus
       };
-    }
-  }, [accessToken, user]);
 
-  // 디버깅을 위한 상태 변화 감지
+      console.log('Updated state:', updatedState);
+      return updatedState;
+    });
+  }, []);
+
+  // VoiceChat 스토어와 동기화
   useEffect(() => {
-    console.log('CallProvider state changed:', state);
+    if (state.users.length > 0) {
+      useVoiceChat.getState().setUsers(state.users);
+    }
+  }, [state.users]);
+
+  // WebSocket 연결 설정
+  useEffect(() => {
+    if (!accessToken || !user) return;
+
+    const connection = new CallConnection(handleStateUpdate, accessToken);
+    connectionRef.current = connection;
+
+    // 연결 시작
+    try {
+      connection.connect();
+    } catch (error) {
+      console.error('Connection failed:', error);
+    }
+
+    // 클린업
+    return () => {
+      connection.disconnect();
+      connectionRef.current = null;
+    };
+  }, [accessToken, user, handleStateUpdate]);
+
+  // 개발 환경에서 상태 변화 모니터링
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.group('CallProvider State Update');
+      console.log('Users:', state.users);
+      console.log('Current User:', state.currentUser);
+      console.log('Connection Status:', state.connectionStatus);
+      console.groupEnd();
+    }
   }, [state]);
 
-  const value = {
+  const contextValue = {
     users: state.users,
     currentUser: state.currentUser,
     connection: connectionRef.current,
@@ -77,7 +101,7 @@ export function CallProvider({ children }: CallProviderProps) {
   };
 
   return (
-    <CallContext.Provider value={value}>
+    <CallContext.Provider value={contextValue}>
       {children}
       {process.env.NODE_ENV === 'development' && (
         <div className="fixed bottom-2 right-2 bg-gray-800 text-white px-3 py-1 rounded-md text-sm z-50">

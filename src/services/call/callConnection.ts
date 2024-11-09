@@ -8,10 +8,22 @@ import {
 } from './types';
 import { CALL_API, OP_CODES, RECONNECT_DELAY } from './constants';
 import { apiClient } from '@/api/apiClient';
+import { isEqual } from 'lodash';
 
 interface CallServerResponse {
   url: string;
 }
+
+
+type MessageHandlerMap = {
+  [K: number]: (data: any) => void;
+  [OP_CODES.JOIN_CHANNEL_ACK]: (data: any) => void;
+  [OP_CODES.LEAVE_CHANNEL_ACK]: (data: any) => void;
+  [OP_CODES.STATE_UPDATE_ACK]: (data: any) => void;
+  [OP_CODES.INITIAL_ACK]: (data: any) => void;
+  [OP_CODES.IDENTIFY_ACK]: (data: any) => void;  // 추가
+  [OP_CODES.HEARTBEAT_ACK]: () => void;
+};
 
 export class CallConnection {
   private ws: WebSocket | null = null;
@@ -34,196 +46,152 @@ export class CallConnection {
 
   async connect(serverId: string = CALL_API.DEFAULT_SERVER_ID) {
     this.currentServerId = serverId;
-    console.log('🌐 Attempting to connect to call server...', { serverId: this.currentServerId });
+    console.log('🌐 Connecting to call server...', { serverId: this.currentServerId });
 
     try {
       const response = await apiClient.client.get<CallServerResponse>(CALL_API.GET_WEBSOCKET_URL);
-      console.log('API Response:', response);
       if (!response.data.url) throw new Error('WebSocket URL not received');
 
       this.ws = new WebSocket(response.data.url);
       this.setupWebSocketHandlers();
+      this.updateConnectionStatus('CONNECTING');
     } catch (error) {
-      console.error('❌ Failed to connect to call server:', error);
-      this.scheduleReconnect();
+      console.error('❌ Connection failed:', error);
+      this.handleConnectionError();
     }
   }
 
   private setupWebSocketHandlers() {
     if (!this.ws) return;
 
-    this.ws.onopen = () => {
-      console.log('🌐 WebSocket connected successfully');
-      this.updateConnectionStatus('CONNECTED');
-      this.sendOp(OP_CODES.INITIAL, { token: this.accessToken });
-    };
-
+    this.ws.onopen = this.handleOpen;
     this.ws.onmessage = this.handleMessage;
     this.ws.onclose = this.handleClose;
     this.ws.onerror = this.handleError;
   }
 
-  private isCallUserData(data: any): data is CallUserData {
-    return 'user_id' in data && 'username' in data;
+  private handleOpen = () => {
+    console.log('🌐 WebSocket connected');
+    this.updateConnectionStatus('CONNECTED');
+    this.sendOp(OP_CODES.INITIAL, { token: this.accessToken });
+  };
+
+  private messageHandlers: MessageHandlerMap = {
+    [OP_CODES.JOIN_CHANNEL_ACK]: (data: any) => {
+      console.log('JOIN_CHANNEL_ACK received:', data);  // 디버깅 로그 추가
+
+      if (!data) {
+        console.warn('No data in JOIN_CHANNEL_ACK');
+        return;
+      }
+
+      // 단일 유저 데이터인 경우
+      if (this.isCallUserData(data)) {
+        this.updateUsers(prevUsers => {
+          console.log('Updating users with single user data:', data);
+          const existingUserIndex = prevUsers.findIndex(u => u.user_id === data.user_id);
+          if (existingUserIndex === -1) {
+            return [...prevUsers, data];
+          } else {
+            const updatedUsers = [...prevUsers];
+            updatedUsers[existingUserIndex] = data;
+            return updatedUsers;
+          }
+        });
+
+        if (!this.state.currentUser) {
+          this.updateCurrentUser(data);
+        }
+      }
+      // 유저 배열인 경우
+      else if (Array.isArray(data)) {
+        console.log('Updating users with array data:', data);
+        this.updateUsers(() => data.filter(this.isCallUserData));
+      }
+    },
+
+    [OP_CODES.STATE_UPDATE_ACK]: (data: any) => {
+      console.log('STATE_UPDATE_ACK received:', data);  // 디버깅 로그 추가
+
+      if (!this.isCallUserData(data)) return;
+
+      this.updateUsers(prevUsers => {
+        return prevUsers.map(user =>
+          user.user_id === data.user_id ? { ...user, ...data } : user,
+        );
+      });
+
+      if (this.state.currentUser?.user_id === data.user_id) {
+        this.updateCurrentUser({ ...this.state.currentUser, ...data });
+      }
+    },
+
+    [OP_CODES.LEAVE_CHANNEL_ACK]: (data: any) => {
+      const leaveData = data as LeaveChannelData;
+      if (!leaveData?.user_id) return;
+
+      const leavingUserId = leaveData.user_id;
+      console.log('👋 User leaving:', leavingUserId);
+
+      this.updateUsers(prevUsers => {
+        const updatedUsers = prevUsers.filter(user => user.user_id !== leavingUserId);
+        console.log('Updated users after leave:', updatedUsers);
+        return updatedUsers;
+      });
+
+      if (this.state.currentUser?.user_id === leavingUserId) {
+        this.updateCurrentUser(null);
+      }
+    },
+
+    [OP_CODES.INITIAL_ACK]: (data: any) => {
+      console.log('INITIAL_ACK received:', data);
+      if (data?.heartbeat_interval) {
+        this.setupHeartbeat(data.heartbeat_interval);
+        // INITIAL_ACK 이후 서버 식별 정보 전송
+        this.sendServerIdentification();
+      }
+    },
+
+    [OP_CODES.HEARTBEAT_ACK]: () => {
+      console.log('💓 Heartbeat acknowledged');
+    },
+
+    [OP_CODES.IDENTIFY_ACK]: (data: any) => {
+      console.log('IDENTIFY_ACK received:', data);
+      if (data && this.isCallUserData(data)) {
+        console.log('🔄 Updating users with identify data');
+        this.updateUsers(() => [data]);
+
+        // 처음 연결된 경우 currentUser 설정
+        if (!this.state.currentUser) {
+          this.updateCurrentUser(data);
+        }
+      }
+    },
+
+  };
+
+  private sendServerIdentification() {
+    console.log('🎯 Sending server identification:', this.currentServerId);
+    this.sendOp(OP_CODES.IDENTIFY, {
+      server_id: this.currentServerId,
+    });
   }
 
   private handleMessage = (event: MessageEvent) => {
     try {
       const message: CallServerMessage = JSON.parse(event.data);
-      console.log('📨 Received message:', message);
+      console.log('📨 Received:', message);
 
-      switch (message.op) {
-        case OP_CODES.INITIAL_ACK:
-          if (message.data && 'heartbeat_interval' in message.data) {
-            console.log('💓 Setting up heartbeat with interval:', message.data.heartbeat_interval);
-            this.setupHeartbeat(message.data.heartbeat_interval);
-            this.sendOp(OP_CODES.HEARTBEAT);
-            this.sendServerIdentification();
-          }
-          break;
-
-        case OP_CODES.HEARTBEAT_ACK:
-          console.log('💓 Heartbeat acknowledged');
-          break;
-
-        case OP_CODES.IDENTIFY_ACK:
-          console.log('🎯 Server identification acknowledged');
-          if (message.data && this.isCallUserData(message.data)) {
-            console.log('🔄 Updating users with identify data');
-            this.updateUsers([message.data]);
-          }
-          break;
-
-        case OP_CODES.JOIN_CHANNEL_ACK:
-          console.log('🎯 Channel join acknowledged');
-          if (message.data && this.isCallUserData(message.data)) {
-            console.log('🔍 Join channel data:', message.data);
-            const userData = message.data;
-
-            // 내가 입장한 경우 currentUser 업데이트
-            if (!this.state.currentUser) {
-              console.log('👤 Setting current user:', userData);
-              this.updateCurrentUser(userData);
-            }
-
-            // users 배열에 추가 또는 업데이트
-            const existingUserIndex = this.state.users.findIndex(u => u.user_id === userData.user_id);
-            if (existingUserIndex === -1) {
-              console.log('➕ Adding new user to users list:', userData);
-              this.updateUsers([...this.state.users, userData]);
-            } else {
-              console.log('🔄 Updating existing user in users list:', userData);
-              const updatedUsers = [...this.state.users];
-              updatedUsers[existingUserIndex] = userData;
-              this.updateUsers(updatedUsers);
-            }
-
-            console.log('📊 Current state after join:', {
-              currentUser: this.state.currentUser,
-              users: this.state.users
-            });
-          } else {
-            console.warn('⚠️ Received JOIN_CHANNEL_ACK without valid user data:', message.data);
-          }
-          break;
-
-        case OP_CODES.LEAVE_CHANNEL_ACK:
-          console.log('👋 Channel leave acknowledged');
-          console.log('🔍 Raw leave channel response:', message);
-
-          if (!message.data) {
-            console.warn('⚠️ No data in leave channel response');
-            return;
-          }
-
-          if ('user_id' in message.data) {
-            const leavingUserId = message.data.user_id;
-            console.log('🚪 User leaving channel:', {
-              leavingUserId,
-              currentUserId: this.state.currentUser?.user_id,
-              currentUsers: this.state.users.map(u => ({ id: u.user_id, name: u.username }))
-            });
-
-            // users 배열에서 해당 유저 제거
-            const updatedUsers = this.state.users.filter(user => user.user_id !== leavingUserId);
-            console.log('📊 Users after filtering:', updatedUsers.map(u => ({ id: u.user_id, name: u.username })));
-
-            // 퇴장하는 유저가 현재 유저인 경우
-            if (this.state.currentUser?.user_id === leavingUserId) {
-              console.log('🔄 Current user is leaving - resetting current user');
-              this.updateCurrentUser(null);
-            }
-
-            // users 배열 업데이트
-            this.updateUsers(updatedUsers);
-
-            console.log('📊 Final state after leave:', {
-              currentUser: this.state.currentUser,
-              remainingUsers: this.state.users.map(u => ({ id: u.user_id, name: u.username }))
-            });
-          } else {
-            console.warn('⚠️ Invalid leave channel data format:', message.data);
-          }
-          break;
-
-        case OP_CODES.STATE_UPDATE_ACK:
-          if (message.data && this.isCallUserData(message.data)) {
-            const updatedUser = message.data;
-
-            // 내 상태가 변경된 경우
-            if (this.state.currentUser?.user_id === updatedUser.user_id) {
-              this.updateCurrentUser({
-                ...this.state.currentUser,
-                muted: updatedUser.muted !== undefined ? updatedUser.muted : this.state.currentUser.muted,
-                deafened: updatedUser.deafened !== undefined ? updatedUser.deafened : this.state.currentUser.deafened,
-                speaking: updatedUser.speaking !== undefined ? updatedUser.speaking : this.state.currentUser.speaking,
-                camera_on: updatedUser.camera_on !== undefined ? updatedUser.camera_on : this.state.currentUser.camera_on,
-                screen_sharing: updatedUser.screen_sharing !== undefined ? updatedUser.screen_sharing : this.state.currentUser.screen_sharing
-              });
-            }
-
-            // users 배열에서 해당 유저 업데이트
-            this.updateUsers(this.state.users.map(user =>
-              user.user_id === updatedUser.user_id
-                ? {
-                  ...user,
-                  muted: updatedUser.muted !== undefined ? updatedUser.muted : user.muted,
-                  deafened: updatedUser.deafened !== undefined ? updatedUser.deafened : user.deafened,
-                  speaking: updatedUser.speaking !== undefined ? updatedUser.speaking : user.speaking,
-                  camera_on: updatedUser.camera_on !== undefined ? updatedUser.camera_on : user.camera_on,
-                  screen_sharing: updatedUser.screen_sharing !== undefined ? updatedUser.screen_sharing : user.screen_sharing
-                }
-                : user
-            ));
-          }
-          break;
-
-        default:
-          console.warn('⚠️ Unhandled message type:', message);
+      const handler = this.messageHandlers[message.op];
+      if (handler) {
+        handler(message.data);
       }
     } catch (error) {
-      console.error('❌ Error processing WebSocket message:', error);
+      console.error('❌ Message handling error:', error);
     }
   };
-
-  private setupHeartbeat(interval: number | undefined) {
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-    }
-
-    // 주기적인 heartbeat 전송 설정
-    this.heartbeatInterval = setInterval(() => {
-      if (this.ws?.readyState === WebSocket.OPEN) {
-        console.log('💓 Sending heartbeat');
-        this.sendOp(OP_CODES.HEARTBEAT);
-      } else {
-        console.warn('⚠️ WebSocket is not open, skipping heartbeat');
-      }
-    }, interval);
-
-    // interval이 변경될 때마다 현재 상태를 로그로 출력
-    console.log('💓 Heartbeat interval set to', interval, 'ms');
-  }
 
   private handleClose = (event: CloseEvent) => {
     console.log('🔌 WebSocket closed:', event);
@@ -234,102 +202,86 @@ export class CallConnection {
 
   private handleError = (error: Event) => {
     console.error('❌ WebSocket error:', error);
-    this.updateConnectionStatus('ERROR');
-    this.cleanup();
+    this.handleConnectionError();
   };
 
+// callConnection.ts (계속)
+
+  private handleConnectionError() {
+    console.error('Connection error occurred');
+    this.updateConnectionStatus('ERROR');
+    this.cleanup();
+    this.scheduleReconnect();
+  }
+
+  private setupHeartbeat(interval: number | undefined) {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+    }
+
+    if (!interval) return;
+
+    this.heartbeatInterval = setInterval(() => {
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.sendOp(OP_CODES.HEARTBEAT);
+      }
+    }, interval);
+
+    console.log('💓 Heartbeat set:', interval, 'ms');
+  }
+
   private sendOp(op: number, data?: any) {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      const message = JSON.stringify({ op, data });
-      console.log('📤 Sending message:', message);
-      this.ws.send(message);
-    } else {
-      console.warn('⚠️ Attempted to send message while WebSocket is not open');
+    if (this.ws?.readyState !== WebSocket.OPEN) {
+      console.warn('⚠️ WebSocket not open');
+      return;
     }
+
+    const message = JSON.stringify({ op, data });
+    this.ws.send(message);
+    console.log('📤 Sent:', { op, data });
   }
 
-  private sendServerIdentification() {
-    console.log('🎯 Sending server identification:', this.currentServerId);
-    this.sendOp(OP_CODES.IDENTIFY, {
-      server_id: this.currentServerId,
+  private updateCurrentUser = (user: CallUserData | null) => {
+    if (!isEqual(this.state.currentUser, user)) {
+      this.state.currentUser = user;
+      this.notifyStateUpdate();
+    }
+  };
+
+  private updateConnectionStatus = (status: string) => {
+    if (this.state.connectionStatus !== status) {
+      this.state.connectionStatus = status;
+      this.notifyStateUpdate();
+    }
+  };
+
+  private updateUsers = (
+    updater: (prev: CallUserData[]) => CallUserData[],
+  ) => {
+    const updatedUsers = updater(this.state.users);
+    console.log('Updating users:', {
+      previous: this.state.users,
+      updated: updatedUsers,
     });
-  }
 
-  joinChannel(channelId: string, channelType: MediaChannelType = 'VOICE') {
-    console.log('🎯 Joining channel:', channelId);
-    this.currentChannelId = channelId;
-    this.sendOp(OP_CODES.JOIN_CHANNEL, {
-      server_id: this.currentServerId,
-      channel_id: channelId,
-      channel_type: channelType,
-    });
-  }
-  leaveChannel() {
-    if (this.currentChannelId) {
-      console.log('👋 Leaving channel:', this.currentChannelId);
-      this.sendOp(OP_CODES.LEAVE_CHANNEL, {
-        server_id: this.currentServerId,
-        channel_id: this.currentChannelId,
-        channel_type: 'VOICE',
-      });
-      this.currentChannelId = null;
-    }
-  }
-
-  updateState(state: VoiceStateUpdate) {
-    if (this.currentChannelId && this.state.currentUser) {
-      console.log('🔄 Updating state:', state);
-
-      // 현재 유저의 현재 상태를 기반으로 새로운 상태만 업데이트
-      const currentState = {
-        muted: this.state.currentUser.muted,
-        deafened: this.state.currentUser.deafened,
-        speaking: this.state.currentUser.speaking,
-        camera_on: this.state.currentUser.camera_on,
-        screen_sharing: this.state.currentUser.screen_sharing
-      };
-
-      // 변경하려는 상태만 업데이트하여 기존 상태와 병합
-      const updatedState = {
-        ...currentState,  // 기존 상태를 기반으로
-        ...state         // 새로운 상태만 덮어쓰기
-      };
-
-      // 모든 상태값을 포함하여 전송
-      this.sendOp(OP_CODES.STATE_UPDATE, {
-        server_id: this.currentServerId,
-        channel_id: this.currentChannelId,
-        ...updatedState
-      });
-    }
-  }
-
-  private updateUsers(users: CallUserData[]) {
-    this.state.users = users;
+    this.state.users = updatedUsers;
     this.notifyStateUpdate();
-  }
+  };
 
-  private updateCurrentUser(user: CallUserData | null) {
-    this.state.currentUser = user;
-    this.notifyStateUpdate();
-  }
-
-  private updateConnectionStatus(status: string) {
-    this.state.connectionStatus = status;
-    this.notifyStateUpdate();
-  }
-
-  private notifyStateUpdate() {
-    this.onStateUpdate({ ...this.state });
-  }
+  private notifyStateUpdate = () => {
+    const newState = { ...this.state };
+    console.log('Notifying state update:', newState);
+    this.onStateUpdate(newState);
+  };
 
   private scheduleReconnect() {
-    if (!this.reconnectTimeout) {
-      this.reconnectTimeout = setTimeout(() => {
-        console.log('🔄 Attempting to reconnect...');
-        this.connect(this.currentServerId);
-      }, RECONNECT_DELAY);
-    }
+    if (this.reconnectTimeout) return;
+
+    this.reconnectTimeout = setTimeout(() => {
+      console.log('🔄 Attempting reconnection...');
+      this.connect(this.currentServerId);
+      this.reconnectTimeout = null;
+    }, RECONNECT_DELAY);
   }
 
   private cleanup() {
@@ -343,6 +295,52 @@ export class CallConnection {
     }
   }
 
+  // Public Methods
+  joinChannel(channelId: string, channelType: MediaChannelType = 'VOICE') {
+    console.log('🎯 Joining channel:', channelId);
+    this.currentChannelId = channelId;
+    this.sendOp(OP_CODES.JOIN_CHANNEL, {
+      server_id: this.currentServerId,
+      channel_id: channelId,
+      channel_type: channelType,
+    });
+  }
+
+  leaveChannel() {
+    if (!this.currentChannelId) return;
+
+    console.log('👋 Leaving channel:', this.currentChannelId);
+    this.sendOp(OP_CODES.LEAVE_CHANNEL, {
+      server_id: this.currentServerId,
+      channel_id: this.currentChannelId,
+      channel_type: 'VOICE',
+    });
+    this.currentChannelId = null;
+  }
+
+  updateState(state: VoiceStateUpdate) {
+    if (!this.currentChannelId || !this.state.currentUser) {
+      console.warn('⚠️ Cannot update state: No active channel or user');
+      return;
+    }
+
+    const currentState = {
+      muted: this.state.currentUser.muted,
+      deafened: this.state.currentUser.deafened,
+      speaking: this.state.currentUser.speaking,
+      camera_on: this.state.currentUser.camera_on,
+      screen_sharing: this.state.currentUser.screen_sharing,
+    };
+
+    const updatedState = { ...currentState, ...state };
+
+    this.sendOp(OP_CODES.STATE_UPDATE, {
+      server_id: this.currentServerId,
+      channel_id: this.currentChannelId,
+      ...updatedState,
+    });
+  }
+
   disconnect() {
     console.log('📴 Disconnecting from call server');
     this.cleanup();
@@ -352,20 +350,13 @@ export class CallConnection {
     }
   }
 
-  getConnectionStatus() {
-    if (!this.ws) return 'DISCONNECTED';
+  isConnected() {
+    return this.ws?.readyState === WebSocket.OPEN;
+  }
 
-    switch (this.ws.readyState) {
-      case WebSocket.CONNECTING:
-        return 'CONNECTING';
-      case WebSocket.OPEN:
-        return 'CONNECTED';
-      case WebSocket.CLOSING:
-        return 'CLOSING';
-      case WebSocket.CLOSED:
-        return 'CLOSED';
-      default:
-        return 'UNKNOWN';
-    }
+  private isCallUserData(data: any): data is CallUserData {
+    return data &&
+      typeof data.user_id === 'string' &&
+      typeof data.username === 'string';
   }
 }
