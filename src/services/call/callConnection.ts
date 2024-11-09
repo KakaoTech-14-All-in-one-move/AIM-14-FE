@@ -1,4 +1,11 @@
-import { CallServerMessage, CallState, CallUserData, MediaChannelType, VoiceStateUpdate } from './types';
+import {
+  CallServerMessage,
+  CallState,
+  CallUserData,
+  LeaveChannelData,
+  MediaChannelType,
+  VoiceStateUpdate,
+} from './types';
 import { CALL_API, OP_CODES, RECONNECT_DELAY } from './constants';
 import { apiClient } from '@/api/apiClient';
 
@@ -103,19 +110,19 @@ export class CallConnection {
 
         case OP_CODES.LEAVE_CHANNEL_ACK:
           console.log('👋 Channel leave acknowledged');
-          if (message.data && this.isCallUserData(message.data)) {
-            const leavingUser = message.data;
+          if (message.data && 'user_id' in message.data) {
+            const leavingUserId = message.data.user_id;
 
             // 현재 유저가 떠나는 경우
-            if (this.state.currentUser?.user_id === leavingUser.user_id) {
-              this.state.currentUser = null;  // 현재 유저 상태 초기화
-              this.state.users = [];  // 채널을 떠나므로 users 배열도 초기화
-            } else {
-              // 다른 유저가 떠나는 경우
-              this.state.users = this.state.users.filter(
-                user => user.user_id !== leavingUser.user_id
-              );
+            if (this.state.currentUser?.user_id === leavingUserId) {
+              this.state.currentUser = null;  // 현재 유저만 null로
             }
+
+            // users 배열에서 해당 user_id만 제거
+            this.state.users = this.state.users.filter(
+              user => user.user_id !== leavingUserId
+            );
+
             this.notifyStateUpdate();
           }
           break;
@@ -209,6 +216,10 @@ export class CallConnection {
       channel_id: channelId,
       channel_type: channelType,
     });
+  }
+
+  private isLeaveChannelData(data: any): data is LeaveChannelData {
+    return 'user_id' in data && 'channel_id' in data && !('username' in data);
   }
 
   leaveChannel() {

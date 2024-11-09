@@ -44,18 +44,25 @@ export type VoiceStateUpdate = Partial<Pick<CallUserData,
   'screen_sharing'
 >>;
 
+export interface CallState {
+  users: CallUserData[];
+  currentUser: CallUserData | null;
+  connectionStatus: string;
+}
+
+export interface LeaveChannelData {
+  user_id: string;
+  server_id: string;
+  channel_id: string;
+  channel_type: string;
+}
+
 export interface CallServerMessage {
   op: number;
   data?: {
     heartbeat_interval?: number;
     users?: CallUserData[];
     user?: CallUserData;
-  } | CallUserData;  // 단일 유저 데이터 타입 추가
-  seq?: string;  // 시퀀스 번호도 추가
-}
-
-export interface CallState {
-  users: CallUserData[];
-  currentUser: CallUserData | null;
-  connectionStatus: string;
+  } | CallUserData | LeaveChannelData;
+  seq?: string;
 }
