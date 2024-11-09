@@ -71,6 +71,7 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
     });
   };
 
+  // ChannelList.tsx의 renderChannelMembers 함수 수정
   const renderChannelMembers = (channelName: string) => {
     if (type !== 'voice' || channelName !== TEMP_CHANNEL_MAPPING.channelName || !users) {
       return null;
@@ -78,39 +79,18 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
 
     const channelMembers = users.filter(member =>
       member.channel_id === TEMP_CHANNEL_MAPPING.channelId &&
-      member.server_id === TEMP_CHANNEL_MAPPING.serverId &&
-      member.user_id !== user?.id
+      member.server_id === TEMP_CHANNEL_MAPPING.serverId
     );
 
     return (
       <>
-        {/* 현재 사용자가 참여중인 경우에만 표시 */}
-        {channelStates.voice.joined[channelName] && user && (
-          <div className="ml-6 mt-2 mb-2 flex items-center text-gray-400">
-            <img
-              src={user.profile_image || DEFAULT_PROFILE_IMAGE}
-              alt={user.username}
-              className="w-5 h-5 rounded-full mr-2"
-            />
-            <span className="text-sm font-semibold">{user.username}</span>
-            {/* 현재 사용자의 음성 상태는 useCall의 currentUser에서 가져옴 */}
-            {currentUser && (
-              <div className="ml-auto mr-4 flex items-center gap-2">
-                {currentUser.muted && <MicOff size={16} className="text-red-500" />}
-                {currentUser.deafened && <HeadphoneOff size={16} className="text-red-500" />}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 다른 참여자들 표시 */}
         {channelMembers.map(member => (
           <div
             key={member.user_id}
             className="ml-6 mt-2 mb-2 flex items-center text-gray-400"
           >
             <img
-              src={DEFAULT_PROFILE_IMAGE}
+              src={member.profile_image || DEFAULT_PROFILE_IMAGE}
               alt={member.username}
               className="w-5 h-5 rounded-full mr-2"
             />

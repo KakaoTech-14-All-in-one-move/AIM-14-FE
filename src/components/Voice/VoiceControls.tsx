@@ -1,9 +1,8 @@
-import React from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { HeadphoneOff, Headphones, Mic, MicOff, PhoneOff, MonitorUp, Video, VideoOff } from 'lucide-react';
-import { useVoiceChat } from '../../hooks/useVoiceChat';
-import { ControlButton } from './ControlButton';
-import { useCall } from '../../services/call/CallProvider';
+// VoiceControls.tsx
+import { ControlButton } from './ControlButton.tsx';
+import { HeadphoneOff, Headphones, Mic, MicOff, PhoneOff } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useCall } from '../../services/call/CallProvider.tsx';
 
 interface VoiceControlsProps {
   show: boolean;
@@ -12,10 +11,7 @@ interface VoiceControlsProps {
 export const VoiceControls: React.FC<VoiceControlsProps> = ({ show }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isMuted, isDeafened, toggleMute, toggleDeafen } = useVoiceChat();
   const { connection, currentUser } = useCall();
-  const [isScreenSharing, setIsScreenSharing] = React.useState(false);
-  const [isCameraOn, setIsCameraOn] = React.useState(false);
 
   const handleDisconnect = () => {
     if (connection) {
@@ -24,66 +20,36 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ show }) => {
     navigate('/home');
   };
 
-  const handleScreenShare = async () => {
-    try {
-      if (!isScreenSharing) {
-        await navigator.mediaDevices.getDisplayMedia({ video: true });
-        setIsScreenSharing(true);
-        connection?.updateState({ screenSharing: true });
-      } else {
-        setIsScreenSharing(false);
-        connection?.updateState({ screenSharing: false });
-      }
-    } catch (err) {
-      console.error('Error sharing screen:', err);
+  const handleToggleMute = () => {
+    if (connection && currentUser) {
+      connection.updateState({ muted: !currentUser.muted });
     }
   };
 
-  const handleToggleMute = () => {
-    toggleMute();
-    connection?.updateState({ muted: !isMuted });
-  };
-
   const handleToggleDeafen = () => {
-    toggleDeafen();
-    connection?.updateState({ deafened: !isDeafened });
-  };
-
-  const handleToggleCamera = () => {
-    setIsCameraOn(!isCameraOn);
-    connection?.updateState({ cameraOn: !isCameraOn });
+    if (connection && currentUser) {
+      connection.updateState({ deafened: !currentUser.deafened });
+    }
   };
 
   return (
     <div className={`absolute bottom-6 left-1/2 transform -translate-x-1/2 flex items-center space-x-2 
       transition-opacity duration-200 ${show ? 'opacity-100' : 'opacity-0'}`}>
       <ControlButton
-        icon={isMuted ? MicOff : Mic}
+        icon={currentUser?.muted ? MicOff : Mic}
         onClick={handleToggleMute}
-        tooltip={isMuted ? 'Unmute' : 'Mute'}
-        active={isMuted}
+        tooltip={currentUser?.muted ? 'Unmute' : 'Mute'}
+        active={currentUser?.muted}
       />
       <ControlButton
-        icon={isDeafened ? HeadphoneOff : Headphones}
+        icon={currentUser?.deafened ? HeadphoneOff : Headphones}
         onClick={handleToggleDeafen}
-        tooltip={isDeafened ? 'Undeafen' : 'Deafen'}
-        active={isDeafened}
+        tooltip={currentUser?.deafened ? 'Undeafen' : 'Deafen'}
+        active={currentUser?.deafened}
       />
       {location.pathname.includes('/video/') && (
         <>
-          <ControlButton
-            icon={isCameraOn ? Video : VideoOff}
-            onClick={handleToggleCamera}
-            tooltip={isCameraOn ? 'Turn off camera' : 'Turn on camera'}
-            active={isCameraOn}
-          />
-          <ControlButton
-            icon={MonitorUp}
-            onClick={handleScreenShare}
-            tooltip={isScreenSharing ? 'Stop sharing' : 'Share screen'}
-            active={isScreenSharing}
-            className={isScreenSharing ? 'bg-green-500 hover:bg-green-600' : undefined}
-          />
+          {/* 비디오 관련 컨트롤 */}
         </>
       )}
       <ControlButton

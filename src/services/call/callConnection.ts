@@ -56,6 +56,10 @@ export class CallConnection {
     this.ws.onerror = this.handleError;
   }
 
+  private isCallUserData(data: any): data is CallUserData {
+    return 'user_id' in data && 'username' in data;
+  }
+
   private handleMessage = (event: MessageEvent) => {
     try {
       const message: CallServerMessage = JSON.parse(event.data);
@@ -63,7 +67,7 @@ export class CallConnection {
 
       switch (message.op) {
         case OP_CODES.INITIAL_ACK:
-          if (message.data?.heartbeat_interval) {
+          if (message.data && 'heartbeat_interval' in message.data) {
             console.log('💓 Setting up heartbeat with interval:', message.data.heartbeat_interval);
             this.setupHeartbeat(message.data.heartbeat_interval);
             this.sendOp(OP_CODES.HEARTBEAT);
@@ -77,33 +81,66 @@ export class CallConnection {
 
         case OP_CODES.IDENTIFY_ACK:
           console.log('🎯 Server identification acknowledged');
-          console.log('🔍 IDENTIFY_ACK data:', message.data);
-          // data 자체를 CallUserData로 처리
-          if (message.data && 'user_id' in message.data) {
+          if (message.data && this.isCallUserData(message.data)) {
             console.log('🔄 Updating users with identify data');
-            this.updateUsers([message.data as CallUserData]);
+            this.updateUsers([message.data]);
           }
           break;
 
         case OP_CODES.JOIN_CHANNEL_ACK:
           console.log('🎯 Channel join acknowledged');
-          if (message.data?.users) {
-            console.log('🔄 Updating users list:', message.data.users);
-            this.updateUsers(message.data.users);
+          if (message.data && this.isCallUserData(message.data)) {
+            const userData = message.data;
+            this.updateCurrentUser(userData);
+
+            const updatedUsers = [...this.state.users];
+            if (!updatedUsers.some(u => u.user_id === userData.user_id)) {
+              updatedUsers.push(userData);
+            }
+            this.updateUsers(updatedUsers);
           }
           break;
 
         case OP_CODES.LEAVE_CHANNEL_ACK:
           console.log('👋 Channel leave acknowledged');
-          if (message.data?.users) {
-            this.updateUsers(message.data.users);
+          if (message.data && this.isCallUserData(message.data)) {
+            const leavingUser = message.data;
+
+            // 현재 유저가 떠나는 경우
+            if (this.state.currentUser?.user_id === leavingUser.user_id) {
+              this.state.currentUser = null;  // 현재 유저 상태 초기화
+              this.state.users = [];  // 채널을 떠나므로 users 배열도 초기화
+            } else {
+              // 다른 유저가 떠나는 경우
+              this.state.users = this.state.users.filter(
+                user => user.user_id !== leavingUser.user_id
+              );
+            }
+            this.notifyStateUpdate();
           }
           break;
 
         case OP_CODES.STATE_UPDATE_ACK:
           console.log('🔄 State update acknowledged');
-          if (message.data?.user) {
-            this.updateCurrentUser(message.data.user);
+          if (message.data && this.isCallUserData(message.data)) {
+            const updatedUser = message.data;
+
+            // 현재 유저인 경우
+            if (this.state.currentUser?.user_id === updatedUser.user_id) {
+              // 기존 상태를 유지하면서 업데이트
+              this.updateCurrentUser({
+                ...this.state.currentUser,
+                ...updatedUser
+              });
+            }
+
+            // users 배열도 기존 상태를 유지하면서 업데이트
+            this.state.users = this.state.users.map(user =>
+              user.user_id === updatedUser.user_id
+                ? { ...user, ...updatedUser }
+                : user
+            );
+            this.notifyStateUpdate();
           }
           break;
 
@@ -115,7 +152,7 @@ export class CallConnection {
     }
   };
 
-  private setupHeartbeat(interval: number) {
+  private setupHeartbeat(interval: number | undefined) {
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
     }
@@ -187,12 +224,22 @@ export class CallConnection {
   }
 
   updateState(state: VoiceStateUpdate) {
-    if (this.currentChannelId) {
+    if (this.currentChannelId && this.state.currentUser) {
       console.log('🔄 Updating state:', state);
+      // 현재 상태를 보존하면서 새로운 상태만 업데이트
+      const updatedState = {
+        muted: this.state.currentUser.muted,
+        deafened: this.state.currentUser.deafened,
+        speaking: this.state.currentUser.speaking,
+        camera_on: this.state.currentUser.camera_on,
+        screen_sharing: this.state.currentUser.screen_sharing,
+        ...state  // 새로운 상태로 덮어쓰기
+      };
+
       this.sendOp(OP_CODES.STATE_UPDATE, {
         server_id: this.currentServerId,
         channel_id: this.currentChannelId,
-        ...state,
+        ...updatedState
       });
     }
   }
@@ -202,7 +249,7 @@ export class CallConnection {
     this.notifyStateUpdate();
   }
 
-  private updateCurrentUser(user: CallUserData) {
+  private updateCurrentUser(user: CallUserData | null) {
     this.state.currentUser = user;
     this.notifyStateUpdate();
   }

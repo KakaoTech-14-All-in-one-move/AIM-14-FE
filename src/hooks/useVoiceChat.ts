@@ -1,60 +1,27 @@
+// useVoiceChat.ts를 수정
+import { CallUserData } from '@/services/call/types';
 import { create } from 'zustand';
 
-interface User {
-  id: string;
-  nickname: string;
-  isSpeaking: boolean;
-  isMuted: boolean;
-  isDeafened: boolean;
-  imageUrl?: string;
-}
-
 interface VoiceChatStore {
-  users: User[];
+  users: CallUserData[];
   isMuted: boolean;
   isDeafened: boolean;
+  setUsers: (users: CallUserData[]) => void;
   toggleMute: () => void;
   toggleDeafen: () => void;
-  updateCurrentUserStatus: () => void;
+  updateUserStatus: (userId: string, updates: Partial<CallUserData>) => void;
 }
 
 export const useVoiceChat = create<VoiceChatStore>((set) => ({
-  users: [
-    {
-      id: '1',
-      nickname: '이정진',
-      isSpeaking: false,
-      isMuted: false,
-      isDeafened: false
-    }
-  ],
+  users: [],
   isMuted: false,
   isDeafened: false,
-  toggleMute: () => set((state) => {
-    const newMutedState = !state.isMuted;
-    const updatedUsers = state.users.map(user =>
-      user.id === '1' ? { ...user, isMuted: newMutedState } : user
-    );
-    return {
-      isMuted: newMutedState,
-      users: updatedUsers
-    };
-  }),
-  toggleDeafen: () => set((state) => {
-    const newDeafenedState = !state.isDeafened;
-    const updatedUsers = state.users.map(user =>
-      user.id === '1' ? { ...user, isDeafened: newDeafenedState } : user
-    );
-    return {
-      isDeafened: newDeafenedState,
-      users: updatedUsers
-    };
-  }),
-  updateCurrentUserStatus: () => set((state) => ({
+  setUsers: (users) => set({ users }),
+  toggleMute: () => set((state) => ({ isMuted: !state.isMuted })),
+  toggleDeafen: () => set((state) => ({ isDeafened: !state.isDeafened })),
+  updateUserStatus: (userId, updates) => set((state) => ({
     users: state.users.map(user =>
-      user.id === '1'
-        ? { ...user, isMuted: state.isMuted, isDeafened: state.isDeafened }
-        : user
+      user.user_id === userId ? { ...user, ...updates } : user
     )
   }))
 }));

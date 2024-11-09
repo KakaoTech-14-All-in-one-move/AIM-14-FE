@@ -44,14 +44,14 @@ export type VoiceStateUpdate = Partial<Pick<CallUserData,
   'screen_sharing'
 >>;
 
-// WebSocket message types
 export interface CallServerMessage {
   op: number;
   data?: {
     heartbeat_interval?: number;
     users?: CallUserData[];
     user?: CallUserData;
-  };
+  } | CallUserData;  // 단일 유저 데이터 타입 추가
+  seq?: string;  // 시퀀스 번호도 추가
 }
 
 export interface CallState {
