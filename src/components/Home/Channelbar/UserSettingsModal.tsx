@@ -130,6 +130,10 @@ const UserSettingsModal: React.FC<UserSettingsModalProps> = ({ isOpen, onClose }
     };
 
     const handleLogout = async () => {
+        if (!window.confirm('로그아웃 하시겠습니까?')) {
+            return;
+        }
+
         try {
             clearAuth();  // 로그아웃 처리
             onClose();    // 모달 닫기
@@ -138,7 +142,6 @@ const UserSettingsModal: React.FC<UserSettingsModalProps> = ({ isOpen, onClose }
             console.error('Failed to logout:', error);
         }
     };
-
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
