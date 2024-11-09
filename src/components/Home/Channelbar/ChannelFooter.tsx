@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Settings } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
-import UserSettingsModal from '@/components/Home/Channelbar/UserSettingsModal';
+import UserSettingsModal from '@/components/UserSettings/UserSettingsModal';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage';
 
 const ChannelFooter: React.FC = () => {
