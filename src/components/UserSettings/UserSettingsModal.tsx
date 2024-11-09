@@ -121,7 +121,6 @@ const UserSettingsModal: React.FC<UserSettingsModalProps> = ({ isOpen, onClose }
 
             clearAuth();
             onClose();
-            window.location.href = '/login';
         } catch (error) {
             console.error('Failed to delete account:', error);
             alert('계정 삭제에 실패했습니다. 다시 시도해주세요.');
@@ -138,7 +137,6 @@ const UserSettingsModal: React.FC<UserSettingsModalProps> = ({ isOpen, onClose }
         try {
             clearAuth();
             onClose();
-            window.location.href = '/login';
         } catch (error) {
             console.error('Failed to logout:', error);
         }
