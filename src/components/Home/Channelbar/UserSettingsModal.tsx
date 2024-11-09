@@ -19,6 +19,7 @@ const UserSettingsModal: React.FC<UserSettingsModalProps> = ({ isOpen, onClose }
     const [isEditingUsername, setIsEditingUsername] = useState(false);
     const [newUsername, setNewUsername] = useState('');
     const [isUpdatingUsername, setIsUpdatingUsername] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     if (!isOpen || !user) return null;
 
@@ -107,13 +108,37 @@ const UserSettingsModal: React.FC<UserSettingsModalProps> = ({ isOpen, onClose }
     };
 
     const handleDeleteAccount = async () => {
+        if (!window.confirm('정말로 계정을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+            return;
+        }
+
         try {
-            clearAuth();
-            onClose();
+            setIsDeleting(true);
+            await apiClient.client.delete('/api/v1/users/me');
+
+            clearAuth();  // 로그아웃 처리
+            onClose();    // 모달 닫기
+
+            // 필요한 경우 메인 페이지로 리다이렉트
+            window.location.href = '/login';
         } catch (error) {
             console.error('Failed to delete account:', error);
+            alert('계정 삭제에 실패했습니다. 다시 시도해주세요.');
+        } finally {
+            setIsDeleting(false);
         }
     };
+
+    const handleLogout = async () => {
+        try {
+            clearAuth();  // 로그아웃 처리
+            onClose();    // 모달 닫기
+            window.location.href = '/login';
+        } catch (error) {
+            console.error('Failed to logout:', error);
+        }
+    };
+
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
@@ -229,19 +254,30 @@ const UserSettingsModal: React.FC<UserSettingsModalProps> = ({ isOpen, onClose }
                     </div>
                 </div>
 
+
+
                 {/* Account Deletion */}
                 <div className="p-4 bg-[#313338] rounded-lg mx-4 mb-4">
                     <h3 className="text-white text-lg font-semibold mb-2">계정 제거</h3>
                     <p className="text-gray-400 text-sm mb-4">
-                        계정을 비활성화하면 언제든 복구할 수 있어요.
+                        삭제된 계정은 복구할 수 없으며, 모든 데이터가 즉시 삭제됩니다.
                     </p>
                     <div className="flex gap-3">
                         <button
                             onClick={handleDeleteAccount}
+                            disabled={isDeleting}
                             className="px-4 py-2 border border-red-500 text-red-500 rounded-md 
-                                     hover:bg-red-500/10 transition-colors"
+                             hover:bg-red-500/10 transition-colors
+                             disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            계정 삭제하기
+                            {isDeleting ? (
+                                <span className="flex items-center gap-2">
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500"></div>
+                                    삭제중...
+                                </span>
+                            ) : (
+                                "계정 삭제하기"
+                            )}
                         </button>
                     </div>
                 </div>
