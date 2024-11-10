@@ -12,6 +12,7 @@ export const authApi = {
   async login(data: LoginRequest) {
     try {
       const response = await apiClient.publicClient.post<LoginResponse>('/api/v1/auth/login', data);
+      console.log('response : ', response);
       return response.data;
     } catch (error) {
       console.error('Login API Error:', error);

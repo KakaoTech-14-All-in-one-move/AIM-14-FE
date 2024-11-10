@@ -5,6 +5,7 @@ interface DefaultProfileImageProps {
     size?: number;
 }
 
+// SVG를 데이터 URL로 생성하는 함수
 export const generateProfileImageUrl = (username: string = '', size: number = 40): string => {
     const initial = username ? username.charAt(0).toUpperCase() : '?';
 

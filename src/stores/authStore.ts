@@ -13,8 +13,11 @@ interface AuthState {
   isAuthenticated: boolean;
   setTokens: (accessToken: string, refreshToken: string) => void;
   setUser: (user: User) => void;
+  setProfileImage: (profileImageUrl: string) => void;
   clearAuth: () => void;
 }
+
+const BASE_URL = 'http://localhost:8080';
 
 export const useAuthStore = create<AuthState>((set) => ({
   accessToken: localStorage.getItem('accessToken'),
@@ -23,7 +26,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: !!localStorage.getItem('accessToken'),
 
   setTokens: (accessToken, refreshToken) => {
-    console.log('Setting tokens:', { accessToken, refreshToken }); // 디버깅용
+    console.log('Setting tokens:', { accessToken, refreshToken });
     localStorage.setItem('accessToken', accessToken);
     localStorage.setItem('refreshToken', refreshToken);
     set({
@@ -34,13 +37,41 @@ export const useAuthStore = create<AuthState>((set) => ({
     console.log('localStorage after setting tokens:', {
       accessToken: localStorage.getItem('accessToken'),
       refreshToken: localStorage.getItem('refreshToken'),
-    }); // 디버깅용
+    });
   },
 
   setUser: (user) => {
-    console.log('Setting user:', user); // 디버깅용
-    localStorage.setItem('user', JSON.stringify(user));
-    set({ user });
+    console.log('Setting user:', user);
+    // 프로필 이미지 URL에 BASE_URL 추가
+    const updatedUser = {
+      ...user,
+      profile_image: user.profile_image
+        ? user.profile_image.startsWith('http')
+          ? user.profile_image
+          : `${BASE_URL}${user.profile_image}`
+        : '',
+    };
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+    set({ user: updatedUser });
+  },
+
+  setProfileImage: (profileImageUrl: string) => {
+    set((state) => {
+      if (!state.user) return state;
+
+      const updatedUser = {
+        ...state.user,
+        profile_image: profileImageUrl.startsWith('http')
+          ? profileImageUrl
+          : `${BASE_URL}${profileImageUrl}`,
+      };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+
+      return {
+        ...state,
+        user: updatedUser,
+      };
+    });
   },
 
   clearAuth: () => {
