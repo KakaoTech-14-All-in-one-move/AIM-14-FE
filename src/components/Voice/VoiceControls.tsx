@@ -15,25 +15,25 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ show }) => {
   const { connection, currentUser } = useCall();
   const voiceChatStore = useVoiceChat();
 
-  // 현재 유저의 마지막 상태를 참조하기 위한 ref
-  const latestStateRef = useRef({
-    muted: currentUser?.muted || false,
-    deafened: currentUser?.deafened || false
-  });
+  // 각 유저별 상태를 추적하기 위한 ref
+  const userStatesRef = useRef(new Map<string, { muted: boolean; deafened: boolean }>());
 
-  // 상태가 변경될 때마다 ref 업데이트
+  // 채널 입장 시 초기 상태 설정
   useEffect(() => {
     if (currentUser) {
-      latestStateRef.current = {
-        muted: currentUser.muted,
-        deafened: currentUser.deafened
-      };
+      // 채널 입장 시 받은 초기 상태로 설정
+      userStatesRef.current.set(currentUser.user_id, {
+        muted: currentUser.muted || false,
+        deafened: currentUser.deafened || false
+      });
     }
-  }, [currentUser]);
+  }, [currentUser?.user_id]); // currentUser가 변경될 때만 실행
 
   const handleDisconnect = useCallback(() => {
     if (connection) {
       connection.leaveChannel();
+      // 채널 떠날 때 상태 초기화
+      userStatesRef.current.clear();
     }
     navigate('/home');
   }, [connection, navigate]);
@@ -45,25 +45,28 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ show }) => {
         return;
       }
 
-      // 최신 상태를 기반으로 업데이트
-      const newMutedState = !latestStateRef.current.muted;
-      latestStateRef.current.muted = newMutedState;
+      // 현재 유저의 최신 상태 가져오기
+      const currentState = userStatesRef.current.get(currentUser.user_id) || {
+        muted: false,
+        deafened: false
+      };
 
-      // 서버에 현재 누적된 전체 상태 전송
-      connection.updateState({
-        muted: latestStateRef.current.muted,
-        deafened: latestStateRef.current.deafened
-      });
+      // 새로운 상태 계산
+      const newState = {
+        ...currentState,
+        muted: !currentState.muted
+      };
 
-      // 임시 UI 업데이트 (서버 응답 전)
+      // 상태 업데이트
+      userStatesRef.current.set(currentUser.user_id, newState);
+
+      // 서버에 상태 전송
+      connection.updateState(newState);
+
+      // UI 업데이트
       voiceChatStore.updateUserStatus(currentUser.user_id, {
         ...currentUser,
-        muted: newMutedState
-      });
-
-      console.log('Requested state update:', {
-        userId: currentUser.user_id,
-        newState: latestStateRef.current
+        muted: newState.muted
       });
     }
   }, [connection, currentUser, voiceChatStore]);
@@ -75,36 +78,44 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ show }) => {
         return;
       }
 
-      // 최신 상태를 기반으로 업데이트
-      const newDeafenedState = !latestStateRef.current.deafened;
-      latestStateRef.current.deafened = newDeafenedState;
+      // 현재 유저의 최신 상태 가져오기
+      const currentState = userStatesRef.current.get(currentUser.user_id) || {
+        muted: false,
+        deafened: false
+      };
 
-      // 서버에 현재 누적된 전체 상태 전송
-      connection.updateState({
-        muted: latestStateRef.current.muted,
-        deafened: latestStateRef.current.deafened
-      });
+      // 새로운 상태 계산
+      const newState = {
+        ...currentState,
+        deafened: !currentState.deafened
+      };
 
-      // 임시 UI 업데이트 (서버 응답 전)
+      // 상태 업데이트
+      userStatesRef.current.set(currentUser.user_id, newState);
+
+      // 서버에 상태 전송
+      connection.updateState(newState);
+
+      // UI 업데이트
       voiceChatStore.updateUserStatus(currentUser.user_id, {
         ...currentUser,
-        deafened: newDeafenedState
-      });
-
-      console.log('Requested state update:', {
-        userId: currentUser.user_id,
-        newState: latestStateRef.current
+        deafened: newState.deafened
       });
     }
   }, [connection, currentUser, voiceChatStore]);
 
-  // currentUser와 store의 상태를 병합하여 최신 상태 사용
+  // 현재 유저의 상태만 참조하도록 수정
   const currentUserState = useMemo(() => {
-    const storeUser = voiceChatStore.users.find(u => u.user_id === currentUser?.user_id);
+    if (!currentUser) return null;
+
+    const userState = userStatesRef.current.get(currentUser.user_id) || {
+      muted: false,
+      deafened: false
+    };
+
     return {
       ...currentUser,
-      ...storeUser,
-      ...latestStateRef.current
+      ...userState
     };
   }, [currentUser, voiceChatStore.users]);
 
