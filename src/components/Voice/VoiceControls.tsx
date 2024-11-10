@@ -21,10 +21,17 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ show }) => {
   // 채널 입장 시 초기 상태 설정
   useEffect(() => {
     if (currentUser) {
-      // 채널 입장 시 받은 초기 상태로 설정
+      // 채널 입장 시 항상 false로 초기화
       userStatesRef.current.set(currentUser.user_id, {
-        muted: currentUser.muted || false,
-        deafened: currentUser.deafened || false
+        muted: false,
+        deafened: false
+      });
+
+      // VoiceChat 스토어도 동일하게 초기화
+      voiceChatStore.updateUserStatus(currentUser.user_id, {
+        ...currentUser,
+        muted: false,
+        deafened: false
       });
     }
   }, [currentUser?.user_id]); // currentUser가 변경될 때만 실행
