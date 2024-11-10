@@ -26,6 +26,7 @@ export interface ChannelMapping {
 export interface CallUserData {
   user_id: string;
   username: string;
+  profile_image: string;
   server_id: string;
   channel_id: string;
   channel_type: MediaChannelType;

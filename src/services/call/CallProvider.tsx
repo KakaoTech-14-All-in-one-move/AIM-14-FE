@@ -41,10 +41,34 @@ export function CallProvider({ children }: CallProviderProps) {
     setState(prevState => {
       console.log('Previous state:', prevState);
 
+      // Create a map of existing users with their profile images
+      const existingUserMap = new Map(
+        prevState.users.map(user => [user.user_id, user])
+      );
+
+      // Merge new users with existing profile images
+      const updatedUsers = newState.users.map(newUser => {
+        const existingUser = existingUserMap.get(newUser.user_id);
+        return {
+          ...newUser,
+          profile_image: existingUser?.profile_image || newUser.profile_image
+        };
+      });
+
+      // Update current user while preserving profile image
+      const updatedCurrentUser = newState.currentUser
+        ? {
+          ...newState.currentUser,
+          profile_image:
+            prevState.currentUser?.profile_image ||
+            newState.currentUser.profile_image
+        }
+        : null;
+
       const updatedState = {
         ...prevState,
-        users: newState.users,
-        currentUser: newState.currentUser,
+        users: updatedUsers,
+        currentUser: updatedCurrentUser,
         connectionStatus: newState.connectionStatus
       };
 
@@ -55,7 +79,7 @@ export function CallProvider({ children }: CallProviderProps) {
 
   // VoiceChat 스토어와 동기화
   useEffect(() => {
-    if (state.users.length >= 0) {  // 0 이상으로 변경하여 빈 배열도 동기화
+    if (state.users.length >= 0) {
       console.log('Syncing users with VoiceChat store:', state.users);
       useVoiceChat.getState().setUsers(state.users);
     }
