@@ -68,18 +68,23 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
           screenStreamRef.current = null;
         }
 
-        // 서버에 상태 업데이트 먼저
+        // WebSocket 상태 업데이트
         connection.updateState({
           camera_on: true,
           screen_sharing: false
         });
 
-        // 로컬 상태 업데이트
+        // VoiceChat 스토어 상태 업데이트 (스트림 포함)
         voiceChatStore.updateUserStatus(currentUser.user_id, {
-          ...currentUser,
           camera_on: true,
           screen_sharing: false,
-          stream
+          stream // 중요: stream 객체를 명시적으로 전달
+        });
+
+        console.log('Camera enabled:', {
+          userId: currentUser.user_id,
+          stream: stream,
+          tracks: stream.getTracks()
         });
       } else {
         // 카메라 끄기
@@ -93,13 +98,20 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
         });
 
         voiceChatStore.updateUserStatus(currentUser.user_id, {
-          ...currentUser,
           camera_on: false,
-          stream: null
+          stream: null // 스트림 제거
         });
+
+        console.log('Camera disabled for user:', currentUser.user_id);
       }
     } catch (error) {
       console.error('Failed to toggle camera:', error);
+      // 에러 처리 추가
+      if ((error as Error).name === 'NotAllowedError') {
+        alert('카메라 접근 권한이 거부되었습니다. 브라우저 설정에서 카메라 권한을 허용해주세요.');
+      } else {
+        alert('카메라를 시작하는데 문제가 발생했습니다.');
+      }
     }
   }, [connection, currentUser, voiceChatStore]);
 

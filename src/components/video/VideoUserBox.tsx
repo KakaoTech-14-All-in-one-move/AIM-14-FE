@@ -1,6 +1,5 @@
-// VideoUserBox.tsx
-import { Camera, CameraOff, HeadphoneOff, MicOff, MonitorUp } from 'lucide-react';
 import { useEffect, useRef } from 'react';
+import { Camera, CameraOff, HeadphoneOff, MicOff, MonitorUp } from 'lucide-react';
 
 interface VideoUserBoxProps {
   user: {
@@ -17,16 +16,43 @@ interface VideoUserBoxProps {
 }
 
 export const VideoUserBox: React.FC<VideoUserBoxProps> = ({ user }) => {
-  console.log(user);
-
   const videoRef = useRef<HTMLVideoElement>(null);
 
+  // 스트림 연결 처리
   useEffect(() => {
-    if (videoRef.current && user.stream) {
-      videoRef.current.srcObject = user.stream;
-      videoRef.current.play().catch(err => console.error('Failed to play video:', err));
+    const videoElement = videoRef.current;
+    if (!videoElement) return;
+
+    if (user.stream && (user.isVideoOn || user.isScreenSharing)) {
+      console.log('Setting up video stream for user:', {
+        userId: user.id,
+        stream: user.stream,
+        tracks: user.stream.getTracks()
+      });
+
+      videoElement.srcObject = user.stream;
+
+      // 비디오 재생 시작
+      const playVideo = async () => {
+        try {
+          await videoElement.play();
+        } catch (error) {
+          console.error('Failed to play video:', error);
+        }
+      };
+
+      playVideo();
+    } else {
+      videoElement.srcObject = null;
     }
-  }, [user.stream]);
+
+    // cleanup
+    return () => {
+      if (videoElement.srcObject) {
+        videoElement.srcObject = null;
+      }
+    };
+  }, [user.stream, user.isVideoOn, user.isScreenSharing]);
 
   return (
     <div
@@ -34,7 +60,7 @@ export const VideoUserBox: React.FC<VideoUserBoxProps> = ({ user }) => {
         ${user.isSpeaking ? 'ring-2 ring-green-500' : ''}
         transition-all duration-200 hover:shadow-xl`}
     >
-      {/* 비디오 또는 유저 이미지 */}
+      {/* 비디오 또는 유저 이미지 표시 */}
       {user.stream && (user.isVideoOn || user.isScreenSharing) ? (
         <video
           ref={videoRef}
@@ -61,8 +87,7 @@ export const VideoUserBox: React.FC<VideoUserBoxProps> = ({ user }) => {
         </div>
       )}
 
-
-      {/* 상단의 상태 표시 */}
+      {/* 상태 아이콘 */}
       <div className="absolute top-6 right-6 flex gap-3">
         {user.isMuted && (
           <div className="bg-red-500 rounded-full p-3">
@@ -74,7 +99,7 @@ export const VideoUserBox: React.FC<VideoUserBoxProps> = ({ user }) => {
             <HeadphoneOff className="w-6 h-6 text-white" />
           </div>
         )}
-        {!user.isVideoOn && ( // 카메라가 꺼져있을 때만 아이콘 표시
+        {!user.isVideoOn && (
           <div className="bg-red-500 rounded-full p-3">
             <CameraOff className="w-6 h-6 text-white" />
           </div>
@@ -86,7 +111,7 @@ export const VideoUserBox: React.FC<VideoUserBoxProps> = ({ user }) => {
         )}
       </div>
 
-      {/* 하단의 유저 정보 */}
+      {/* 유저 정보 */}
       <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent">
         <div className="flex items-center justify-between">
           <span className="text-white text-xl font-medium">
