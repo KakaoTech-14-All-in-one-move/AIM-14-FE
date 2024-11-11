@@ -1,14 +1,28 @@
 // VideoContent.tsx
 import { VideoUserBox } from './VideoUserBox';
 import { VideoControls } from './VideoControls';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';  // useEffect 추가
+import { useParams } from 'react-router-dom'; // useParams 추가
 import { useCall } from '@/services/call/CallProvider';
 import { useVoiceChat } from '@/hooks/useVoiceChat';
 
 export const VideoContent = () => {
   const [showControls, setShowControls] = useState(false);
-  const { currentUser } = useCall();
+  const { currentUser, connection } = useCall();  // connection 추가
   const voiceChatStore = useVoiceChat();
+  const { channelId } = useParams();
+
+  useEffect(() => {
+    if (connection && channelId) {
+      connection.joinChannel(channelId, 'VIDEO');
+    }
+
+    return () => {
+      if (connection) {
+        connection.leaveChannel();
+      }
+    };
+  }, [connection, channelId]);
 
   // 화면 공유 중인 사용자를 별도의 유저로 추가
   const allUsers = currentUser

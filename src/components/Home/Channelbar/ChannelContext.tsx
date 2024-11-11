@@ -1,11 +1,12 @@
-import React, { createContext, useContext, useState } from 'react';
+// ChannelContext.tsx
+import React, { createContext, useContext, useState, useCallback } from 'react';
 import { ChannelContextType, Channels, ChannelStateType, ChannelType } from './types';
 import { useAuthStore } from '@/stores/authStore';
 
 export const ChannelContext = createContext<ChannelContextType | null>(null);
 
 export const ChannelProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const user = useAuthStore(state => state.user);  // user 정보를 authStore에서 가져옴
+  const user = useAuthStore(state => state.user);
 
   const [channels, setChannels] = useState<Channels>({
     text: ['일반', '풀스택', '인공지능', '클라우드'],
@@ -30,24 +31,24 @@ export const ChannelProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   });
 
-  // 기본 채널 관리 함수들
-  const addChannel = (type: ChannelType, name: string) => {
+  // 기본 채널 관리 함수들 메모이제이션
+  const addChannel = useCallback((type: ChannelType, name: string) => {
     setChannels(prev => ({
       ...prev,
       [type]: [...prev[type], name],
     }));
-  };
+  }, []);
 
-  const renameChannel = (type: ChannelType, oldName: string, newName: string) => {
+  const renameChannel = useCallback((type: ChannelType, oldName: string, newName: string) => {
     setChannels(prev => ({
       ...prev,
       [type]: prev[type].map(channelName =>
         channelName === oldName ? newName : channelName,
       ),
     }));
-  };
+  }, []);
 
-  const deleteChannel = (type: ChannelType, channelName: string) => {
+  const deleteChannel = useCallback((type: ChannelType, channelName: string) => {
     setChannels(prev => ({
       ...prev,
       [type]: prev[type].filter(name => name !== channelName),
@@ -66,17 +67,17 @@ export const ChannelProvider: React.FC<{ children: React.ReactNode }> = ({ child
         },
       }));
     }
-  };
+  }, []);
 
-  const toggleSection = (type: ChannelType) => {
+  const toggleSection = useCallback((type: ChannelType) => {
     setOpenSections(prev => ({
       ...prev,
       [type]: !prev[type],
     }));
-  };
+  }, []);
 
-  // 채널 상태 관리 함수들
-  const activateChannel = (type: Exclude<ChannelType, 'text'>, channelName: string) => {
+  // 채널 상태 관리 함수들 메모이제이션
+  const activateChannel = useCallback((type: Exclude<ChannelType, 'text'>, channelName: string) => {
     setChannelStates(prev => ({
       ...prev,
       [type]: {
@@ -84,9 +85,9 @@ export const ChannelProvider: React.FC<{ children: React.ReactNode }> = ({ child
         active: { ...prev[type].active, [channelName]: true },
       },
     }));
-  };
+  }, []);
 
-  const deactivateChannel = (type: Exclude<ChannelType, 'text'>, channelName: string) => {
+  const deactivateChannel = useCallback((type: Exclude<ChannelType, 'text'>, channelName: string) => {
     setChannelStates(prev => ({
       ...prev,
       [type]: {
@@ -94,9 +95,9 @@ export const ChannelProvider: React.FC<{ children: React.ReactNode }> = ({ child
         active: { ...prev[type].active, [channelName]: false },
       },
     }));
-  };
+  }, []);
 
-  const joinChannel = (type: Exclude<ChannelType, 'text'>, channelName: string) => {
+  const joinChannel = useCallback((type: Exclude<ChannelType, 'text'>, channelName: string) => {
     setChannelStates(prev => ({
       ...prev,
       [type]: {
@@ -104,9 +105,9 @@ export const ChannelProvider: React.FC<{ children: React.ReactNode }> = ({ child
         joined: { ...prev[type].joined, [channelName]: true },
       },
     }));
-  };
+  }, []);
 
-  const leaveChannel = (type: Exclude<ChannelType, 'text'>, channelName: string) => {
+  const leaveChannel = useCallback((type: Exclude<ChannelType, 'text'>, channelName: string) => {
     setChannelStates(prev => ({
       ...prev,
       [type]: {
@@ -114,9 +115,10 @@ export const ChannelProvider: React.FC<{ children: React.ReactNode }> = ({ child
         joined: { ...prev[type].joined, [channelName]: false },
       },
     }));
-  };
+  }, []);
 
-  const contextValue: ChannelContextType = {
+  // context value도 메모이제이션
+  const contextValue = React.useMemo(() => ({
     channels,
     addChannel,
     renameChannel,
@@ -128,10 +130,23 @@ export const ChannelProvider: React.FC<{ children: React.ReactNode }> = ({ child
     deactivateChannel,
     joinChannel,
     leaveChannel,
-    currentUser: user  // user 정보를 context value에 포함
-  };
+    currentUser: user
+  }), [
+    channels,
+    addChannel,
+    renameChannel,
+    deleteChannel,
+    openSections,
+    toggleSection,
+    channelStates,
+    activateChannel,
+    deactivateChannel,
+    joinChannel,
+    leaveChannel,
+    user
+  ]);
 
-    return (
+  return (
     <ChannelContext.Provider value={contextValue}>
       {children}
     </ChannelContext.Provider>
