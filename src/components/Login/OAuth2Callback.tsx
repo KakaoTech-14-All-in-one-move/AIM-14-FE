@@ -23,7 +23,7 @@ export const OAuth2Callback = () => {
         const userInfo = {
             email: params.get('email') || '',
             username: params.get('username') || '',
-            profile_image: ''
+            profile_image: params.get('profile_image') || '',
         };
 
         setUser(userInfo);
