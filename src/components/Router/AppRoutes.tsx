@@ -8,6 +8,7 @@ import { AuthEventHandler } from '@/components/router/AuthEventHandler';
 import { OAuth2Callback } from '@/components/login/OAuth2Callback';
 import Record from '../Record';
 import Voice from '../Voice';
+import Video from '../video';
 
 export const AppRoutes: React.FC = () => {
   // 전역적으로 인증 상태 체크
@@ -62,6 +63,14 @@ export const AppRoutes: React.FC = () => {
           element={
             <ProtectedRoute>
               <Voice/>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/video/:channelId"
+          element={
+            <ProtectedRoute>
+              <Video/>
             </ProtectedRoute>
           }
         />

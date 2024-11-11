@@ -1,14 +1,15 @@
+// components/Home/Channelbar/ChannelList.tsx
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronDown, HeadphoneOff, MicOff, Plus } from 'lucide-react';
+import { ChevronDown, HeadphoneOff, MicOff, Camera, MonitorUp, Plus, CameraOff } from 'lucide-react';
 import { ChannelType } from './types';
 import { useChannels } from './ChannelContext';
 import { useCall } from '@/services/call/CallProvider';
-import { TEMP_CHANNEL_MAPPING } from '@/services/call/constants';
 import ContextMenu from './ContextMenu';
-import { useVoiceChat } from '../../../hooks/useVoiceChat.ts';
+import { useVoiceChat } from '@/hooks/useVoiceChat';
 
 const GENERAL_VOICE_CHANNEL_ID = '5143992e-9dcd-45fe-bcc7-e337417b0cfe';
+const GENERAL_VIDEO_CHANNEL_ID = '6143992e-9dcd-45fe-bcc7-e337417b0cfe';
 const DEFAULT_PROFILE_IMAGE = '/kakao_login_logo.png';
 
 const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({ type, icon: Icon }) => {
@@ -33,31 +34,27 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
   const { connection, users } = useCall();
   const voiceChatStore = useVoiceChat();
 
+  // 채널 상태 모니터링
   useEffect(() => {
-    // 초기 채널 설정
-    if (channelId === GENERAL_VOICE_CHANNEL_ID && type === 'voice') {
+    if (!channelStates) return; // 초기 상태 체크 추가
+
+    const currentChannelId = type === 'voice' ? GENERAL_VOICE_CHANNEL_ID : GENERAL_VIDEO_CHANNEL_ID;
+    if (channelId === currentChannelId && (type === 'voice' || type === 'video')) {
       joinChannel(type, '일반');
       setExpandedChannels(new Set(['일반']));
     }
 
-    // 채널 상태 업데이트
-    if (type === 'voice') {
-      console.log('Checking channel status - Current store users:', voiceChatStore.users);
-
+    if (['voice', 'video'].includes(type)) {
       const channelUsers = voiceChatStore.users.filter(user =>
-        user.channel_type === 'VOICE' &&
-        user.channel_id === GENERAL_VOICE_CHANNEL_ID
+        user.channel_type === type.toUpperCase() &&
+        user.channel_id === currentChannelId
       );
 
-      console.log('Channel users after filter:', channelUsers);
-
       if (channelUsers.length > 0) {
-        console.log('Activating channel - users present');
-        activateChannel('voice', '일반');
+        activateChannel(type, '일반');
         setExpandedChannels(prev => new Set([...prev, '일반']));
       } else {
-        console.log('Deactivating channel - no users');
-        deactivateChannel('voice', '일반');
+        deactivateChannel(type, '일반');
         setExpandedChannels(prev => {
           const newSet = new Set(prev);
           newSet.delete('일반');
@@ -65,51 +62,19 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
         });
       }
     }
-  }, [channelId, voiceChatStore.users, type]);
+  }, [channelId, voiceChatStore.users, type, channelStates]);
 
-  useEffect(() => {
-    console.log('ChannelList users updated:', users);
-    if (users && users.length > 0 && type === 'voice') {
-      const voiceChannelUsers = users.filter((user: { channel_type: string; channel_id: string; }) =>
-        user.channel_type === 'VOICE' &&
-        user.channel_id === GENERAL_VOICE_CHANNEL_ID,
-      );
-
-      console.log('Voice channel users:', voiceChannelUsers);
-
-      if (voiceChannelUsers.length > 0) {
-        activateChannel('voice', '일반');
-        setExpandedChannels(prev => new Set([...prev, '일반']));
-      }
-    }
-  }, [users]);
-
-  const toggleChannelExpand = (channelName: string) => {
-    setExpandedChannels(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(channelName)) {
-        newSet.delete(channelName);
-      } else {
-        newSet.add(channelName);
-      }
-      return newSet;
-    });
-  };
 
   const renderChannelMembers = (channelName: string) => {
-    if (type !== 'voice' || channelName !== TEMP_CHANNEL_MAPPING.channelName) {
+    if (!['voice', 'video'].includes(type) || channelName !== '일반') {
       return null;
     }
 
-    console.log('Rendering channel members. Current store users:', voiceChatStore.users);
-
-    // users 대신 voiceChatStore.users 사용
+    const currentChannelId = type === 'voice' ? GENERAL_VOICE_CHANNEL_ID : GENERAL_VIDEO_CHANNEL_ID;
     const channelMembers = voiceChatStore.users.filter(member =>
-      member.channel_id === TEMP_CHANNEL_MAPPING.channelId &&
-      member.server_id === TEMP_CHANNEL_MAPPING.serverId
+      member.channel_id === currentChannelId &&
+      member.channel_type === type.toUpperCase()
     );
-
-    console.log('Filtered channel members:', channelMembers);
 
     return (
       <>
@@ -127,6 +92,8 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
             <div className="ml-auto mr-4 flex items-center gap-2">
               {member.muted && <MicOff size={16} className="text-red-500" />}
               {member.deafened && <HeadphoneOff size={16} className="text-red-500" />}
+              {type === 'video' && !member.camera_on && <CameraOff size={16} className="text-red-500" />}
+              {type === 'video' && member.screen_sharing && <MonitorUp size={16} className="text-green-500" />}
             </div>
           </div>
         ))}
@@ -134,21 +101,23 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
     );
   };
 
-
+  // ChannelList.tsx
   const handleChannelClick = async (channelName: string) => {
     if (type !== 'voice' && type !== 'video') return;
+    if (!channelStates) return; // 초기 상태 체크 추가
 
-    const mediaType = type as Exclude<ChannelType, 'text'>;  // type assertion 추가
-    const isJoined = channelStates[mediaType].joined[channelName];
+    const mediaType = type as Exclude<ChannelType, 'text'>;
+    const currentChannelId = type === 'voice' ? GENERAL_VOICE_CHANNEL_ID : GENERAL_VIDEO_CHANNEL_ID;
 
-    // 이미 참여중인 경우: 토글만 수행
-    if (isJoined) {
+    // 이미 참여중인 경우
+    if (channelStates[mediaType]?.joined?.[channelName]) {
       toggleChannelExpand(channelName);
       return;
     }
 
     // 다른 채널에 이미 참여중인지 확인
-    const hasActiveOtherChannel = Object.entries(channelStates[mediaType].joined)
+    const currentJoinedState = channelStates[mediaType]?.joined ?? {};
+    const hasActiveOtherChannel = Object.entries(currentJoinedState)
       .some(([name, joined]) => name !== channelName && joined);
 
     if (hasActiveOtherChannel) {
@@ -158,8 +127,8 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
 
       if (!confirmSwitch) return;
 
-      // 현재 접속중인 채널에서 나가기
-      Object.entries(channelStates[mediaType].joined).forEach(([name, joined]) => {
+      // 현재 채널에서 나가기
+      Object.entries(currentJoinedState).forEach(([name, joined]) => {
         if (joined) {
           leaveChannel(mediaType, name);
           connection?.leaveChannel();
@@ -167,11 +136,11 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
       });
     }
 
-    // 채널 참여 처리
-    if (mediaType === 'voice' && channelName === '일반') {
+    // 채널 참여
+    if (channelName === '일반') {
       joinChannel(mediaType, channelName);
-      connection?.joinChannel(GENERAL_VOICE_CHANNEL_ID, 'VOICE');
-      navigate(`/voice/${GENERAL_VOICE_CHANNEL_ID}`);
+      connection?.joinChannel(currentChannelId, mediaType.toUpperCase());
+      navigate(`/${mediaType}/${currentChannelId}`);
       toggleChannelExpand(channelName);
     }
   };
@@ -198,6 +167,18 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
       }
       setContextMenu(null);
     }
+  };
+
+  const toggleChannelExpand = (channelName: string) => {
+    setExpandedChannels(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(channelName)) {
+        newSet.delete(channelName);
+      } else {
+        newSet.add(channelName);
+      }
+      return newSet;
+    });
   };
 
   return (
@@ -232,9 +213,9 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
         <div key={channel} className="mb-1 ml-3">
           <div
             className={`flex items-center text-gray-400 hover:bg-gray-700 hover:text-gray-200 px-2 py-1 rounded cursor-pointer ${
-              channelStates[type as 'voice' | 'video']?.active[channel] ? 'bg-gray-700' : ''
+              channelStates?.[type as 'voice' | 'video']?.active?.[channel] ? 'bg-gray-700' : ''
             } ${
-              channelStates[type as 'voice' | 'video']?.joined[channel] ? 'text-white font-semibold' : ''
+              channelStates?.[type as 'voice' | 'video']?.joined?.[channel] ? 'text-white font-semibold' : ''
             }`}
             onClick={() => handleChannelClick(channel)}
             onContextMenu={(e) => handleContextMenu(e, channel)}
@@ -242,7 +223,7 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
             <Icon size={18} className="mr-1" />
             <span className="flex-grow">{channel}</span>
             {(type === 'voice' || type === 'video') && (
-              channelStates[type].active[channel] || channelStates[type].joined[channel]
+              channelStates?.[type]?.active?.[channel] || channelStates?.[type]?.joined?.[channel]
             ) && (
               <>
                 <div className="mr-3">
@@ -260,12 +241,8 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
 
           {/* 채널 멤버 목록 */}
           {(type === 'voice' || type === 'video') &&
-            (channelStates[type].active[channel] || channelStates[type].joined[channel]) &&
-            expandedChannels.has(channel) && (
-              <>
-                {renderChannelMembers(channel)}
-              </>
-            )}
+            (channelStates?.[type]?.active?.[channel] || channelStates?.[type]?.joined?.[channel]) &&
+            expandedChannels.has(channel) && renderChannelMembers(channel)}
         </div>
       ))}
 

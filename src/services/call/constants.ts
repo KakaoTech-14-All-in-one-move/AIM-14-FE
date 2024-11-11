@@ -1,4 +1,5 @@
-import { ChannelMapping } from './types';
+// services/call/constants.ts
+import { ChannelMapping } from './types.ts';
 
 export const CALL_API = {
   GET_WEBSOCKET_URL: '/api/v1/call',
@@ -6,11 +7,20 @@ export const CALL_API = {
   DEFAULT_CHANNEL_ID: '5143992e-9dcd-45fe-bcc7-e337417b0cfe'
 };
 
+// 기존 음성 채널 매핑은 그대로 유지
 export const TEMP_CHANNEL_MAPPING: ChannelMapping = {
   serverId: '12345',
   channelName: '일반',
   channelId: '5143992e-9dcd-45fe-bcc7-e337417b0cfe',
   channelType: 'VOICE'
+};
+
+// 비디오 채널 매핑 추가
+export const VIDEO_CHANNEL_MAPPING: ChannelMapping = {
+  serverId: '12345',
+  channelName: '일반',
+  channelId: '6143992e-9dcd-45fe-bcc7-e337417b0cfe',
+  channelType: 'VIDEO'
 };
 
 export const OP_CODES = {
