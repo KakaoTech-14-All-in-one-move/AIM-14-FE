@@ -69,7 +69,8 @@ export const VideoContent = () => {
                 isDeafened: user.deafened,
                 isVideoOn: user.camera_on,
                 isScreenSharing: user.screen_sharing,
-                imageUrl: user.profile_image
+                imageUrl: user.profile_image,
+                stream: user.stream
               }}
             />
           ))}
