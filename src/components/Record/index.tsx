@@ -21,57 +21,59 @@ const Index = () => {
   const [attachedFile, setAttachedFile] = useState<File | undefined>();
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 
+  // 모든 미디어 스트림을 정리하는 함수
+  const cleanupMediaStreams = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+    if (screenStream) {
+      screenStream.getTracks().forEach(track => track.stop());
+      setScreenStream(null);
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
   useEffect(() => {
-    initializeCamera();
+    // 페이지 로드 시 초기화
+    const initializeMedia = async () => {
+      if (isCameraOn) {
+        await initializeCamera();
+      } else {
+        await initializeAudioOnly();
+      }
+    };
+
+    initializeMedia();
+
+    // popstate 이벤트 핸들러 추가 (뒤로가기 감지)
+    const handlePopState = () => {
+      cleanupMediaStreams();
+    };
+
+    // beforeunload 이벤트 핸들러 추가
+    const handleBeforeUnload = () => {
+      cleanupMediaStreams();
+    };
+
+    // 이벤트 리스너 등록
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('beforeunload', handleBeforeUnload);
 
     // cleanup 함수
     return () => {
-      // 카메라 스트림 정리
-      if (cameraStream) {
-        cameraStream.getTracks().forEach(track => {
-          track.stop();  // 모든 트랙(비디오, 오디오)을 완전히 중지
-        });
-        setCameraStream(null);
-      }
-
-      // 화면 공유 스트림 정리
-      if (screenStream) {
-        screenStream.getTracks().forEach(track => {
-          track.stop();
-        });
-        setScreenStream(null);
-      }
-
-      // 녹화 중지
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.stop();
-      }
-
-      // 상태 초기화
-      setIsCameraOn(true);
-      setIsSharing(false);
-      setIsRecording(false);
-      setShowDownload(false);
-      setRecordedChunks([]);
-      mediaRecorderRef.current = null;
-
-      // 시스템 수준에서 모든 미디어 트랙 확실히 정리
-      navigator.mediaDevices.getUserMedia({ audio: true, video: true })
-        .then(stream => {
-          stream.getTracks().forEach(track => track.stop());
-        })
-        .catch(() => {
-        });
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      cleanupMediaStreams();
     };
-  }, []); // 컴포넌트 마운트/언마운트 시에만 실행
+  }, []);
 
   const initializeCamera = async () => {
     try {
       // 기존 스트림이 있다면 모든 트랙 중지
-      if (cameraStream) {
-        cameraStream.getTracks().forEach(track => track.stop());
-        setCameraStream(null);
-      }
+      cleanupMediaStreams();
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
@@ -88,10 +90,7 @@ const Index = () => {
   const initializeAudioOnly = async () => {
     try {
       // 기존 스트림이 있다면 모든 트랙 중지
-      if (cameraStream) {
-        cameraStream.getTracks().forEach(track => track.stop());
-        setCameraStream(null);
-      }
+      cleanupMediaStreams();
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: true,
@@ -107,23 +106,13 @@ const Index = () => {
 
   const toggleCamera = async () => {
     try {
-      // 현재 스트림 정리
-      if (cameraStream) {
-        cameraStream.getTracks().forEach(track => track.stop());
-        setCameraStream(null);
-      }
+      cleanupMediaStreams();
 
       const newCameraState = !isCameraOn;
       setIsCameraOn(newCameraState);
 
-      // 녹화 중이면 중지
-      if (isRecording) {
-        if (mediaRecorderRef.current) {
-          mediaRecorderRef.current.stop();
-        }
-        setIsRecording(false);
-      }
       setShowDownload(false);
+      setRecordedChunks([]);
 
       // 새로운 스트림 시작
       if (newCameraState) {
@@ -136,33 +125,66 @@ const Index = () => {
       setError('Failed to toggle camera/microphone.');
     }
   };
-
-// useEffect for cleanup
   useEffect(() => {
-    if (isCameraOn) {
-      initializeCamera();
-    } else {
-      initializeAudioOnly();
-    }
+    // 페이지 로드 시 초기화
+    const initializeMedia = async () => {
+      if (isCameraOn) {
+        await initializeCamera();
+      } else {
+        await initializeAudioOnly();
+      }
+    };
 
+    initializeMedia();
+
+    // beforeunload 이벤트 핸들러 추가
+    const handleBeforeUnload = () => {
+      // 카메라 스트림 정리
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => {
+          track.stop();
+        });
+      }
+      // 화면 공유 스트림 정리
+      if (screenStream) {
+        screenStream.getTracks().forEach(track => {
+          track.stop();
+        });
+      }
+      // 녹화 중지
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+    };
+
+    // 이벤트 리스너 등록
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // cleanup 함수
     return () => {
-      // cleanup
+      // 이벤트 리스너 제거
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+
+      // 카메라 스트림 정리
       if (cameraStream) {
         cameraStream.getTracks().forEach(track => {
           track.stop();
         });
       }
 
+      // 화면 공유 스트림 정리
       if (screenStream) {
         screenStream.getTracks().forEach(track => {
           track.stop();
         });
       }
 
+      // MediaRecorder 정리
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.stop();
       }
 
+      // 상태 초기화
       setCameraStream(null);
       setScreenStream(null);
       setIsCameraOn(true);
@@ -171,8 +193,17 @@ const Index = () => {
       setShowDownload(false);
       setRecordedChunks([]);
       mediaRecorderRef.current = null;
+
+      // 시스템 수준에서 모든 미디어 트랙 정리 시도
+      navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+        .then(stream => {
+          stream.getTracks().forEach(track => track.stop());
+        })
+        .catch(() => {
+        });
     };
-  }, []);
+  }, []); // 컴포넌트 마운트/언마운트 시에만 실행
+
 
   const startRecording = async () => {
     try {
