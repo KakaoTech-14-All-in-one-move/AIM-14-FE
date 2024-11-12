@@ -11,20 +11,20 @@ const AudioWaveform = ({ isRecording, isScreenSharingExpanded, isCameraExpanded 
   const [frequencies, setFrequencies] = useState<number[]>(new Array(64).fill(0));
 
   useEffect(() => {
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    let analyser: AnalyserNode;
-    let microphone: MediaStreamAudioSourceNode;
-    let dataArray: Uint8Array;
+    let audioContext: AudioContext | null = null;
+    let currentStream: MediaStream | null = null;
     let animationFrameId: number;
 
     const handleSuccess = async (stream: MediaStream) => {
-      analyser = audioContext.createAnalyser();
+      currentStream = stream;  // 스트림 저장
+      audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const analyser = audioContext.createAnalyser();
       analyser.fftSize = 128;
-      microphone = audioContext.createMediaStreamSource(stream);
+      const microphone = audioContext.createMediaStreamSource(stream);
       microphone.connect(analyser);
 
       const bufferLength = analyser.frequencyBinCount;
-      dataArray = new Uint8Array(bufferLength);
+      const dataArray = new Uint8Array(bufferLength);
 
       const updateWaveform = () => {
         analyser.getByteFrequencyData(dataArray);
@@ -41,8 +41,18 @@ const AudioWaveform = ({ isRecording, isScreenSharingExpanded, isCameraExpanded 
       .catch((err) => console.error("Error accessing microphone:", err));
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
-      audioContext.close();
+      // 모든 리소스 정리
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+      if (audioContext) {
+        audioContext.close();
+      }
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => {
+          track.stop();
+        });
+      }
     };
   }, []);
 

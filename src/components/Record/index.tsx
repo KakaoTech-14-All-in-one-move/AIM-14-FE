@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from "react";
-import CameraRecording from "./CameraRecording.tsx";
-import ScreenSharing from "./ScreenSharing.tsx";
-import Controls from "./Controls.tsx";
-import AudioWaveform from "./AudioWaveform.tsx";
+import { useEffect, useRef, useState } from 'react';
+import CameraRecording from './CameraRecording.tsx';
+import ScreenSharing from './ScreenSharing.tsx';
+import Controls from './Controls.tsx';
+import AudioWaveform from './AudioWaveform.tsx';
 import FileUploadBox from './FileUploadBox.tsx';
-import { FiArrowUpRight, FiArrowDownLeft } from "react-icons/fi";
-import Draggable from "react-draggable";
+import { FiArrowDownLeft, FiArrowUpRight } from 'react-icons/fi';
+import Draggable from 'react-draggable';
 
 const Index = () => {
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
@@ -23,10 +23,56 @@ const Index = () => {
 
   useEffect(() => {
     initializeCamera();
-  }, []);
+
+    // cleanup 함수
+    return () => {
+      // 카메라 스트림 정리
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => {
+          track.stop();  // 모든 트랙(비디오, 오디오)을 완전히 중지
+        });
+        setCameraStream(null);
+      }
+
+      // 화면 공유 스트림 정리
+      if (screenStream) {
+        screenStream.getTracks().forEach(track => {
+          track.stop();
+        });
+        setScreenStream(null);
+      }
+
+      // 녹화 중지
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+
+      // 상태 초기화
+      setIsCameraOn(true);
+      setIsSharing(false);
+      setIsRecording(false);
+      setShowDownload(false);
+      setRecordedChunks([]);
+      mediaRecorderRef.current = null;
+
+      // 시스템 수준에서 모든 미디어 트랙 확실히 정리
+      navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+        .then(stream => {
+          stream.getTracks().forEach(track => track.stop());
+        })
+        .catch(() => {
+        });
+    };
+  }, []); // 컴포넌트 마운트/언마운트 시에만 실행
 
   const initializeCamera = async () => {
     try {
+      // 기존 스트림이 있다면 모든 트랙 중지
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+        setCameraStream(null);
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true,
@@ -34,10 +80,99 @@ const Index = () => {
       setCameraStream(stream);
       setError(null);
     } catch (err) {
-      console.error("Error accessing camera and microphone:", err);
-      setError("There was an issue accessing the camera and microphone.");
+      console.error('Error accessing camera and microphone:', err);
+      setError('There was an issue accessing the camera and microphone.');
     }
   };
+
+  const initializeAudioOnly = async () => {
+    try {
+      // 기존 스트림이 있다면 모든 트랙 중지
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+        setCameraStream(null);
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: false,
+      });
+      setCameraStream(stream);
+      setError(null);
+    } catch (err) {
+      console.error('Error accessing microphone:', err);
+      setError('There was an issue accessing the microphone.');
+    }
+  };
+
+  const toggleCamera = async () => {
+    try {
+      // 현재 스트림 정리
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+        setCameraStream(null);
+      }
+
+      const newCameraState = !isCameraOn;
+      setIsCameraOn(newCameraState);
+
+      // 녹화 중이면 중지
+      if (isRecording) {
+        if (mediaRecorderRef.current) {
+          mediaRecorderRef.current.stop();
+        }
+        setIsRecording(false);
+      }
+      setShowDownload(false);
+
+      // 새로운 스트림 시작
+      if (newCameraState) {
+        await initializeCamera();
+      } else {
+        await initializeAudioOnly();
+      }
+    } catch (err) {
+      console.error('Error toggling camera:', err);
+      setError('Failed to toggle camera/microphone.');
+    }
+  };
+
+// useEffect for cleanup
+  useEffect(() => {
+    if (isCameraOn) {
+      initializeCamera();
+    } else {
+      initializeAudioOnly();
+    }
+
+    return () => {
+      // cleanup
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => {
+          track.stop();
+        });
+      }
+
+      if (screenStream) {
+        screenStream.getTracks().forEach(track => {
+          track.stop();
+        });
+      }
+
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+
+      setCameraStream(null);
+      setScreenStream(null);
+      setIsCameraOn(true);
+      setIsSharing(false);
+      setIsRecording(false);
+      setShowDownload(false);
+      setRecordedChunks([]);
+      mediaRecorderRef.current = null;
+    };
+  }, []);
 
   const startRecording = async () => {
     try {
@@ -63,8 +198,8 @@ const Index = () => {
         setError(null);
       }
     } catch (err) {
-      console.error("Error starting recording:", err);
-      setError("There was an issue starting the recording.");
+      console.error('Error starting recording:', err);
+      setError('There was an issue starting the recording.');
     }
   };
 
@@ -80,32 +215,16 @@ const Index = () => {
     if (recordedChunks.length === 0) return;
 
     const blob = new Blob(recordedChunks, {
-      type: isCameraOn ? "video/webm" : "audio/webm",
+      type: isCameraOn ? 'video/webm' : 'audio/webm',
     });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
+    const a = document.createElement('a');
     a.href = url;
-    a.download = isCameraOn ? "recording.webm" : "audio.webm";
+    a.download = isCameraOn ? 'recording.webm' : 'audio.webm';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  };
-
-  const toggleCamera = () => {
-    if (cameraStream) {
-      cameraStream.getTracks().forEach((track) => {
-        if (track.kind === "video") {
-          track.enabled = !track.enabled;
-        }
-      });
-    }
-    setIsCameraOn(!isCameraOn);
-    setShowDownload(false);
-    setIsRecording(false);
-    if (mediaRecorderRef.current) {
-      mediaRecorderRef.current.stop();
-    }
   };
 
   const startSharing = async () => {
@@ -117,8 +236,8 @@ const Index = () => {
       setIsSharing(true);
       setError(null);
     } catch (err) {
-      console.error("Error sharing screen:", err);
-      setError("There was an issue with screen sharing.");
+      console.error('Error sharing screen:', err);
+      setError('There was an issue with screen sharing.');
     }
   };
 
@@ -161,7 +280,7 @@ const Index = () => {
         ) : (
           <div className="text-white flex items-center justify-center h-full relative">
             <AudioWaveform isRecording={isRecording}
-                           isScreenSharingExpanded={isScreenSharingExpanded} isCameraExpanded={isCameraExpanded}/>
+                           isScreenSharingExpanded={isScreenSharingExpanded} isCameraExpanded={isCameraExpanded} />
             {isRecording && (
               <div className="absolute top-2 left-2 flex items-center">
                 <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse mr-2" />
@@ -182,7 +301,7 @@ const Index = () => {
           <ScreenSharing stream={screenStream} />
         ) : (
           <p className="text-white flex items-center justify-center h-full">
-            {isSharing ? "Initializing screen share..." : "Screen sharing not started"}
+            {isSharing ? 'Initializing screen share...' : 'Screen sharing not started'}
           </p>
         )}
       </div>
@@ -191,55 +310,55 @@ const Index = () => {
 
   const handleFeedbackClick = (recordedFile: Blob, attachedFile?: File) => {
     const formData = new FormData();
-    formData.append("recordedFile", recordedFile);
+    formData.append('recordedFile', recordedFile);
     if (attachedFile) {
-      formData.append("attachedFile", attachedFile);
+      formData.append('attachedFile', attachedFile);
     }
 
-    fetch("YOUR_API_ENDPOINT", {
-      method: "POST",
+    fetch('YOUR_API_ENDPOINT', {
+      method: 'POST',
       body: formData,
     })
       .then((response) => response.json())
       .then((data) => {
-        console.log("Feedback submitted successfully:", data);
+        console.log('Feedback submitted successfully:', data);
       })
       .catch((error) => {
-        console.error("Error submitting feedback:", error);
+        console.error('Error submitting feedback:', error);
       });
   };
 
   const getCameraClassName = () => {
-    if (isCameraExpanded === 2) return "flex-1 w-full";
-    if (isCameraExpanded === 1) return "flex-1 rounded-lg";
-    if (isScreenSharingExpanded === 2) return "hidden";
+    if (isCameraExpanded === 2) return 'flex-1 w-full';
+    if (isCameraExpanded === 1) return 'flex-1 rounded-lg';
+    if (isScreenSharingExpanded === 2) return 'hidden';
     return isScreenSharingExpanded === 1
-      ? "flex-[0.35] w-[35%] h-[40%] mx-auto mt-6 ml-2 mr-2 rounded-lg"
-      : "";
+      ? 'flex-[0.35] w-[35%] h-[40%] mx-auto mt-6 ml-2 mr-2 rounded-lg'
+      : '';
   };
 
   const getRightSideClassName = () => {
-    if (isCameraExpanded === 1) return "flex-[0.35] h-full mx-auto mt-6 ml-6 rounded-lg mr-2";
+    if (isCameraExpanded === 1) return 'flex-[0.35] h-full mx-auto mt-6 ml-6 rounded-lg mr-2';
     if (isCameraExpanded === 2) return 'hidden';
-  }
+  };
 
   const getScreenSharingClassName = () => {
-    if (isScreenSharingExpanded === 2) return "flex-1 w-full h-full";
-    if (isScreenSharingExpanded === 1) return "flex-1 h-full rounded-lg";
-    if (isCameraExpanded === 2) return "hidden";
+    if (isScreenSharingExpanded === 2) return 'flex-1 w-full h-full';
+    if (isScreenSharingExpanded === 1) return 'flex-1 h-full rounded-lg';
+    if (isCameraExpanded === 2) return 'hidden';
     return isCameraExpanded === 1
-      ? "flex-[0.35] h-[30%] rounded-lg border-2 border-gray-600"
-      : "flex-[0.7]";
+      ? 'flex-[0.35] h-[30%] rounded-lg border-2 border-gray-600'
+      : 'flex-[0.7]';
   };
 
   const getFileUploadBoxClassName = () => {
-    if (isScreenSharingExpanded === 1 || isScreenSharingExpanded === 2 || isCameraExpanded === 2) return "hidden";
-    if (isCameraExpanded === 1) return "flex-[0.35] h-[30%] mt-6 rounded-lg border border-gray-700"
-    return "";
-  }
+    if (isScreenSharingExpanded === 1 || isScreenSharingExpanded === 2 || isCameraExpanded === 2) return 'hidden';
+    if (isCameraExpanded === 1) return 'flex-[0.35] h-[30%] mt-6 rounded-lg border border-gray-700';
+    return '';
+  };
 
   return (
-    <div className="h-screen w-full flex flex-col" style={{ backgroundColor: "#1E1F22" }}>
+    <div className="h-screen w-full flex flex-col" style={{ backgroundColor: '#1E1F22' }}>
       <div className="flex-grow flex relative overflow-hidden">
 
         {/* 좌측 영역 (카메라) */}
@@ -259,7 +378,7 @@ const Index = () => {
           ) : (
             <div className="flex items-center justify-center text-white h-full relative">
               <AudioWaveform isRecording={isRecording}
-                             isScreenSharingExpanded={isScreenSharingExpanded} isCameraExpanded={isCameraExpanded}/>
+                             isScreenSharingExpanded={isScreenSharingExpanded} isCameraExpanded={isCameraExpanded} />
               {isRecording && (
                 <div className="absolute top-4 left-4 flex items-center">
                   <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse mr-2" />
@@ -318,8 +437,8 @@ const Index = () => {
               <ScreenSharing stream={screenStream} />
             ) : (
               <div className="text-white h-full flex items-center justify-center text-sm"
-                   style={{ backgroundColor: "#232428" }}>
-                {isSharing ? "Initializing screen share..." : "Screen sharing not started"}
+                   style={{ backgroundColor: '#232428' }}>
+                {isSharing ? 'Initializing screen share...' : 'Screen sharing not started'}
               </div>
             )}
 
@@ -386,12 +505,12 @@ const Index = () => {
             isRecordingComplete={showDownload}
             downloadRecording={downloadRecording}
             onFeedbackClick={handleFeedbackClick}
-            recordedFile={new Blob(recordedChunks, { type: isCameraOn ? "video/webm" : "audio/webm" })}
+            recordedFile={new Blob(recordedChunks, { type: isCameraOn ? 'video/webm' : 'audio/webm' })}
             attachedFile={attachedFile}
           />
         </div>
       </div>
     </div>
   );
-}
+};
 export default Index;

@@ -3,7 +3,7 @@ const FeedbackIcon = () => {
     <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 100 100"
-      className="w-8 h-8"
+      className="w-6 h-6"
     >
       {/* 말풍선 모양 */}
       <path
@@ -19,7 +19,7 @@ const FeedbackIcon = () => {
         fill="#FFFFFF"
         fontFamily="Arial, sans-serif"
         fontWeight="bold"
-        fontSize="36"
+        fontSize="46"
       >
         AI
       </text>

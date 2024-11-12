@@ -9,6 +9,7 @@ import { OAuth2Callback } from '@/components/login/OAuth2Callback';
 import Record from '../Record';
 import Voice from '../Voice';
 import Video from '../video';
+import Feedback from '@/components/feedback';
 
 export const AppRoutes: React.FC = () => {
   // 전역적으로 인증 상태 체크
@@ -51,10 +52,18 @@ export const AppRoutes: React.FC = () => {
           }
         />
         <Route
-          path="/feedback"
+          path="/record"
           element={
             <ProtectedRoute>
               <Record/>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/feedback"
+          element={
+            <ProtectedRoute>
+              <Feedback/>
             </ProtectedRoute>
           }
         />
