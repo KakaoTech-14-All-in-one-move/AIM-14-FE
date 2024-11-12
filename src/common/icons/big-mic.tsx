@@ -2,7 +2,7 @@ interface BigMicIconProps {
   size?: number; // Optional size prop with a default value
 }
 
-const BigMicIcon = ({ size = 20 }: BigMicIconProps) => (
+const BigMicIcon = ({ size = 60 }: BigMicIconProps) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     fill="none"
