@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { VideoUserBox } from './VideoUserBox';
 import { VideoControls } from './VideoControls';
@@ -21,30 +21,7 @@ export const VideoContent = () => {
   const [showControls, setShowControls] = useState(false);
   const { currentUser, connection, connectionStatus } = useCall();
   const voiceChatStore = useVoiceChat();
-  const { channelId } = useParams();
-
-  // 채널 접속 처리
-  useEffect(() => {
-    const joinChannel = async () => {
-      if (connection && channelId) {
-        try {
-          console.log('Joining channel:', channelId);
-          await connection.joinChannel(channelId, 'VIDEO');
-          console.log('Successfully joined channel');
-        } catch (error) {
-          console.error('Failed to join channel:', error);
-        }
-      }
-    };
-
-    joinChannel();
-
-    return () => {
-      if (connection) {
-        connection.leaveChannel();
-      }
-    };
-  }, [connection, channelId]);
+  useParams();
 
   // 채널 연결 상태 모니터링
   useEffect(() => {
@@ -68,7 +45,7 @@ export const VideoContent = () => {
       isVideoOn: user.camera_on,
       isScreenSharing: user.screen_sharing,
       imageUrl: user.profile_image,
-      stream: user.stream  // MediaStream 객체 매핑
+      stream: user.stream,  // MediaStream 객체 매핑
     };
 
     console.log('매핑 후 디스플레이 사용자 데이터:', displayUser); // 디버깅용
@@ -88,7 +65,7 @@ export const VideoContent = () => {
         isVideoOn: true,
         isScreenSharing: true,
         imageUrl: user.profile_image,
-        stream: user.stream
+        stream: user.stream,
       });
     }
   });
