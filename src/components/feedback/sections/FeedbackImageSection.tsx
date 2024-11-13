@@ -14,8 +14,8 @@ export const FeedbackImageSection = ({
                                        imageBase64
                                      }: FeedbackImageSectionProps) => {
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6">
-      <div className="relative aspect-video overflow-hidden rounded-lg">
+    <div className="bg-discord700 rounded-lg shadow-xl p-4">
+      <div className="relative aspect-video overflow-hidden rounded-lg border-2 border-discord600">
         <img
           src={`data:image/jpeg;base64,${imageBase64}`}
           alt={`Frame ${currentIndex + 1}`}
@@ -27,9 +27,9 @@ export const FeedbackImageSection = ({
         <button
           onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
           disabled={currentIndex === 0}
-          className="p-2 rounded-full hover:bg-gray-100 disabled:opacity-50"
+          className="p-2 rounded-lg hover:bg-discord600 disabled:opacity-50 disabled:hover:bg-transparent transition-colors duration-200"
         >
-          <ChevronLeft className="w-6 h-6" />
+          <ChevronLeft className="w-6 h-6 text-discord100" />
         </button>
 
         <div className="flex space-x-2">
@@ -37,8 +37,8 @@ export const FeedbackImageSection = ({
             <button
               key={idx}
               onClick={() => setCurrentIndex(idx)}
-              className={`w-2 h-2 rounded-full ${
-                currentIndex === idx ? 'bg-blue-600' : 'bg-gray-300'
+              className={`w-2 h-2 rounded-full transition-all duration-200 ${
+                currentIndex === idx ? 'bg-discord100' : 'bg-discord500 hover:bg-discord400'
               }`}
             />
           ))}
@@ -47,9 +47,9 @@ export const FeedbackImageSection = ({
         <button
           onClick={() => setCurrentIndex(Math.min(totalFrames - 1, currentIndex + 1))}
           disabled={currentIndex === totalFrames - 1}
-          className="p-2 rounded-full hover:bg-gray-100 disabled:opacity-50"
+          className="p-2 rounded-lg hover:bg-discord600 disabled:opacity-50 disabled:hover:bg-transparent transition-colors duration-200"
         >
-          <ChevronRight className="w-6 h-6" />
+          <ChevronRight className="w-6 h-6 text-discord100" />
         </button>
       </div>
     </div>

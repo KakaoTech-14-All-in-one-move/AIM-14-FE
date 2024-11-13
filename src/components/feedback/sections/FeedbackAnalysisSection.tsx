@@ -16,18 +16,18 @@ export const FeedbackAnalysisSection = ({ feedbackText }: FeedbackAnalysisSectio
   ];
 
   return (
-    <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+    <div className="bg-discord700 rounded-lg shadow-xl overflow-hidden">
       <Tab.Group>
-        <Tab.List className="flex space-x-1 bg-blue-50 p-1">
+        <Tab.List className="flex space-x-1 bg-discord800 p-1">
           {categories.map(({ id, label }) => (
             <Tab
               key={id}
               className={({ selected }) => `
-                flex-1 py-3 px-4 text-sm font-medium rounded-lg
-                focus:outline-none
+                flex-1 py-2.5 px-3 text-sm font-medium rounded-md
+                focus:outline-none transition-all duration-200
                 ${selected
-                ? 'bg-white text-blue-700 shadow'
-                : 'text-gray-500 hover:bg-white/[0.5] hover:text-blue-600'
+                ? 'bg-discord500 text-white shadow-lg'
+                : 'text-gray-300 hover:bg-discord600 hover:text-white'
               }
               `}
             >
@@ -36,27 +36,27 @@ export const FeedbackAnalysisSection = ({ feedbackText }: FeedbackAnalysisSectio
           ))}
         </Tab.List>
 
-        <Tab.Panels className="p-6">
+        <Tab.Panels className="p-4">
           {categories.map(({ id }) => (
             <Tab.Panel key={id} className="space-y-6 focus:outline-none">
               <div className="space-y-4">
-                <div className="flex items-center">
-                  <CategoryIcon category={id} />
-                  <h3 className="text-lg font-semibold text-gray-900">
+                <div className="flex items-center space-x-3 bg-discord800 p-3 rounded-lg">
+                  <CategoryIcon category={id} className="text-discord100" />
+                  <h3 className="text-lg font-bold text-white">
                     Areas for Improvement
                   </h3>
                 </div>
-                <p className="text-gray-700 pl-10">
+                <p className="text-gray-300 pl-4 leading-relaxed">
                   {feedbackText?.[id]?.improvement}
                 </p>
 
-                <div className="flex items-center mt-6">
-                  <CategoryIcon category={id} />
-                  <h3 className="text-lg font-semibold text-gray-900">
+                <div className="flex items-center space-x-3 bg-discord800 p-3 rounded-lg mt-6">
+                  <CategoryIcon category={id} className="text-discord100" />
+                  <h3 className="text-lg font-bold text-white">
                     Recommendations
                   </h3>
                 </div>
-                <p className="text-gray-700 pl-10">
+                <p className="text-gray-300 pl-4 leading-relaxed">
                   {feedbackText?.[id]?.recommendations}
                 </p>
               </div>

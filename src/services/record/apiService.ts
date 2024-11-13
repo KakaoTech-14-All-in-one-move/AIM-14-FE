@@ -1,4 +1,3 @@
-// src/services/apiService.ts
 import { FeedbackItem } from '@/components/feedback/types.ts';
 
 interface ApiConfig {
@@ -21,24 +20,25 @@ export interface FeedbackResponse {
   problem: string;
 }
 
-/**
- * 비디오 파일을 서버에 업로드
- */
 export const uploadVideo = async (videoFile: Blob): Promise<string> => {
   try {
     const formData = new FormData();
-    formData.append('video', videoFile, 'recording.webm');
+    formData.append('file', videoFile, 'recording.webm');
 
     const response = await fetch(`${config.baseUrl}/api/video/receive-video/`, {
       method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+      },
       body: formData,
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(`Upload failed: ${response.status}`);
     }
 
     const data: VideoUploadResponse = await response.json();
+    console.log(data.video_id);
     return data.video_id;
   } catch (error) {
     console.error('Error uploading video:', error);
@@ -46,18 +46,21 @@ export const uploadVideo = async (videoFile: Blob): Promise<string> => {
   }
 };
 
-/**
- * AI 피드백 데이터 가져오기
- */
 export const getFeedbackData = async (videoId: string): Promise<FeedbackResponse> => {
   try {
-    const response = await fetch(`${config.aiServerUrl}/video/video-send-feedback/${videoId}/`);
+    const response = await fetch(`${config.aiServerUrl}/api/video/video-send-feedback/${videoId}/`);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     const data: FeedbackResponse = await response.json();
+    console.log(data.message)
+
+    if (!data.feedbacks?.length || data.problem === "none") {
+      throw new Error(data.message || '분석 결과가 없습니다. 다시 시도해주세요.');
+    }
+
     return data;
   } catch (error) {
     console.error('Error getting feedback:', error);
@@ -65,29 +68,4 @@ export const getFeedbackData = async (videoId: string): Promise<FeedbackResponse
   }
 };
 
-/**
- * AI 피드백 데이터 폴링
- */
-export const pollFeedbackData = async (
-  videoId: string,
-  maxAttempts = 60,
-  interval = 1000
-): Promise<FeedbackResponse> => {
-  let attempts = 0;
-
-  const executePoll = async (): Promise<FeedbackResponse> => {
-    try {
-      const result = await getFeedbackData(videoId);
-      return result;
-    } catch (error) {
-      if (attempts < maxAttempts) {
-        attempts++;
-        await new Promise(resolve => setTimeout(resolve, interval));
-        return executePoll();
-      }
-      throw new Error('Polling timeout: AI analysis is taking longer than expected');
-    }
-  };
-
-  return executePoll();
-};
+export const pollFeedbackData = getFeedbackData;

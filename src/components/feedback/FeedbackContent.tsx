@@ -1,63 +1,79 @@
-import { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 import { pollFeedbackData } from '@/services/record/apiService';
 import { FeedbackHeader } from './sections/FeedbackHeader';
 import { FeedbackImageSection } from './sections/FeedbackImageSection';
 import { FeedbackAnalysisSection } from './sections/FeedbackAnalysisSection';
 import type { FeedbackItem } from './types';
 
-export const FeedbackContent = () => {
+interface FeedbackContentProps {
+  onNoResult: (message: string) => void;
+}
+
+export const FeedbackContent = ({ onNoResult }: FeedbackContentProps) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [feedbackData, setFeedbackData] = useState<FeedbackItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const fetchRef = useRef(false);
 
   const location = useLocation();
+  const navigate = useNavigate();
   const videoId = location.state?.videoId;
 
   useEffect(() => {
-    const fetchFeedbackData = async () => {
-      if (!videoId) {
-        setError('No video ID provided');
-        setIsLoading(false);
-        return;
-      }
+    if (fetchRef.current) return;
 
+    if (!videoId) {
+      navigate('/');
+      return;
+    }
+
+    const fetchFeedbackData = async () => {
       try {
-        setIsLoading(true);
+        fetchRef.current = true;
         const response = await pollFeedbackData(videoId);
+
+        console.log('Response feedbacks:', response.feedbacks);
+
+        if (!response.feedbacks || response.problem === "none") {
+          console.log("NOTHING");
+          onNoResult(response.message || '분석 결과가 없습니다. 다시 시도해주세요.');
+          return;
+        }
+
         setFeedbackData(response.feedbacks);
       } catch (error) {
-        setError(error instanceof Error ? error.message : 'Failed to load feedback data');
+        onNoResult('분석 중 오류가 발생했습니다. 다시 시도해주세요.');
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchFeedbackData();
-  }, [videoId]);
+  }, [videoId, navigate, onNoResult]);
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-lg">Analyzing your presentation...</div>
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-discord900">
+        <div className="bg-discord800 p-8 rounded-xl shadow-lg flex flex-col items-center">
+          <Loader2 className="w-12 h-12 text-discord100 animate-spin" />
+          <p className="mt-4 text-white text-lg font-medium">Analyzing your presentation...</p>
+          <p className="text-discord200 text-sm mt-2">This may take 1-2 minutes</p>
+        </div>
       </div>
     );
   }
 
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-red-500">{error}</div>
-      </div>
-    );
+  if (!feedbackData || feedbackData.length === 0) {
+    return null;
   }
 
   const currentFeedback = feedbackData[currentIndex];
 
   return (
-    <div className="min-h-screen p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-discord900 p-6">
+      <div className="max-w-7xl mx-auto space-y-8">
         <FeedbackHeader
           currentIndex={currentIndex}
           totalFrames={feedbackData.length}
