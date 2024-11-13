@@ -3,6 +3,7 @@ import React from 'react';
 interface DefaultProfileImageProps {
     username?: string;
     size?: number;
+    margin?: string; // margin 속성 추가
 }
 
 // SVG를 데이터 URL로 생성하는 함수
@@ -29,16 +30,17 @@ export const generateProfileImageUrl = (username: string = '', size: number = 40
 };
 
 export const DefaultProfileImage: React.FC<DefaultProfileImageProps> = ({
-    username = '',
-    size = 40
-}) => {
+                                                                            username = '',
+                                                                            size = 40,
+                                                                            margin = ' ',
+                                                                        }) => {
     return (
-        <img
-            src={generateProfileImageUrl(username, size)}
-            alt={username || '?'}
-            className="rounded-full"
-            width={size}
-            height={size}
-        />
+      <img
+        src={generateProfileImageUrl(username, size)}
+        alt={username || '?'}
+        className={`rounded-full ${margin}`} // 템플릿 리터럴로 수정
+        width={size}
+        height={size}
+      />
     );
 };

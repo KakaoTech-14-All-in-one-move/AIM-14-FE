@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
 import { Settings } from 'lucide-react';
-import { useChannels } from '@/components/Home/Channelbar/ChannelContext';
 import { useAuthStore } from '@/stores/authStore';
 import UserSettingsModal from '@/components/UserSettings/UserSettingsModal';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage';
 
 const ChannelFooter: React.FC = () => {
   const user = useAuthStore(state => state.user);
-  const { currentUser } = useChannels();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   if (!user) return null;

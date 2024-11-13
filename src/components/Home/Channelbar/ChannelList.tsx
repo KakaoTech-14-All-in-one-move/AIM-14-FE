@@ -1,20 +1,23 @@
 // ChannelList.tsx
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronDown, HeadphoneOff, MicOff, Camera, MonitorUp, Plus, CameraOff } from 'lucide-react';
+import { ChevronDown, HeadphoneOff, MicOff, MonitorUp, Plus, CameraOff } from 'lucide-react';
 import { ChannelType } from './types';
 import { useChannels } from './ChannelContext';
 import { useCall } from '@/services/call/CallProvider';
 import ContextMenu from './ContextMenu';
 import { useVoiceChat } from '@/hooks/useVoiceChat';
+import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage.tsx';
+import { useAuthStore } from '@/stores/authStore.ts';
 
 const GENERAL_VOICE_CHANNEL_ID = '5143992e-9dcd-45fe-bcc7-e337417b0cfe';
 const GENERAL_VIDEO_CHANNEL_ID = '6143992e-9dcd-45fe-bcc7-e337417b0cfe';
-const DEFAULT_PROFILE_IMAGE = '/kakao_login_logo.png';
 
 const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({ type, icon: Icon }) => {
   const navigate = useNavigate();
   const { channelId } = useParams();
+  const user = useAuthStore(state => state.user);
+
   const {
     channels,
     addChannel,
@@ -28,11 +31,11 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
     renameChannel,
     deleteChannel,
   } = useChannels();
+  const { connection } = useCall();
+  const voiceChatStore = useVoiceChat();
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; channel: string } | null>(null);
   const [expandedChannels, setExpandedChannels] = useState<Set<string>>(new Set());
-  const { connection } = useCall();
-  const voiceChatStore = useVoiceChat();
 
   const getCurrentChannelId = useCallback(() => {
     return type === 'voice' ? GENERAL_VOICE_CHANNEL_ID : GENERAL_VIDEO_CHANNEL_ID;
@@ -101,11 +104,15 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
             key={member.user_id}
             className="ml-6 mt-2 mb-2 flex items-center text-gray-400"
           >
-            <img
-              src={member.profile_image || DEFAULT_PROFILE_IMAGE}
-              alt={member.username}
-              className="w-5 h-5 rounded-full mr-2"
-            />
+            {user.profile_image ? (
+              <img
+                src={user.profile_image}
+                alt={user.username}
+                className="w-5 h-5 rounded-full mr-1"
+              />
+            ) : (
+              <DefaultProfileImage username={user.username} size={20} margin="mr-1"/>
+            )}
             <span className="text-sm font-semibold">{member.username}</span>
             <div className="ml-auto mr-4 flex items-center gap-2">
               {member.muted && <MicOff size={16} className="text-red-500" />}
