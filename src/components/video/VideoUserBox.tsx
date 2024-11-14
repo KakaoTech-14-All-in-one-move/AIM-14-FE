@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Camera, CameraOff, HeadphoneOff, MicOff, MonitorUp } from 'lucide-react';
+import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage.tsx';
 
 interface VideoUserBoxProps {
   user: {
@@ -73,16 +74,12 @@ export const VideoUserBox: React.FC<VideoUserBoxProps> = ({ user }) => {
         <div className="absolute inset-0 flex items-center justify-center">
           {user.imageUrl ? (
             <img
-              src={user.imageUrl}
+              src={import.meta.env.VITE_BE_SERVER_URL + user.imageUrl}
               alt={user.nickname}
-              className="w-40 h-40 rounded-full"
+              className="w-20 h-20 rounded-full mr-2"
             />
           ) : (
-            <div className="w-40 h-40 rounded-full bg-gray-800 flex items-center justify-center">
-              <span className="text-5xl text-white">
-                {user.nickname[0].toUpperCase()}
-              </span>
-            </div>
+            <DefaultProfileImage username={user.nickname} size={80} margin="mr-1" />
           )}
         </div>
       )}
