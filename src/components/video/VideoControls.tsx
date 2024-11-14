@@ -249,16 +249,16 @@ transition-opacity duration-200 ${show ? 'opacity-100' : 'opacity-0'}`}>
         active={currentUser?.muted}
       />
       <ControlButton
-        icon={currentUser?.screen_sharing ? MonitorOff : MonitorUp}
-        onClick={handleToggleScreenShare}
-        tooltip={currentUser?.screen_sharing ? 'Stop Sharing' : 'Share Screen'}
-        active={currentUser?.screen_sharing}
-      />
-      <ControlButton
         icon={currentUser?.deafened ? HeadphoneOff : Headphones}
         onClick={handleToggleDeafen}
         tooltip={currentUser?.deafened ? 'Undeafen' : 'Deafen'}
         active={currentUser?.deafened}
+      />
+      <ControlButton
+        icon={currentUser?.screen_sharing ? MonitorOff : MonitorUp}
+        onClick={handleToggleScreenShare}
+        tooltip={currentUser?.screen_sharing ? 'Stop Sharing' : 'Share Screen'}
+        active={currentUser?.screen_sharing}
       />
       <ControlButton
         icon={PhoneOff}
