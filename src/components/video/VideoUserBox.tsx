@@ -76,7 +76,7 @@ export const VideoUserBox: React.FC<VideoUserBoxProps> = ({ user }) => {
             <img
               src={import.meta.env.VITE_BE_SERVER_URL + user.imageUrl}
               alt={user.nickname}
-              className="w-20 h-20 rounded-full mr-2"
+              className="w-28 h-28 rounded-full mr-2"
             />
           ) : (
             <DefaultProfileImage username={user.nickname} size={80} margin="mr-1" />

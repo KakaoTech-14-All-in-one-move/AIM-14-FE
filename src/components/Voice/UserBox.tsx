@@ -1,7 +1,6 @@
 import { HeadphoneOff, MicOff } from 'lucide-react';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage.tsx';
 import React from 'react';
-import { useAuthStore } from '@/stores/authStore.ts';
 
 interface UserBoxProps {
   user: {
@@ -15,7 +14,6 @@ interface UserBoxProps {
 }
 
 export const UserBox: React.FC<UserBoxProps> = ({ user }) => {
-  const user2 = useAuthStore(state => state.user);
 
   return (
     <div
@@ -24,16 +22,16 @@ export const UserBox: React.FC<UserBoxProps> = ({ user }) => {
         transition-all duration-200 hover:shadow-xl`}
     >
       {/* 유저 이미지/아바타 영역 */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          {user.imageUrl ? (
-            <img
-              src={import.meta.env.VITE_BE_SERVER_URL + user.imageUrl}
-              alt={user.nickname}
-              className="w-20 h-20 rounded-full mr-2"
-            />
-          ) : (
-            <DefaultProfileImage username={user.nickname} size={80} margin="mr-1" />
-          )}
+      <div className="absolute inset-0 flex items-center justify-center">
+        {user.imageUrl ? (
+          <img
+            src={import.meta.env.VITE_BE_SERVER_URL + user.imageUrl}
+            alt={user.nickname}
+            className="w-28 h-28 rounded-full mr-2"
+          />
+        ) : (
+          <DefaultProfileImage username={user.nickname} size={80} margin="mr-1" />
+        )}
       </div>
 
       {/* 상단의 음소거 상태 표시 */}
