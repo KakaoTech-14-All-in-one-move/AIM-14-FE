@@ -24,33 +24,16 @@ export const UserBox: React.FC<UserBoxProps> = ({ user }) => {
         transition-all duration-200 hover:shadow-xl`}
     >
       {/* 유저 이미지/아바타 영역 */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        {user2.profile_image ? (
-          <img
-            src={user2.profile_image}
-            alt={user2.username}
-            className="rounded-full"
-            style={{
-              width: '180px',
-              height: '180px',
-            }}
-          />
-        ) : (
-          <DefaultProfileImage username={user2.username} size={180} />
-        )}
-        {/*{user.imageUrl ? (*/}
-        {/*  <img*/}
-        {/*    src={user.imageUrl}*/}
-        {/*    alt={user.nickname}*/}
-        {/*    className="w-40 h-40 rounded-full"*/}
-        {/*  />*/}
-        {/*) : (*/}
-        {/*  <div className="w-40 h-40 rounded-full bg-gray-800 flex items-center justify-center">*/}
-        {/*    <span className="text-5xl text-white">*/}
-        {/*      {user.nickname[0].toUpperCase()}*/}
-        {/*    </span>*/}
-        {/*  </div>*/}
-        {/*)}*/}
+        <div className="absolute inset-0 flex items-center justify-center">
+          {user.imageUrl ? (
+            <img
+              src={import.meta.env.VITE_BE_SERVER_URL + user.imageUrl}
+              alt={user.nickname}
+              className="w-20 h-20 rounded-full mr-2"
+            />
+          ) : (
+            <DefaultProfileImage username={user.nickname} size={80} margin="mr-1" />
+          )}
       </div>
 
       {/* 상단의 음소거 상태 표시 */}

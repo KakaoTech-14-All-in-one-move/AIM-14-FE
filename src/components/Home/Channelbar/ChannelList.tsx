@@ -104,14 +104,14 @@ const ChannelList: React.FC<{ type: ChannelType; icon: React.ElementType }> = ({
             key={member.user_id}
             className="ml-6 mt-2 mb-2 flex items-center text-gray-400"
           >
-            {user.profile_image ? (
+            {member.profile_image ? (
               <img
-                src={user.profile_image}
-                alt={user.username}
-                className="w-5 h-5 rounded-full mr-1"
+                src={import.meta.env.VITE_BE_SERVER_URL + member.profile_image}
+                alt={member.username}
+                className="w-5 h-5 rounded-full mr-2"
               />
             ) : (
-              <DefaultProfileImage username={user.username} size={20} margin="mr-1"/>
+              <DefaultProfileImage username={member.username} size={20} margin="mr-1" />
             )}
             <span className="text-sm font-semibold">{member.username}</span>
             <div className="ml-auto mr-4 flex items-center gap-2">
