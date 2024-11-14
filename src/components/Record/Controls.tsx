@@ -10,6 +10,7 @@ import CancelIcon from "@/common/icons/cancel";
 import DownloadIcon from "@/common/icons/download";
 import FeedbackIcon from "@/common/icons/feedback";
 import { FeedbackResponse } from '@/services/record/apiService.ts';
+import { HomeIcon } from 'lucide-react';
 
 interface ControlsProps {
   isRecording: boolean;
@@ -69,6 +70,12 @@ const Controls = ({
 
   return (
     <div className="w-full h-16 bg-[#1E1F22] flex justify-center items-center space-x-6">
+      <button
+        onClick={() => navigate('/')}
+        className="bg-white p-2 rounded-full"
+      >
+        <HomeIcon />
+      </button>
       {/* Start/Stop Recording Button */}
       <button
         onClick={isRecording ? stopRecording : startRecording}
@@ -123,7 +130,8 @@ const Controls = ({
 
       {/* Error message */}
       {error && (
-        <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-md">
+        <div
+          className="absolute bottom-20 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-md">
           {error}
         </div>
       )}

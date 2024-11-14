@@ -1,12 +1,10 @@
 import { FeedbackItem } from '@/components/feedback/types.ts';
 
 interface ApiConfig {
-  baseUrl: string;
   aiServerUrl: string;
 }
 
 const config: ApiConfig = {
-  baseUrl: import.meta.env.VITE_API_BASE_URL || '',
   aiServerUrl: import.meta.env.VITE_AI_SERVER_URL || ''
 };
 
@@ -25,7 +23,7 @@ export const uploadVideo = async (videoFile: Blob): Promise<string> => {
     const formData = new FormData();
     formData.append('file', videoFile, 'recording.webm');
 
-    const response = await fetch(`${config.baseUrl}/api/video/receive-video/`, {
+    const response = await fetch(`${config.aiServerUrl}/api/video/receive-video/`, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
