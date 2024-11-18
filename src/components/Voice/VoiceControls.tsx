@@ -1,7 +1,7 @@
-import { ControlButton } from './ControlButton.tsx';
+import { ControlButton } from '@/components/Voice/ControlButton.tsx';
 import { HeadphoneOff, Headphones, Mic, MicOff, PhoneOff } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useCall } from '../../services/call/CallProvider.tsx';
+import { useCall } from '@/services/call/CallProvider.tsx';
 import { useVoiceChat } from '@/hooks/useVoiceChat';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 

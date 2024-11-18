@@ -1,6 +1,5 @@
-import { ChannelType } from '../../components/Home/Channelbar/types';
+import { ChannelType } from '@/components/Home/Channelbar/types';
 
-// Channel related types
 export type MediaChannelType = 'VOICE' | 'VIDEO';
 
 export interface ServerChannel {

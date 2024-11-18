@@ -1,4 +1,3 @@
-// src/components/Voice/types/voice.ts
 export interface User {
   id: string;
   nickname: string;

@@ -1,7 +1,7 @@
 // components/Video/index.tsx
-import Sidebar from '../Home/Sidebar';
-import Channelbar from '../Home/Channelbar';
-import { VideoContent } from './VideoContent';
+import Sidebar from '@/components/Home/Sidebar';
+import Channelbar from '@/components/Home/Channelbar';
+import { VideoContent } from '@/components/Video/VideoContent';
 
 const Video = () => {
   console.log("Video component rendered");

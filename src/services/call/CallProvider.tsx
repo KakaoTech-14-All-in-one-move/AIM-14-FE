@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
-import { CallConnection } from './callConnection';
-import { CallState, CallUserData } from './types';
+import { CallConnection } from '@/services/call/callConnection';
+import { CallState, CallUserData } from '@/services/call/types';
 import { useAuthStore } from '@/stores/authStore';
 import { useVoiceChat } from '@/hooks/useVoiceChat';
 

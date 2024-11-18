@@ -1,6 +1,5 @@
-// VideoControls.tsx
 import { useNavigate } from 'react-router-dom';
-import { useCall } from '../../services/call/CallProvider';
+import { useCall } from '@/services/call/CallProvider';
 import { useVoiceChat } from '@/hooks/useVoiceChat';
 import { useCallback, useEffect, useRef } from 'react';
 import {

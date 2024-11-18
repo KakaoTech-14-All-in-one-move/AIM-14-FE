@@ -5,8 +5,8 @@ import {
   LeaveChannelData,
   MediaChannelType,
   VoiceStateUpdate,
-} from './types';
-import { CALL_API, OP_CODES, RECONNECT_DELAY } from './constants';
+} from '@/services/call/types';
+import { CALL_API, OP_CODES, RECONNECT_DELAY } from '@/services/call/constants';
 import { apiClient } from '@/api/apiClient';
 import { isEqual } from 'lodash';
 

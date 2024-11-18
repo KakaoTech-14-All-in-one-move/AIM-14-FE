@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import CameraRecording from './CameraRecording.tsx';
-import ScreenSharing from './ScreenSharing.tsx';
-import Controls from './Controls.tsx';
-import AudioWaveform from './AudioWaveform.tsx';
-import FileUploadBox from './FileUploadBox.tsx';
+import CameraRecording from '@/components/Record/CameraRecording.tsx';
+import ScreenSharing from '@/components/Record/ScreenSharing.tsx';
+import Controls from '@/components/Record/Controls.tsx';
+import AudioWaveform from '@/components/Record/AudioWaveform.tsx';
+import FileUploadBox from '@/components/Record/FileUploadBox.tsx';
 import { FiArrowDownLeft, FiArrowUpRight } from 'react-icons/fi';
 import Draggable from 'react-draggable';
 

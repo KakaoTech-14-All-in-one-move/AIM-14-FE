@@ -1,5 +1,4 @@
-// services/call/constants.ts
-import { ChannelMapping } from './types.ts';
+import { ChannelMapping } from '@/services/call/types.ts';
 
 export const CALL_API = {
   GET_WEBSOCKET_URL: '/api/v1/call',

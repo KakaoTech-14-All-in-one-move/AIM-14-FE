@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Camera, CameraOff, HeadphoneOff, MicOff, MonitorUp } from 'lucide-react';
+import { CameraOff, HeadphoneOff, MicOff, MonitorUp } from 'lucide-react';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage.tsx';
 
 interface VideoUserBoxProps {

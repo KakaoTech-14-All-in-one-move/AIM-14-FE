@@ -1,4 +1,3 @@
-// components/Video/types/video.ts
 export interface VideoUser {
   id: string;
   nickname: string;

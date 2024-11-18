@@ -8,7 +8,7 @@ import { AuthEventHandler } from '@/components/router/AuthEventHandler';
 import { OAuth2Callback } from '@/components/login/OAuth2Callback';
 import Record from '../Record';
 import Voice from '../Voice';
-import Video from '../video';
+import Video from '../Video';
 import Feedback from '@/components/feedback';
 
 export const AppRoutes: React.FC = () => {

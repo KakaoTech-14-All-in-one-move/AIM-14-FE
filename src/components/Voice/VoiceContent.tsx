@@ -1,8 +1,8 @@
-import { UserBox } from './UserBox.tsx';
-import { VoiceControls } from './VoiceControls.tsx';
+import { UserBox } from '@/components/Voice/UserBox.tsx';
+import { VoiceControls } from '@/components/Voice/VoiceControls.tsx';
 import { useState } from 'react';
-import { useCall } from '../../services/call/CallProvider.tsx';
-import { useVoiceChat } from '@/hooks/useVoiceChat';  // 추가
+import { useCall } from '@/services/call/CallProvider.tsx';
+import { useVoiceChat } from '@/hooks/useVoiceChat';
 
 export const VoiceContent = () => {
   const [showControls, setShowControls] = useState(false);

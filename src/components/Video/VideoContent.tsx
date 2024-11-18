@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { VideoUserBox } from './VideoUserBox';
-import { VideoControls } from './VideoControls';
+import { VideoUserBox } from '@/components/Video/VideoUserBox';
+import { VideoControls } from '@/components/Video/VideoControls';
 import { useCall } from '@/services/call/CallProvider';
 import { useVoiceChat } from '@/hooks/useVoiceChat';
 
