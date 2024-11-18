@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { FeedbackContent } from './FeedbackContent';
+import { FeedbackContent } from '@/components/feedback/FeedbackContent';
 
 const Feedback = () => {
   const navigate = useNavigate();

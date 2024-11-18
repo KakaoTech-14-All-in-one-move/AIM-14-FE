@@ -2,10 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { pollFeedbackData } from '@/services/record/apiService';
-import { FeedbackHeader } from './sections/FeedbackHeader';
-import { FeedbackImageSection } from './sections/FeedbackImageSection';
-import { FeedbackAnalysisSection } from './sections/FeedbackAnalysisSection';
-import type { FeedbackItem } from './types';
+import { FeedbackHeader } from '@/components/feedback/sections/FeedbackHeader';
+import { FeedbackImageSection } from '@/components/feedback/sections/FeedbackImageSection';
+import { FeedbackAnalysisSection } from '@/components/feedback/sections/FeedbackAnalysisSection';
+import type { FeedbackItem } from '@/components/feedback/types';
 
 interface FeedbackContentProps {
   onNoResult: (message: string) => void;

@@ -1,5 +1,5 @@
 import { Eye, Smile, Hand, User, Move } from 'lucide-react';
-import type { FeedbackCategoryType } from './types.ts';
+import type { FeedbackCategoryType } from '@/components/feedback/types.ts';
 
 interface CategoryIconProps {
   category: FeedbackCategoryType;

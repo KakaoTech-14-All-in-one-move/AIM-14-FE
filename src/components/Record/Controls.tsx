@@ -1,15 +1,14 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import * as apiService from "@/services/record/apiService";
-import StopIcon from "@/common/icons/stop";
-import CameraOnIcon from "@/common/icons/camera-on";
-import RecordIcon from "@/common/icons/record";
-import MicIcon from "@/common/icons/mic";
-import ShareIcon from "@/common/icons/share";
-import CancelIcon from "@/common/icons/cancel";
-import DownloadIcon from "@/common/icons/download";
-import FeedbackIcon from "@/common/icons/feedback";
-import { FeedbackResponse } from '@/services/record/apiService.ts';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import * as apiService from '@/services/record/apiService';
+import StopIcon from '@/common/icons/stop';
+import CameraOnIcon from '@/common/icons/camera-on';
+import RecordIcon from '@/common/icons/record';
+import MicIcon from '@/common/icons/mic';
+import ShareIcon from '@/common/icons/share';
+import CancelIcon from '@/common/icons/cancel';
+import DownloadIcon from '@/common/icons/download';
+import FeedbackIcon from '@/common/icons/feedback';
 import { HomeIcon } from 'lucide-react';
 
 interface ControlsProps {
@@ -39,7 +38,7 @@ const Controls = ({
                     stopSharing,
                     isRecordingComplete,
                     downloadRecording,
-                    recordedFile
+                    recordedFile,
                   }: ControlsProps) => {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +46,7 @@ const Controls = ({
 
   const handleFeedbackClick = async () => {
     if (!recordedFile) {
-      setError("No recording file available");
+      setError('No recording file available');
       return;
     }
 
@@ -61,7 +60,7 @@ const Controls = ({
       navigate('/feedback', { state: { videoId } });
 
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Failed to upload video");
+      setError(error instanceof Error ? error.message : 'Failed to upload video');
       console.error('Failed to process feedback:', error);
     } finally {
       setIsUploading(false);
@@ -140,81 +139,3 @@ const Controls = ({
 };
 
 export default Controls;
-
-// src/services/apiService.ts
-interface ApiConfig {
-  baseUrl: string;
-  aiServerUrl: string;
-}
-
-const config: ApiConfig = {
-  baseUrl: import.meta.env.REACT_APP_API_BASE_URL || '',
-  aiServerUrl: import.meta.env.REACT_APP_AI_SERVER_URL || ''
-};
-
-// 비디오 업로드 응답 타입
-interface VideoUploadResponse {
-  video_id: string;
-}
-
-export const uploadVideo = async (videoFile: Blob): Promise<string> => {
-  try {
-    const formData = new FormData();
-    formData.append('video', videoFile, 'recording.webm');
-
-    const response = await fetch(`${config.baseUrl}/api/video/receive-video/`, {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data: VideoUploadResponse = await response.json();
-    return data.video_id;
-  } catch (error) {
-    console.error('Error uploading video:', error);
-    throw error;
-  }
-};
-
-export const getFeedbackData = async (videoId: string): Promise<FeedbackResponse> => {
-  try {
-    const response = await fetch(`${config.aiServerUrl}/video/video-send-feedback/${videoId}/`);
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data: FeedbackResponse = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error getting feedback:', error);
-    throw error;
-  }
-};
-
-export const pollFeedbackData = async (
-  videoId: string,
-  maxAttempts = 60,
-  interval = 1000
-): Promise<FeedbackResponse> => {
-  let attempts = 0;
-
-  const executePoll = async (): Promise<FeedbackResponse> => {
-    try {
-      const result = await getFeedbackData(videoId);
-      return result;
-    } catch (error) {
-      if (attempts < maxAttempts) {
-        attempts++;
-        await new Promise(resolve => setTimeout(resolve, interval));
-        return executePoll();
-      }
-      throw new Error('Polling timeout: AI analysis is taking longer than expected');
-    }
-  };
-
-  return executePoll();
-};

@@ -1,6 +1,6 @@
 import { Tab } from '@headlessui/react';
-import { CategoryIcon } from '../CategoryIcon';
-import type { FeedbackText, FeedbackCategoryType } from '../types';
+import { CategoryIcon } from '@/components/feedback/CategoryIcon';
+import type { FeedbackText, FeedbackCategoryType } from '@/components/feedback/types';
 
 interface FeedbackAnalysisSectionProps {
   feedbackText?: FeedbackText;
