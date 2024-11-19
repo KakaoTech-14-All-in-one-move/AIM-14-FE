@@ -27,6 +27,7 @@ export const OAuth2Callback = () => {
         };
 
         setUser(userInfo);
+        // CallProvider가 자동으로 인증 상태를 감지하고 웹소켓 연결을 시작함
 
         return () => {
             navigate('/home', { replace: true });
@@ -34,11 +35,11 @@ export const OAuth2Callback = () => {
     }, [navigate, setTokens, setUser]);
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-discord900">
-            <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-kakaoYellow mx-auto"></div>
-                <p className="mt-4 text-white">로그인 처리중...</p>
-            </div>
-        </div>
+      <div className="flex items-center justify-center min-h-screen bg-discord900">
+          <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-kakaoYellow mx-auto"></div>
+              <p className="mt-4 text-white">로그인 처리중...</p>
+          </div>
+      </div>
     );
 };
