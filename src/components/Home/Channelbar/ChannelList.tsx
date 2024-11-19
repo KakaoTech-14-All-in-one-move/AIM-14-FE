@@ -2,10 +2,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronDown, HeadphoneOff, MicOff, MonitorUp, Plus, CameraOff } from 'lucide-react';
-import { ChannelType } from './types';
-import { useChannels } from './ChannelContext';
+import { ChannelType } from '@/components/Home/Channelbar/types';
+import { useChannels } from '@/components/Home/Channelbar/ChannelContext';
 import { useCall } from '@/services/call/CallProvider';
-import ContextMenu from './ContextMenu';
+import ContextMenu from '@/components/Home/Channelbar/ContextMenu';
 import { useVoiceChat } from '@/hooks/useVoiceChat';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage.tsx';
 import { useAuthStore } from '@/stores/authStore.ts';

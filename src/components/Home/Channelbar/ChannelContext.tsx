@@ -1,6 +1,6 @@
 // ChannelContext.tsx
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import { ChannelContextType, Channels, ChannelStateType, ChannelType } from './types';
+import { ChannelContextType, Channels, ChannelStateType, ChannelType } from '@/components/Home/Channelbar/types';
 import { useAuthStore } from '@/stores/authStore';
 
 export const ChannelContext = createContext<ChannelContextType | null>(null);
