@@ -58,7 +58,7 @@ export const SidebarIcon: React.FC<SidebarIconProps> = ({
       )}
 
       <div
-        className={`sidebar-icon group flex items-center justify-center w-12 h-12 mx-auto my-2 cursor-pointer 
+        className={`sidebar-icon group flex items-center justify-center w-12 h-12 mx-auto my-2 cursor-pointer hover:bg-discord700 
               ${isSelected || isHovered ? 'rounded-2xl' : 'rounded-full'} 
               transition-colors duration-300`}
         onClick={onClick}

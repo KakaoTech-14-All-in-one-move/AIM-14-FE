@@ -5,7 +5,7 @@ interface ApiConfig {
 }
 
 const config: ApiConfig = {
-  aiServerUrl: import.meta.env.VITE_AI_SERVER_URL || ''
+  aiServerUrl: import.meta.env.VITE_AI_SERVER_URL || '',
 };
 
 export interface VideoUploadResponse {
@@ -26,7 +26,7 @@ export const uploadVideo = async (videoFile: Blob): Promise<string> => {
     const response = await fetch(`${config.aiServerUrl}/api/video/receive-video/`, {
       method: 'POST',
       headers: {
-        'Accept': 'application/json',
+        Accept: 'application/json',
       },
       body: formData,
     });
@@ -53,9 +53,9 @@ export const getFeedbackData = async (videoId: string): Promise<FeedbackResponse
     }
 
     const data: FeedbackResponse = await response.json();
-    console.log(data.message)
+    console.log(data.message);
 
-    if (!data.feedbacks?.length || data.problem === "none") {
+    if (!data.feedbacks?.length || data.problem === 'none') {
       throw new Error(data.message || '분석 결과가 없습니다. 다시 시도해주세요.');
     }
 
