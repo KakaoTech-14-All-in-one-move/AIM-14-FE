@@ -1,9 +1,11 @@
 import { create } from 'zustand';
+import { Server } from '@/types/server';
 
 interface User {
   email: string;
   username: string;
   profile_image: string;
+  servers: Server[];
 }
 
 interface AuthState {
@@ -26,7 +28,6 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: !!localStorage.getItem('accessToken'),
 
   setTokens: (accessToken, refreshToken) => {
-    console.log('Setting tokens:', { accessToken, refreshToken });
     localStorage.setItem('accessToken', accessToken);
     localStorage.setItem('refreshToken', refreshToken);
     set({
@@ -34,15 +35,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       refreshToken,
       isAuthenticated: true,
     });
-    console.log('localStorage after setting tokens:', {
-      accessToken: localStorage.getItem('accessToken'),
-      refreshToken: localStorage.getItem('refreshToken'),
-    });
   },
 
   setUser: (user) => {
-    console.log('Setting user:', user);
-    // 프로필 이미지 URL에 BASE_URL 추가
     const updatedUser = {
       ...user,
       profile_image: user.profile_image
@@ -50,6 +45,7 @@ export const useAuthStore = create<AuthState>((set) => ({
           ? user.profile_image
           : `${BASE_URL}${user.profile_image}`
         : '',
+      servers: user.servers || [],
     };
     localStorage.setItem('user', JSON.stringify(updatedUser));
     set({ user: updatedUser });

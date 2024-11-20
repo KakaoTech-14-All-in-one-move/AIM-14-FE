@@ -25,6 +25,7 @@ export const useAuth = () => {
           email: response.userInfo.email,
           username: response.userInfo.username, // 또는 적절한 기본값
           profile_image: response.userInfo.profile_image, // 기본 프로필 이미지
+          servers: response.userInfo.servers,
         };
         setUser(user);
 

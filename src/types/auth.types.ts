@@ -1,3 +1,5 @@
+import { Server } from '@/types/server';
+
 export interface LoginRequest {
   email: string;
   password: string;
@@ -11,6 +13,7 @@ export interface LoginResponse {
       email: string;
       username: string;
       profile_image: string;
+      servers: Server[]; // 서버 목록 추가
     };
   };
   status: number;
