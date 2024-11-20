@@ -11,6 +11,7 @@ export const OAuth2Callback = () => {
 
         const accessToken = params.get('accessToken');
         const refreshToken = params.get('refreshToken');
+        const serversParam = params.get('servers');
 
         if (!accessToken || !refreshToken) {
             navigate('/login', { replace: true });
@@ -20,10 +21,22 @@ export const OAuth2Callback = () => {
         // Zustand store에 토큰 저장
         setTokens(accessToken, refreshToken);
 
+        // servers 파라미터가 있으면 파싱
+        let servers = [];
+        try {
+            if (serversParam) {
+                servers = JSON.parse(decodeURIComponent(serversParam));
+            }
+        } catch (error) {
+            console.error('Error parsing servers:', error);
+        }
+
+        // 사용자 정보에 servers 포함
         const userInfo = {
             email: params.get('email') || '',
             username: params.get('username') || '',
             profile_image: params.get('profile_image') || '',
+            servers: servers
         };
 
         setUser(userInfo);
@@ -35,11 +48,11 @@ export const OAuth2Callback = () => {
     }, [navigate, setTokens, setUser]);
 
     return (
-      <div className="flex items-center justify-center min-h-screen bg-discord900">
-          <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-kakaoYellow mx-auto"></div>
-              <p className="mt-4 text-white">로그인 처리중...</p>
-          </div>
-      </div>
+        <div className="flex items-center justify-center min-h-screen bg-discord900">
+            <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-kakaoYellow mx-auto"></div>
+                <p className="mt-4 text-white">로그인 처리중...</p>
+            </div>
+        </div>
     );
 };
