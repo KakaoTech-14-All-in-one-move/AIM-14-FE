@@ -10,6 +10,9 @@ interface SidebarIconProps {
   noLeftBar?: boolean;
 }
 
+// 현재 열린 컨텍스트 메뉴를 관리하는 전역 변수
+let activeContextMenu: (() => void) | null = null;
+
 export const SidebarIcon: React.FC<SidebarIconProps> = ({
   icon,
   text,
@@ -23,15 +26,58 @@ export const SidebarIcon: React.FC<SidebarIconProps> = ({
   const [isHovered, setIsHovered] = useState(false);
   const iconRef = useRef<HTMLDivElement>(null);
 
+  // 컨텍스트 메뉴를 닫는 함수
+  const closeContextMenu = () => {
+    setShowContextMenu(false);
+  };
+
+  // 컴포넌트가 마운트될 때 closeContextMenu 함수를 등록
+  useEffect(() => {
+    return () => {
+      if (activeContextMenu === closeContextMenu) {
+        activeContextMenu = null;
+      }
+    };
+  }, []);
+
   const handleContextMenu = (event: React.MouseEvent) => {
     event.preventDefault();
+
+    // 이전에 열린 컨텍스트 메뉴가 있다면 닫기
+    if (activeContextMenu && activeContextMenu !== closeContextMenu) {
+      activeContextMenu();
+    }
+
+    // 화면 크기 가져오기
+    const screenW = window.innerWidth;
+    const screenH = window.innerHeight;
+
+    // contextMenu의 예상 크기
+    const menuWidth = 120;
+    const menuHeight = 100;
+
+    // 마우스 위치
+    let x = event.clientX;
+    let y = event.clientY;
+
+    // 화면 경계 체크
+    if (x + menuWidth > screenW) {
+      x = screenW - menuWidth - 10;
+    }
+    if (y + menuHeight > screenH) {
+      y = screenH - menuHeight - 10;
+    }
+
+    setContextMenuPosition({ x, y });
     setShowContextMenu(true);
-    setContextMenuPosition({ x: event.clientX, y: event.clientY });
+
+    // 현재 컨텍스트 메뉴의 닫기 함수를 activeContextMenu에 저장
+    activeContextMenu = closeContextMenu;
   };
 
   const handleClickOutside = (event: MouseEvent) => {
     if (iconRef.current && !iconRef.current.contains(event.target as Node)) {
-      setShowContextMenu(false);
+      closeContextMenu();
     }
   };
 
@@ -69,14 +115,23 @@ export const SidebarIcon: React.FC<SidebarIconProps> = ({
       </div>
 
       {showContextMenu && onRemove && (
-        <ContextMenu
-          x={contextMenuPosition.x}
-          y={contextMenuPosition.y}
-          onRemove={() => {
-            onRemove();
-            setShowContextMenu(false);
-          }}
-        />
+        <div className="fixed z-50" style={{
+          left: contextMenuPosition.x,
+          top: contextMenuPosition.y
+        }}>
+          <ContextMenu
+            x={0}
+            y={0}
+            onRemove={() => {
+              onRemove();
+              closeContextMenu();
+            }}
+            onInvite={() => {
+              // 초대 로직
+              closeContextMenu();
+            }}
+          />
+        </div>
       )}
     </div>
   );
