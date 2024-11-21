@@ -32,7 +32,10 @@ const Sidebar: React.FC = () => {
         servers: [...(user.servers || []), newServer]
       });
 
-      setSelectedServerId(newServer.server_id);
+      // serverStore에도 추가 
+      const serverStore = useServerStore.getState();
+      serverStore.addServer(newServer);
+      serverStore.setSelectedServerId(newServer.server_id);
     } catch (err) {
       console.error('서버 생성 실패:', err);
       alert('서버 생성에 실패했습니다.');
