@@ -115,6 +115,22 @@ const Sidebar: React.FC = () => {
     }
   };
 
+  const handleInvite = async (serverId: number) => {
+    try {
+      const email = prompt('초대할 멤버의 이메일을 입력하세요:');
+      if (!email || !email.trim()) return;
+
+      await apiClient.client.post(`/api/v1/servers/${serverId}/invite`, {
+        email: email.trim()
+      });
+
+      alert('멤버를 성공적으로 초대했습니다.');
+    } catch (err: any) {
+      console.error('멤버 초대 실패:', err);
+      alert(err.response?.data?.error || '멤버 초대에 실패했습니다.');
+    }
+  };
+
   return (
     <div className="h-screen w-16 flex flex-col bg-discord900 shadow-lg">
       <SidebarIcon
@@ -131,7 +147,7 @@ const Sidebar: React.FC = () => {
               <img
                 src={getFullImageUrl(server.server_image)}
                 alt={server.server_name}
-                className="w-full h-full object-cover"  // rounded 클래스 제거
+                className="w-full h-full object-cover"
               />
             ) : (
               <div className="w-full h-full rounded-full bg-discord700 flex items-center justify-center">
@@ -145,7 +161,8 @@ const Sidebar: React.FC = () => {
           onRename={(newName) => handleRenameServer(server.server_id, newName)}
           onRemove={() => handleRemoveServer(server.server_id)}
           onImageUpload={(file) => handleImageUpload(server.server_id, file)}
-          hasServerImage={!!server.server_image}  // hasServerImage prop 추가
+          onInvite={() => handleInvite(server.server_id)}  // 여기에 onInvite prop 추가
+          hasServerImage={!!server.server_image}
         />
       ))}
       <SidebarIcon

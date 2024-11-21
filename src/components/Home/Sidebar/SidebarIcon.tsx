@@ -10,6 +10,7 @@ interface SidebarIconProps {
   onRename?: (newName: string) => void;
   onRemove?: () => void;
   onImageUpload?: (file: File) => void;
+  onInvite?: () => void;
   noLeftBar?: boolean;
   hasServerImage?: boolean;
 }
@@ -25,6 +26,7 @@ export const SidebarIcon: React.FC<SidebarIconProps> = ({
   onRename,
   onRemove,
   onImageUpload,
+  onInvite,
   noLeftBar,
   hasServerImage,
 }) => {
@@ -136,9 +138,9 @@ export const SidebarIcon: React.FC<SidebarIconProps> = ({
 
       <div
         className={`sidebar-icon group flex items-center justify-center w-12 h-12 mx-auto my-2 cursor-pointer hover:bg-discord700 
-        ${isSelected ? 'bg-discord700' : ''} 
-        ${isSelected || isHovered ? 'rounded-2xl' : 'rounded-full'} 
-        transition-all duration-150 ease-in`}
+              ${isSelected ? 'bg-discord700' : ''} 
+              ${isSelected || isHovered ? 'rounded-2xl' : 'rounded-full'} 
+              transition-all duration-150 ease-in`}
         onClick={onClick}
         onContextMenu={handleContextMenu}
       >
@@ -164,6 +166,7 @@ export const SidebarIcon: React.FC<SidebarIconProps> = ({
             y={0}
             onInvite={() => {
               closeContextMenu();
+              onInvite?.();
             }}
             onRename={handleRename}
             onRemove={() => {
