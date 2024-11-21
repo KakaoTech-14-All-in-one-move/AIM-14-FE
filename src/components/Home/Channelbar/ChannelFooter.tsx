@@ -7,6 +7,7 @@ import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage';
 const ChannelFooter: React.FC = () => {
   const user = useAuthStore(state => state.user);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const BASE_URL = import.meta.env.VITE_BE_SERVER_URL
 
   if (!user) return null;
 
@@ -18,7 +19,7 @@ const ChannelFooter: React.FC = () => {
             <div className="relative mr-2">
               {user.profile_image ? (
                 <img
-                  src={user.profile_image}
+                  src={BASE_URL + user.profile_image}
                   alt={user.username}
                   className="w-7 h-7 rounded-full"
                 />

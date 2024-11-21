@@ -5,10 +5,19 @@ interface ContextMenuProps {
   x: number;
   y: number;
   onInvite: () => void;
+  onRename: () => void;
   onRemove: () => void;
+  onImageUpload: () => void;
 }
 
-export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, onInvite, onRemove }) => {
+export const ContextMenu: React.FC<ContextMenuProps> = ({
+  x,
+  y,
+  onInvite,
+  onRename,
+  onRemove,
+  onImageUpload
+}) => {
   return (
     <div
       className="absolute bg-gray-800 shadow-md rounded-md py-1 z-50"
@@ -18,17 +27,28 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, onInvite, onRemo
         minWidth: '120px',
       }}
     >
-      {/* TODO: 멤버 초대 기능 (멤버 초대하는 UI, DB 조회하여 초대) */}
       <button
-        className="block w-full text-left px-4 py-2 text-kakaoYellow hover:bg-gray-800 whitespace-nowrap"
+        className="block w-full text-left px-4 py-2 text-kakaoYellow hover:bg-gray-700 whitespace-nowrap"
         onClick={onInvite}
       >
         멤버 초대하기
       </button>
       <Divider />
-      {/* TODO: 서버를 만든 관리자라면 채널, 카테고리를 관리할 수 있는 버튼 활성화 */}
       <button
-        className="block w-full text-left px-4 py-2 text-red-500 hover:bg-gray-800 whitespace-nowrap"
+        className="block w-full text-left px-4 py-2 text-white hover:bg-gray-700 whitespace-nowrap"
+        onClick={onImageUpload}
+      >
+        서버 이미지 변경
+      </button>
+      <button
+        className="block w-full text-left px-4 py-2 text-white hover:bg-gray-700 whitespace-nowrap"
+        onClick={onRename}
+      >
+        서버 이름 변경
+      </button>
+      <Divider />
+      <button
+        className="block w-full text-left px-4 py-2 text-red-500 hover:bg-gray-700 whitespace-nowrap"
         onClick={onRemove}
       >
         서버 삭제

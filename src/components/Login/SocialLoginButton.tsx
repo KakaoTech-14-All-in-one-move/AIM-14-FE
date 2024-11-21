@@ -4,15 +4,17 @@ interface SocialLoginButtonProps {
   provider: 'google' | 'naver' | 'kakao';
 }
 
+const BASE_URL = import.meta.env.VITE_BE_SERVER_URL;
+
 const SocialLoginButton: React.FC<SocialLoginButtonProps> = ({ provider }) => {
   const getOAuthUrl = () => {
     switch (provider) {
       case 'google':
-        return "http://localhost:8080/oauth2/authorization/google";
+        return BASE_URL + "/oauth2/authorization/google";
       case 'naver':
-        return "http://localhost:8080/oauth2/authorization/naver";
+        return BASE_URL + "/oauth2/authorization/naver";
       case 'kakao':
-        return "http://localhost:8080/oauth2/authorization/kakao";
+        return BASE_URL + "/oauth2/authorization/kakao";
     }
   };
 
