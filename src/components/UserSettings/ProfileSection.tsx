@@ -2,6 +2,8 @@ import React from 'react';
 import { Upload } from 'lucide-react';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage';
 
+const BASE_URL = import.meta.env.VITE_BE_SERVER_URL
+
 interface ProfileSectionProps {
     user: any;
     isUploading: boolean;
@@ -21,7 +23,7 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({
         <div className="flex items-center gap-3">
             {user.profile_image ? (
                 <img
-                    src={user.profile_image}
+                    src={BASE_URL + user.profile_image}
                     alt={user.username}
                     className="w-16 h-16 rounded-full object-cover"
                 />
