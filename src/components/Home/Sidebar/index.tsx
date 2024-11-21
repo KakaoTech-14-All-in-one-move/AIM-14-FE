@@ -1,18 +1,19 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { SidebarIcon } from '@/components/Home/Sidebar/SidebarIcon';
 import { HomeIcon } from '@/components/Home/Sidebar/icons/HomeIcon';
 import { useAuthStore } from '@/stores/authStore';
+import { useServerStore } from '@/stores/serverStore';
 import { apiClient } from '@/api/apiClient';
 
 const Sidebar: React.FC = () => {
   const { user, setUser } = useAuthStore();
-  const [selectedServerId, setSelectedServerId] = useState<number | null>(null);
+  const { selectedServerId, setSelectedServerId } = useServerStore();
 
   const BASE_URL = import.meta.env.VITE_BE_SERVER_URL
 
   const getFullImageUrl = (imageUrl: string | undefined) => {
     if (!imageUrl) return undefined;
-    if (imageUrl.startsWith('http')) return imageUrl;  // 이미 전체 URL인 경우
+    if (imageUrl.startsWith('http')) return imageUrl;
     return `${BASE_URL}${imageUrl}`;
   };
 
@@ -99,7 +100,6 @@ const Sidebar: React.FC = () => {
       );
 
       const { serverImageUrl } = response.data;
-      const BASE_URL = import.meta.env.VITE_BE_SERVER_URL
 
       setUser({
         ...user,
@@ -161,7 +161,7 @@ const Sidebar: React.FC = () => {
           onRename={(newName) => handleRenameServer(server.server_id, newName)}
           onRemove={() => handleRemoveServer(server.server_id)}
           onImageUpload={(file) => handleImageUpload(server.server_id, file)}
-          onInvite={() => handleInvite(server.server_id)}  // 여기에 onInvite prop 추가
+          onInvite={() => handleInvite(server.server_id)}
           hasServerImage={!!server.server_image}
         />
       ))}

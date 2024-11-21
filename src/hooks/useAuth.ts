@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuthStore } from '@/stores/authStore';
+import { useServerStore } from '@/stores/serverStore';
 import { authApi } from '@/api/auth.api';
 import type { LoginRequest, RegisterRequest } from '@/types/auth.types';
 
@@ -9,6 +10,7 @@ export const useAuth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { setTokens, setUser } = useAuthStore();
+  const { setServers } = useServerStore();
 
   const login = async (data: LoginRequest) => {
     setIsLoading(true);
@@ -28,6 +30,9 @@ export const useAuth = () => {
           servers: response.userInfo.servers,
         };
         setUser(user);
+
+        // useServerStore에 서버 정보 저장
+        setServers(response.userInfo.servers);
 
         toast.success('로그인 되었습니다.');
         navigate('/home');
