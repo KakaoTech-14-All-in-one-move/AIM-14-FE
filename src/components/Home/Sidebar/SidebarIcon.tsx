@@ -4,34 +4,40 @@ import { ContextMenu } from '@/components/Home/Sidebar/ContextMenu';
 interface SidebarIconProps {
   icon?: React.ReactNode;
   text: string;
+  serverId?: number;
   isSelected?: boolean;
   onClick?: () => void;
+  onRename?: (newName: string) => void;
   onRemove?: () => void;
+  onImageUpload?: (file: File) => void;
   noLeftBar?: boolean;
+  hasServerImage?: boolean;
 }
 
-// 현재 열린 컨텍스트 메뉴를 관리하는 전역 변수
 let activeContextMenu: (() => void) | null = null;
 
 export const SidebarIcon: React.FC<SidebarIconProps> = ({
   icon,
   text,
+  serverId,
   isSelected,
   onClick,
+  onRename,
   onRemove,
+  onImageUpload,
   noLeftBar,
+  hasServerImage,
 }) => {
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
   const [isHovered, setIsHovered] = useState(false);
   const iconRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 컨텍스트 메뉴를 닫는 함수
   const closeContextMenu = () => {
     setShowContextMenu(false);
   };
 
-  // 컴포넌트가 마운트될 때 closeContextMenu 함수를 등록
   useEffect(() => {
     return () => {
       if (activeContextMenu === closeContextMenu) {
@@ -43,24 +49,19 @@ export const SidebarIcon: React.FC<SidebarIconProps> = ({
   const handleContextMenu = (event: React.MouseEvent) => {
     event.preventDefault();
 
-    // 이전에 열린 컨텍스트 메뉴가 있다면 닫기
     if (activeContextMenu && activeContextMenu !== closeContextMenu) {
       activeContextMenu();
     }
 
-    // 화면 크기 가져오기
     const screenW = window.innerWidth;
     const screenH = window.innerHeight;
 
-    // contextMenu의 예상 크기
     const menuWidth = 120;
     const menuHeight = 100;
 
-    // 마우스 위치
     let x = event.clientX;
     let y = event.clientY;
 
-    // 화면 경계 체크
     if (x + menuWidth > screenW) {
       x = screenW - menuWidth - 10;
     }
@@ -70,9 +71,31 @@ export const SidebarIcon: React.FC<SidebarIconProps> = ({
 
     setContextMenuPosition({ x, y });
     setShowContextMenu(true);
-
-    // 현재 컨텍스트 메뉴의 닫기 함수를 activeContextMenu에 저장
     activeContextMenu = closeContextMenu;
+  };
+
+  const handleRename = () => {
+    const newName = prompt('새로운 서버 이름을 입력하세요:', text);
+    if (newName && newName.trim() && onRename) {
+      onRename(newName.trim());
+    }
+    closeContextMenu();
+  };
+
+  const handleImageUpload = () => {
+    fileInputRef.current?.click();
+    closeContextMenu();
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && onImageUpload) {
+      onImageUpload(file);
+    }
+    // Reset file input
+    if (event.target) {
+      event.target.value = '';
+    }
   };
 
   const handleClickOutside = (event: MouseEvent) => {
@@ -95,10 +118,18 @@ export const SidebarIcon: React.FC<SidebarIconProps> = ({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
+      <input
+        type="file"
+        ref={fileInputRef}
+        className="hidden"
+        accept="image/*"
+        onChange={handleFileChange}
+      />
+
       {!noLeftBar && (
         <div
           className={`absolute left-0 top-1/2 transform -translate-y-1/2 w-1 bg-gray-300 rounded-r-full
-                transition-all duration-300 ease-out
+                transition-all duration-150 ease-in
                 ${isSelected ? 'h-10' : isHovered ? 'h-5' : 'h-0'}`}
         ></div>
       )}
@@ -106,12 +137,20 @@ export const SidebarIcon: React.FC<SidebarIconProps> = ({
       <div
         className={`sidebar-icon group flex items-center justify-center w-12 h-12 mx-auto my-2 cursor-pointer hover:bg-discord700 
               ${isSelected || isHovered ? 'rounded-2xl' : 'rounded-full'} 
-              transition-colors duration-300`}
+              transition-all duration-150 ease-in`}
         onClick={onClick}
         onContextMenu={handleContextMenu}
       >
-        {icon}
-        <span className="sidebar-tooltip group-hover:scale-100">{text}</span>
+        <div className={`w-full h-full flex items-center justify-center ${hasServerImage ? (isSelected || isHovered ? 'rounded-2xl' : 'rounded-full') : ''} transition-all duration-150 ease-in overflow-hidden`}>
+          {hasServerImage ? (
+            icon
+          ) : (
+            <div className="flex items-center justify-center w-full h-full">
+              {icon}
+            </div>
+          )}
+        </div>
+        <span className="sidebar-tooltip group-hover:scale-100 transition-transform duration-150 ease-in">{text}</span>
       </div>
 
       {showContextMenu && onRemove && (
@@ -122,14 +161,15 @@ export const SidebarIcon: React.FC<SidebarIconProps> = ({
           <ContextMenu
             x={0}
             y={0}
+            onInvite={() => {
+              closeContextMenu();
+            }}
+            onRename={handleRename}
             onRemove={() => {
               onRemove();
               closeContextMenu();
             }}
-            onInvite={() => {
-              // 초대 로직
-              closeContextMenu();
-            }}
+            onImageUpload={handleImageUpload}
           />
         </div>
       )}

@@ -8,6 +8,14 @@ const Sidebar: React.FC = () => {
   const { user, setUser } = useAuthStore();
   const [selectedServerId, setSelectedServerId] = useState<number | null>(null);
 
+  const BASE_URL = import.meta.env.VITE_BE_SERVER_URL
+
+  const getFullImageUrl = (imageUrl: string | undefined) => {
+    if (!imageUrl) return undefined;
+    if (imageUrl.startsWith('http')) return imageUrl;  // 이미 전체 URL인 경우
+    return `${BASE_URL}${imageUrl}`;
+  };
+
   const handleAddServer = async () => {
     try {
       const name = prompt('서버 이름을 입력하세요:');
@@ -51,6 +59,62 @@ const Sidebar: React.FC = () => {
     }
   };
 
+  const handleRenameServer = async (serverId: number, newName: string) => {
+    try {
+      if (!user) return;
+
+      await apiClient.client.put(`/api/v1/servers/${serverId}/name`, {
+        server_name: newName
+      });
+
+      setUser({
+        ...user,
+        servers: user.servers.map(server =>
+          server.server_id === serverId
+            ? { ...server, server_name: newName }
+            : server
+        )
+      });
+    } catch (err) {
+      console.error('서버 이름 변경 실패:', err);
+      alert('서버 이름 변경에 실패했습니다.');
+    }
+  };
+
+  const handleImageUpload = async (serverId: number, file: File) => {
+    try {
+      if (!user) return;
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await apiClient.client.post(
+        `/api/v1/servers/${serverId}/image`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+
+      const { serverImageUrl } = response.data;
+      const BASE_URL = import.meta.env.VITE_BE_SERVER_URL
+
+      setUser({
+        ...user,
+        servers: user.servers.map(server =>
+          server.server_id === serverId
+            ? { ...server, server_image: BASE_URL + serverImageUrl }
+            : server
+        )
+      });
+    } catch (err) {
+      console.error('서버 이미지 업로드 실패:', err);
+      alert('서버 이미지 업로드에 실패했습니다.');
+    }
+  };
+
   return (
     <div className="h-screen w-16 flex flex-col bg-discord900 shadow-lg">
       <SidebarIcon
@@ -65,9 +129,9 @@ const Sidebar: React.FC = () => {
           icon={
             server.server_image ? (
               <img
-                src={server.server_image}
+                src={getFullImageUrl(server.server_image)}
                 alt={server.server_name}
-                className="w-full h-full rounded-full object-cover"
+                className="w-full h-full object-cover"  // rounded 클래스 제거
               />
             ) : (
               <div className="w-full h-full rounded-full bg-discord700 flex items-center justify-center">
@@ -78,7 +142,10 @@ const Sidebar: React.FC = () => {
           text={server.server_name}
           isSelected={selectedServerId === server.server_id}
           onClick={() => setSelectedServerId(server.server_id)}
+          onRename={(newName) => handleRenameServer(server.server_id, newName)}
           onRemove={() => handleRemoveServer(server.server_id)}
+          onImageUpload={(file) => handleImageUpload(server.server_id, file)}
+          hasServerImage={!!server.server_image}  // hasServerImage prop 추가
         />
       ))}
       <SidebarIcon
