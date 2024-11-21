@@ -139,6 +139,29 @@ export const ChannelProvider: React.FC<ChannelProviderProps> = ({ children }) =>
     }
   }, []);
 
+  const renameChannel = useCallback((channelId: string, newName: string) => {
+    setChannels(prev =>
+      prev.map(channel =>
+        channel.id === channelId
+          ? { ...channel, name: newName }
+          : channel
+      )
+    );
+  }, []);
+
+  const deleteChannel = useCallback((channelId: string) => {
+    setChannels(prev => prev.filter(channel => channel.id !== channelId));
+
+    const channel = channels.find(ch => ch.id === channelId);
+    if (channel && channel.type !== 'text') {
+      setChannelStates(prev => {
+        const newStates = { ...prev };
+        delete newStates[channelId];
+        return newStates;
+      });
+    }
+  }, [channels]);
+
   const toggleSection = useCallback((type: ChannelType) => {
     setOpenSections(prev => ({
       ...prev,
@@ -156,7 +179,7 @@ export const ChannelProvider: React.FC<ChannelProviderProps> = ({ children }) =>
     }));
   }, []);
 
-  const deactivateChannel = useCallback((type: Exclude<ChannelType, 'text'>, channelName: string) => {
+  const deactivateChannel = useCallback((channelId: string) => {
     setChannelStates(prev => ({
       ...prev,
       [type]: {
@@ -166,7 +189,7 @@ export const ChannelProvider: React.FC<ChannelProviderProps> = ({ children }) =>
     }));
   }, []);
 
-  const joinChannel = useCallback((type: Exclude<ChannelType, 'text'>, channelName: string) => {
+  const joinChannel = useCallback((channelId: string) => {
     setChannelStates(prev => ({
       ...prev,
       [type]: {
@@ -176,7 +199,7 @@ export const ChannelProvider: React.FC<ChannelProviderProps> = ({ children }) =>
     }));
   }, []);
 
-  const leaveChannel = useCallback((type: Exclude<ChannelType, 'text'>, channelName: string) => {
+  const leaveChannel = useCallback((channelId: string) => {
     setChannelStates(prev => ({
       ...prev,
       [type]: {

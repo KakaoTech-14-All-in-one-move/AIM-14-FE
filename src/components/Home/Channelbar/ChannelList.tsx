@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronDown, HeadphoneOff, MicOff, MonitorUp, Plus, CameraOff } from 'lucide-react';
-import { ChannelType } from '@/components/Home/Channelbar/types';
+import { CameraOff, ChevronDown, HeadphoneOff, MicOff, MonitorUp, Plus } from 'lucide-react';
+import { Channel, ChannelType } from '@/components/Home/Channelbar/types';
 import { useChannels } from '@/components/Home/Channelbar/ChannelContext';
 import { useCall } from '@/services/call/CallProvider';
 import ContextMenu from '@/components/Home/Channelbar/ContextMenu';
@@ -41,13 +41,13 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
   // 현재 타입의 채널들 메모이제이션
   const currentChannels = useMemo(() => channels[type] || [], [channels, type]);
 
-  const toggleChannelExpand = useCallback((channelName: string) => {
+  const toggleChannelExpand = useCallback((channelId: string) => {
     setExpandedChannels(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(channelName)) {
-        newSet.delete(channelName);
+      if (newSet.has(channelId)) {
+        newSet.delete(channelId);
       } else {
-        newSet.add(channelName);
+        newSet.add(channelId);
       }
       return newSet;
     });
