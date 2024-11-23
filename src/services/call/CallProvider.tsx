@@ -36,17 +36,11 @@ export function CallProvider({ children }: CallProviderProps) {
   const user = useAuthStore((state: { user: any; }) => state.user);
 
   const handleStateUpdate = useCallback((newState: CallState) => {
-    console.log('CallProvider received state update:', newState);
-
     setState(prevState => {
-      console.log('Previous state:', prevState);
-
-      // Create a map of existing users with their profile images
       const existingUserMap = new Map(
         prevState.users.map(user => [user.user_id, user])
       );
 
-      // Merge new users with existing profile images
       const updatedUsers = newState.users.map(newUser => {
         const existingUser = existingUserMap.get(newUser.user_id);
         return {
@@ -55,7 +49,6 @@ export function CallProvider({ children }: CallProviderProps) {
         };
       });
 
-      // Update current user while preserving profile image
       const updatedCurrentUser = newState.currentUser
         ? {
           ...newState.currentUser,
@@ -65,57 +58,38 @@ export function CallProvider({ children }: CallProviderProps) {
         }
         : null;
 
-      const updatedState = {
+      return {
         ...prevState,
         users: updatedUsers,
         currentUser: updatedCurrentUser,
         connectionStatus: newState.connectionStatus
       };
-
-      console.log('Updated state:', updatedState);
-      return updatedState;
     });
   }, []);
 
-  // VoiceChat 스토어와 동기화
   useEffect(() => {
     if (state.users.length >= 0) {
-      console.log('Syncing users with VoiceChat store:', state.users);
       useVoiceChat.getState().setUsers(state.users);
     }
   }, [state.users]);
 
-  // WebSocket 연결 설정
   useEffect(() => {
     if (!accessToken || !user) return;
 
     const connection = new CallConnection(handleStateUpdate, accessToken);
     connectionRef.current = connection;
 
-    // 연결 시작
     try {
       connection.connect();
     } catch (error) {
       console.error('Connection failed:', error);
     }
 
-    // 클린업
     return () => {
       connection.disconnect();
       connectionRef.current = null;
     };
   }, [accessToken, user, handleStateUpdate]);
-
-  // 개발 환경에서 상태 변화 모니터링
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.group('CallProvider State Update');
-      console.log('Users:', state.users);
-      console.log('Current User:', state.currentUser);
-      console.log('Connection Status:', state.connectionStatus);
-      console.groupEnd();
-    }
-  }, [state]);
 
   const contextValue = {
     users: state.users,
