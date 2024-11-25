@@ -11,14 +11,13 @@ interface ChannelStore {
       channelCategory: 'CHAT' | 'VOICE' | 'VIDEO';
     },
   ) => Promise<void>;
-  updateChannelName: (channelId: number, newName: string) => Promise<void>;
-  deleteChannel: (channelId: number) => Promise<void>;
+  updateChannelName: (serverId: number, channelId: number, newName: string) => Promise<void>;
+  deleteChannel: (serverId: number, channelId: number) => Promise<void>;
 }
 
 export const useChannelStore = create<ChannelStore>((set) => ({
   addChannel: async (serverId, data) => {
     try {
-      // position은 제외하고 전송
       const newChannel = await channelApi.createChannel(serverId, {
         channelName: data.channelName,
         channelCategory: data.channelCategory,
@@ -47,9 +46,9 @@ export const useChannelStore = create<ChannelStore>((set) => ({
     }
   },
 
-  updateChannelName: async (channelId, newName) => {
+  updateChannelName: async (serverId, channelId, newName) => {
     try {
-      const updatedChannel = await channelApi.updateChannelName(channelId, newName);
+      const updatedChannel = await channelApi.updateChannelName(serverId, channelId, newName);
       const authStore = useAuthStore.getState();
 
       if (authStore.user) {
@@ -71,9 +70,9 @@ export const useChannelStore = create<ChannelStore>((set) => ({
     }
   },
 
-  deleteChannel: async (channelId) => {
+  deleteChannel: async (serverId, channelId) => {
     try {
-      await channelApi.deleteChannel(channelId);
+      await channelApi.deleteChannel(serverId, channelId);
       const authStore = useAuthStore.getState();
 
       if (authStore.user) {

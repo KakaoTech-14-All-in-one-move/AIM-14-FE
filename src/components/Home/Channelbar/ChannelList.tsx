@@ -65,8 +65,8 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
         channelCategory: type === 'text' ? 'CHAT' : type === 'voice' ? 'VOICE' : 'VIDEO'
       });
     } catch (error: any) {
-      const errorMessage = error.response?.data || '채널 생성에 실패했습니다.';
-      alert(errorMessage.message);
+      const errorMessage = error.response?.data?.message || '채널 생성에 실패했습니다.';
+      alert(errorMessage);
     }
   };
 
@@ -75,10 +75,10 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
     if (!newName || newName === channel.channelName) return;
 
     try {
-      await channelStore.updateChannelName(channel.channelId, newName);
+      await channelStore.updateChannelName(channel.serverId, channel.channelId, newName);
     } catch (error: any) {
-      const errorMessage = error.response?.data || '채널 삭제에 실패했습니다.';
-      alert(errorMessage.message);
+      const errorMessage = error.response?.data?.message || '채널 이름 변경에 실패했습니다.';
+      alert(errorMessage);
     }
   };
 
@@ -86,10 +86,10 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
     if (!confirm(`정말로 '${channel.channelName}' 채널을 삭제하시겠습니까?`)) return;
 
     try {
-      await channelStore.deleteChannel(channel.channelId);
+      await channelStore.deleteChannel(channel.serverId, channel.channelId);
     } catch (error: any) {
-      const errorMessage = error.response?.data || '채널 삭제에 실패했습니다.';
-      alert(errorMessage.message);
+      const errorMessage = error.response?.data?.message || '채널 삭제에 실패했습니다.';
+      alert(errorMessage);
     }
   };
 
