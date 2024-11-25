@@ -123,9 +123,9 @@ const Sidebar: React.FC = () => {
             : server
         )
       });
-    } catch (err) {
-      console.error('서버 이미지 업로드 실패:', err);
-      alert('서버 이미지 업로드에 실패했습니다.');
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || '서버 이미지 업로드에 실패했습니다.';
+      alert(errorMessage);
     }
   };
 
