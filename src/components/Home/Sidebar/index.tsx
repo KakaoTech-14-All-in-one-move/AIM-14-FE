@@ -68,9 +68,9 @@ const Sidebar: React.FC = () => {
         const remainingServers = user.servers.filter(s => s.server_id !== serverId);
         setSelectedServerId(remainingServers.length > 0 ? remainingServers[0].server_id : null);
       }
-    } catch (err) {
-      console.error('서버 삭제 실패:', err);
-      alert('서버 삭제에 실패했습니다.');
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || '서버 삭제에 실패했습니다.';
+      alert(errorMessage);
     }
   };
 
