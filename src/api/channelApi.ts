@@ -4,15 +4,19 @@ import { Channel } from '@/types/server';
 export const channelApi = {
   createChannel: async (
     serverId: number,
-    channelData: {
+    data: {
       channelName: string;
       channelCategory: 'CHAT' | 'VOICE' | 'VIDEO';
-      channelPosition: number;
     },
   ): Promise<Channel> => {
+    const requestBody = {
+      channel_name: data.channelName,
+      channel_category: data.channelCategory,
+    };
+
     const response = await apiClient.client.post(
       `/api/v1/servers/${serverId}/channels`,
-      channelData,
+      requestBody,
     );
     return response.data;
   },
