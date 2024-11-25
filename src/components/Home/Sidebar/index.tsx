@@ -90,9 +90,9 @@ const Sidebar: React.FC = () => {
             : server
         )
       });
-    } catch (err) {
-      console.error('서버 이름 변경 실패:', err);
-      alert('서버 이름 변경에 실패했습니다.');
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || '서버 이름 변경에 실패했습니다.';
+      alert(errorMessage);
     }
   };
 
