@@ -46,6 +46,17 @@ const Sidebar: React.FC = () => {
     try {
       if (!user) return;
 
+      // 서버 이름 찾기
+      const serverToDelete = user.servers.find(server => server.server_id === serverId);
+      if (!serverToDelete) return;
+
+      // 확인 대화상자 표시
+      const isConfirmed = window.confirm(
+        `'${serverToDelete.server_name}' 서버를 정말로 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`
+      );
+
+      if (!isConfirmed) return;
+
       await apiClient.client.delete(`/api/v1/servers/${serverId}`);
 
       setUser({
