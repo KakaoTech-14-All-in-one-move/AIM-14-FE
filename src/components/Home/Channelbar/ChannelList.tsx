@@ -62,11 +62,11 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
     try {
       await channelStore.addChannel(selectedServerId, {
         channelName: name,
-        channelCategory: type === 'text' ? 'CHAT' : type === 'voice' ? 'VOICE' : 'VIDEO',
-        channelPosition: currentChannels.length // 현재 채널 목록의 마지막 위치 다음으로 설정
+        channelCategory: type === 'text' ? 'CHAT' : type === 'voice' ? 'VOICE' : 'VIDEO'
       });
-    } catch (error) {
-      alert('채널 생성에 실패했습니다.');
+    } catch (error: any) {
+      const errorMessage = error.response?.data || '채널 생성에 실패했습니다.';
+      alert(errorMessage.message);
     }
   };
 
@@ -76,8 +76,9 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
 
     try {
       await channelStore.updateChannelName(channel.channelId, newName);
-    } catch (error) {
-      alert('채널 이름 변경에 실패했습니다.');
+    } catch (error: any) {
+      const errorMessage = error.response?.data || '채널 삭제에 실패했습니다.';
+      alert(errorMessage.message);
     }
   };
 
@@ -86,8 +87,9 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
 
     try {
       await channelStore.deleteChannel(channel.channelId);
-    } catch (error) {
-      alert('채널 삭제에 실패했습니다.');
+    } catch (error: any) {
+      const errorMessage = error.response?.data || '채널 삭제에 실패했습니다.';
+      alert(errorMessage.message);
     }
   };
 
