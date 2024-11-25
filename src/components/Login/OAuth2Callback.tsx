@@ -1,10 +1,12 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
+import { useServerStore } from '@/stores/serverStore';
 
 export const OAuth2Callback = () => {
     const navigate = useNavigate();
     const { setTokens, setUser } = useAuthStore();
+    const { setServers } = useServerStore();
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
@@ -40,12 +42,16 @@ export const OAuth2Callback = () => {
         };
 
         setUser(userInfo);
+
+        // useServerStore에 서버 정보 저장
+        setServers(servers);
+
         // CallProvider가 자동으로 인증 상태를 감지하고 웹소켓 연결을 시작함
 
         return () => {
             navigate('/home', { replace: true });
         };
-    }, [navigate, setTokens, setUser]);
+    }, [navigate, setTokens, setUser, setServers]);
 
     return (
         <div className="flex items-center justify-center min-h-screen bg-discord900">

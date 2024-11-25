@@ -1,17 +1,26 @@
-// ChannelContext.tsx
-import React, { createContext, useContext, useState, useCallback } from 'react';
-import { ChannelContextType, Channels, ChannelStateType, ChannelType } from '@/components/Home/Channelbar/types';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { ChannelContextType, Channels, ChannelStateType, ChannelType } from './types';
 import { useAuthStore } from '@/stores/authStore';
+import { useServerStore } from '@/stores/serverStore';
+import { Channel } from '@/types/server';
 
 export const ChannelContext = createContext<ChannelContextType | null>(null);
 
-export const ChannelProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const user = useAuthStore(state => state.user);
+interface ChannelProviderProps {
+  children: React.ReactNode;
+}
 
-  const [channels, setChannels] = useState<Channels>({
-    text: ['일반', '풀스택', '인공지능', '클라우드'],
-    voice: ['일반'],
-    video: ['일반'],
+export const ChannelProvider: React.FC<ChannelProviderProps> = ({ children }) => {
+  const { user } = useAuthStore();
+  const { selectedServerId } = useServerStore();
+
+  // 선택된 서버 찾기
+  const selectedServer = user?.servers?.find(server => server.server_id === selectedServerId);
+
+  const [channels, setChannels] = useState<Record<ChannelType, Channel[]>>({
+    text: [],
+    voice: [],
+    video: []
   });
 
   const [openSections, setOpenSections] = useState<Record<ChannelType, boolean>>({
@@ -22,49 +31,110 @@ export const ChannelProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const [channelStates, setChannelStates] = useState<ChannelStateType>({
     voice: {
-      active: { '일반': false },
-      joined: { '일반': false }
+      active: {},
+      joined: {}
     },
     video: {
-      active: { '일반': false },
-      joined: { '일반': false }
+      active: {},
+      joined: {}
     }
   });
 
-  // 기본 채널 관리 함수들 메모이제이션
-  const addChannel = useCallback((type: ChannelType, name: string) => {
+  // 서버나 채널이 변경될 때마다 채널 목록 업데이트
+  useEffect(() => {
+    if (!selectedServer?.channels) {
+      setChannels({
+        text: [],
+        voice: [],
+        video: []
+      });
+      return;
+    }
+
+    const newChannels: Record<ChannelType, Channel[]> = {
+      text: [],
+      voice: [],
+      video: []
+    };
+
+    // 채널들을 카테고리별로 분류
+    selectedServer.channels.forEach(channel => {
+      switch (channel.channelCategory) {
+        case 'CHAT':
+          newChannels.text.push(channel);
+          break;
+        case 'VOICE':
+          newChannels.voice.push(channel);
+          break;
+        case 'VIDEO':
+          newChannels.video.push(channel);
+          break;
+      }
+    });
+
+    // 각 카테고리 내에서 position 순으로 정렬
+    Object.keys(newChannels).forEach(key => {
+      newChannels[key as ChannelType].sort((a, b) => a.channelPosition - b.channelPosition);
+    });
+
+    setChannels(newChannels);
+
+    // 채널 상태 초기화
+    const newChannelStates: ChannelStateType = {
+      voice: {
+        active: Object.fromEntries(newChannels.voice.map(channel => [channel.channelName, false])),
+        joined: Object.fromEntries(newChannels.voice.map(channel => [channel.channelName, false]))
+      },
+      video: {
+        active: Object.fromEntries(newChannels.video.map(channel => [channel.channelName, false])),
+        joined: Object.fromEntries(newChannels.video.map(channel => [channel.channelName, false]))
+      }
+    };
+
+    setChannelStates(prev => ({
+      voice: {
+        active: { ...prev.voice.active, ...newChannelStates.voice.active },
+        joined: { ...prev.voice.joined, ...newChannelStates.voice.joined }
+      },
+      video: {
+        active: { ...prev.video.active, ...newChannelStates.video.active },
+        joined: { ...prev.video.joined, ...newChannelStates.video.joined }
+      }
+    }));
+  }, [selectedServer?.channels]);
+
+  // 나머지 함수들은 그대로 유지...
+  const addChannel = useCallback((type: ChannelType, channel: Channel) => {
     setChannels(prev => ({
       ...prev,
-      [type]: [...prev[type], name],
+      [type]: [...prev[type], channel]
     }));
   }, []);
 
-  const renameChannel = useCallback((type: ChannelType, oldName: string, newName: string) => {
+  const renameChannel = useCallback((type: ChannelType, channelId: number, newName: string) => {
     setChannels(prev => ({
       ...prev,
-      [type]: prev[type].map(channelName =>
-        channelName === oldName ? newName : channelName,
-      ),
+      [type]: prev[type].map(channel =>
+        channel.channelId === channelId
+          ? { ...channel, channelName: newName }
+          : channel
+      )
     }));
   }, []);
 
-  const deleteChannel = useCallback((type: ChannelType, channelName: string) => {
+  const deleteChannel = useCallback((type: ChannelType, channelId: number) => {
     setChannels(prev => ({
       ...prev,
-      [type]: prev[type].filter(name => name !== channelName),
+      [type]: prev[type].filter(channel => channel.channelId !== channelId)
     }));
 
     if (type !== 'text') {
       setChannelStates(prev => ({
         ...prev,
         [type]: {
-          active: Object.fromEntries(
-            Object.entries(prev[type].active).filter(([key]) => key !== channelName),
-          ),
-          joined: Object.fromEntries(
-            Object.entries(prev[type].joined).filter(([key]) => key !== channelName),
-          ),
-        },
+          active: {},
+          joined: {}
+        }
       }));
     }
   }, []);
@@ -72,18 +142,17 @@ export const ChannelProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const toggleSection = useCallback((type: ChannelType) => {
     setOpenSections(prev => ({
       ...prev,
-      [type]: !prev[type],
+      [type]: !prev[type]
     }));
   }, []);
 
-  // 채널 상태 관리 함수들 메모이제이션
   const activateChannel = useCallback((type: Exclude<ChannelType, 'text'>, channelName: string) => {
     setChannelStates(prev => ({
       ...prev,
       [type]: {
         ...prev[type],
-        active: { ...prev[type].active, [channelName]: true },
-      },
+        active: { ...prev[type].active, [channelName]: true }
+      }
     }));
   }, []);
 
@@ -92,8 +161,8 @@ export const ChannelProvider: React.FC<{ children: React.ReactNode }> = ({ child
       ...prev,
       [type]: {
         ...prev[type],
-        active: { ...prev[type].active, [channelName]: false },
-      },
+        active: { ...prev[type].active, [channelName]: false }
+      }
     }));
   }, []);
 
@@ -102,8 +171,8 @@ export const ChannelProvider: React.FC<{ children: React.ReactNode }> = ({ child
       ...prev,
       [type]: {
         ...prev[type],
-        joined: { ...prev[type].joined, [channelName]: true },
-      },
+        joined: { ...prev[type].joined, [channelName]: true }
+      }
     }));
   }, []);
 
@@ -112,12 +181,11 @@ export const ChannelProvider: React.FC<{ children: React.ReactNode }> = ({ child
       ...prev,
       [type]: {
         ...prev[type],
-        joined: { ...prev[type].joined, [channelName]: false },
-      },
+        joined: { ...prev[type].joined, [channelName]: false }
+      }
     }));
   }, []);
 
-  // context value도 메모이제이션
   const contextValue = React.useMemo(() => ({
     channels,
     addChannel,
@@ -155,7 +223,7 @@ export const ChannelProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
 export const useChannels = () => {
   const context = useContext(ChannelContext);
-  if (context === null) {
+  if (!context) {
     throw new Error('useChannels must be used within a ChannelProvider');
   }
   return context;

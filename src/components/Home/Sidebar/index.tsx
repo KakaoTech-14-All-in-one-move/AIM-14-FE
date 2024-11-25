@@ -1,18 +1,19 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { SidebarIcon } from '@/components/Home/Sidebar/SidebarIcon';
 import { HomeIcon } from '@/components/Home/Sidebar/icons/HomeIcon';
 import { useAuthStore } from '@/stores/authStore';
+import { useServerStore } from '@/stores/serverStore';
 import { apiClient } from '@/api/apiClient';
 
 const Sidebar: React.FC = () => {
   const { user, setUser } = useAuthStore();
-  const [selectedServerId, setSelectedServerId] = useState<number | null>(null);
+  const { selectedServerId, setSelectedServerId } = useServerStore();
 
   const BASE_URL = import.meta.env.VITE_BE_SERVER_URL
 
   const getFullImageUrl = (imageUrl: string | undefined) => {
     if (!imageUrl) return undefined;
-    if (imageUrl.startsWith('http')) return imageUrl;  // 이미 전체 URL인 경우
+    if (imageUrl.startsWith('http')) return imageUrl;
     return `${BASE_URL}${imageUrl}`;
   };
 
@@ -31,7 +32,10 @@ const Sidebar: React.FC = () => {
         servers: [...(user.servers || []), newServer]
       });
 
-      setSelectedServerId(newServer.server_id);
+      // serverStore에도 추가 
+      const serverStore = useServerStore.getState();
+      serverStore.addServer(newServer);
+      serverStore.setSelectedServerId(newServer.server_id);
     } catch (err) {
       console.error('서버 생성 실패:', err);
       alert('서버 생성에 실패했습니다.');
@@ -41,6 +45,17 @@ const Sidebar: React.FC = () => {
   const handleRemoveServer = async (serverId: number) => {
     try {
       if (!user) return;
+
+      // 서버 이름 찾기
+      const serverToDelete = user.servers.find(server => server.server_id === serverId);
+      if (!serverToDelete) return;
+
+      // 확인 대화상자 표시
+      const isConfirmed = window.confirm(
+        `'${serverToDelete.server_name}' 서버를 정말로 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`
+      );
+
+      if (!isConfirmed) return;
 
       await apiClient.client.delete(`/api/v1/servers/${serverId}`);
 
@@ -99,7 +114,6 @@ const Sidebar: React.FC = () => {
       );
 
       const { serverImageUrl } = response.data;
-      const BASE_URL = import.meta.env.VITE_BE_SERVER_URL
 
       setUser({
         ...user,
@@ -161,7 +175,7 @@ const Sidebar: React.FC = () => {
           onRename={(newName) => handleRenameServer(server.server_id, newName)}
           onRemove={() => handleRemoveServer(server.server_id)}
           onImageUpload={(file) => handleImageUpload(server.server_id, file)}
-          onInvite={() => handleInvite(server.server_id)}  // 여기에 onInvite prop 추가
+          onInvite={() => handleInvite(server.server_id)}
           hasServerImage={!!server.server_image}
         />
       ))}
