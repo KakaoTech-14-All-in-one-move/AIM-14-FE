@@ -139,9 +139,9 @@ const Sidebar: React.FC = () => {
       });
 
       alert('멤버를 성공적으로 초대했습니다.');
-    } catch (err: any) {
-      console.error('멤버 초대 실패:', err);
-      alert(err.response?.data?.error || '멤버 초대에 실패했습니다.');
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || '멤버 초대에 실패했습니다.';
+      alert(errorMessage);
     }
   };
 
