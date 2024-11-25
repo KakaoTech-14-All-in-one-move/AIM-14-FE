@@ -36,9 +36,9 @@ const Sidebar: React.FC = () => {
       const serverStore = useServerStore.getState();
       serverStore.addServer(newServer);
       serverStore.setSelectedServerId(newServer.server_id);
-    } catch (err) {
-      console.error('서버 생성 실패:', err);
-      alert('서버 생성에 실패했습니다.');
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || '서버 생성에 실패했습니다.';
+      alert(errorMessage);
     }
   };
 
