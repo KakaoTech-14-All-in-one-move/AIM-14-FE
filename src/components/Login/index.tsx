@@ -22,8 +22,9 @@ const LoginForm: React.FC = () => {
         e.preventDefault();
         try {
             await login(formData);
-        } catch (error) {
-            console.error('Login failed:', error);
+        } catch (error: any) {
+            const errorMessage = error.response?.data?.message || '로그인에 실패했습니다.';
+            alert(errorMessage);
         }
     };
 
