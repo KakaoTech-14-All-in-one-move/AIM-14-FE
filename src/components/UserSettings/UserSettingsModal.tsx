@@ -63,9 +63,9 @@ const UserSettingsModal: React.FC<UserSettingsModalProps> = ({ isOpen, onClose }
             const { profileImageUrl } = response.data;
             setProfileImage(profileImageUrl);
 
-        } catch (error) {
-            console.error('Failed to upload image:', error);
-            alert('이미지 업로드에 실패했습니다.');
+        } catch (error: any) {
+            const errorMessage = error.response?.data?.message || '이미지 업로드에 실패했습니다.';
+            alert(errorMessage);
         } finally {
             setIsUploading(false);
         }
@@ -102,9 +102,9 @@ const UserSettingsModal: React.FC<UserSettingsModalProps> = ({ isOpen, onClose }
             } else {
                 throw new Error('사용자 이름 업데이트에 실패했습니다.');
             }
-        } catch (error) {
-            console.error('Failed to update username:', error);
-            alert('사용자 이름 업데이트에 실패했습니다.');
+        } catch (error: any) {
+            const errorMessage = error.response?.data?.message || '사용자 이름 업데이트에 실패했습니다.';
+            alert(errorMessage);
         } finally {
             setIsUpdatingUsername(false);
         }
@@ -121,9 +121,9 @@ const UserSettingsModal: React.FC<UserSettingsModalProps> = ({ isOpen, onClose }
 
             clearAuth();
             onClose();
-        } catch (error) {
-            console.error('Failed to delete account:', error);
-            alert('계정 삭제에 실패했습니다. 다시 시도해주세요.');
+        } catch (error: any) {
+            const errorMessage = error.response?.data?.message || '계정 삭제에 실패했습니다. 다시 시도해주세요.';
+            alert(errorMessage);
         } finally {
             setIsDeleting(false);
         }
