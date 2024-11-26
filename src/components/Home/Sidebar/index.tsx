@@ -90,6 +90,15 @@ const Sidebar: React.FC = () => {
             : server
         )
       });
+
+      const serverStore = useServerStore.getState();
+      serverStore.setServers(
+        serverStore.servers.map(server =>
+          server.server_id === serverId
+            ? { ...server, server_name: newName }
+            : server
+        )
+      );
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || '서버 이름 변경에 실패했습니다.';
       alert(errorMessage);
