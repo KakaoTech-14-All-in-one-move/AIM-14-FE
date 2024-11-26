@@ -36,9 +36,9 @@ const Sidebar: React.FC = () => {
       const serverStore = useServerStore.getState();
       serverStore.addServer(newServer);
       serverStore.setSelectedServerId(newServer.server_id);
-    } catch (err) {
-      console.error('서버 생성 실패:', err);
-      alert('서버 생성에 실패했습니다.');
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || '서버 생성에 실패했습니다.';
+      alert(errorMessage);
     }
   };
 
@@ -68,9 +68,9 @@ const Sidebar: React.FC = () => {
         const remainingServers = user.servers.filter(s => s.server_id !== serverId);
         setSelectedServerId(remainingServers.length > 0 ? remainingServers[0].server_id : null);
       }
-    } catch (err) {
-      console.error('서버 삭제 실패:', err);
-      alert('서버 삭제에 실패했습니다.');
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || '서버 삭제에 실패했습니다.';
+      alert(errorMessage);
     }
   };
 
@@ -90,9 +90,18 @@ const Sidebar: React.FC = () => {
             : server
         )
       });
-    } catch (err) {
-      console.error('서버 이름 변경 실패:', err);
-      alert('서버 이름 변경에 실패했습니다.');
+
+      const serverStore = useServerStore.getState();
+      serverStore.setServers(
+        serverStore.servers.map(server =>
+          server.server_id === serverId
+            ? { ...server, server_name: newName }
+            : server
+        )
+      );
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || '서버 이름 변경에 실패했습니다.';
+      alert(errorMessage);
     }
   };
 
@@ -123,9 +132,9 @@ const Sidebar: React.FC = () => {
             : server
         )
       });
-    } catch (err) {
-      console.error('서버 이미지 업로드 실패:', err);
-      alert('서버 이미지 업로드에 실패했습니다.');
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || '서버 이미지 업로드에 실패했습니다.';
+      alert(errorMessage);
     }
   };
 
@@ -139,9 +148,9 @@ const Sidebar: React.FC = () => {
       });
 
       alert('멤버를 성공적으로 초대했습니다.');
-    } catch (err: any) {
-      console.error('멤버 초대 실패:', err);
-      alert(err.response?.data?.error || '멤버 초대에 실패했습니다.');
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || '멤버 초대에 실패했습니다.';
+      alert(errorMessage);
     }
   };
 
