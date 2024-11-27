@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useCall } from '@/services/call/CallProvider.tsx';
 import { useVoiceChat } from '@/hooks/useVoiceChat';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { WebRTCConnection } from '@/services/call/webrtc/WebRTCConnection.ts';
 
 interface VoiceControlsProps {
   show: boolean;
@@ -64,21 +65,20 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ show }) => {
         muted: !currentState.muted
       };
 
+      // WebRTC 오디오 트랙 상태 변경
+      const webrtc = WebRTCConnection.getInstance();
+      webrtc.toggleAudio(!newState.muted);  // muted가 true면 audio를 false로
+
       // 상태 업데이트
       userStatesRef.current.set(currentUser.user_id, newState);
-
-      // 서버에 상태 전송
       connection.updateState(newState);
-
-      // UI 업데이트
       voiceChatStore.updateUserStatus(currentUser.user_id, {
         ...currentUser,
         muted: newState.muted
       });
     }
   }, [connection, currentUser, voiceChatStore]);
-
-  const handleToggleDeafen = useCallback(() => {
+  useCallback(() => {
     if (connection && currentUser) {
       if (!connection.isInChannel()) {
         console.log('Not in a channel yet');
@@ -94,7 +94,7 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ show }) => {
       // 새로운 상태 계산
       const newState = {
         ...currentState,
-        deafened: !currentState.deafened
+        muted: !currentState.muted
       };
 
       // 상태 업데이트
@@ -106,8 +106,39 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ show }) => {
       // UI 업데이트
       voiceChatStore.updateUserStatus(currentUser.user_id, {
         ...currentUser,
+        muted: newState.muted
+      });
+    }
+  }, [connection, currentUser, voiceChatStore]);
+  
+  const handleToggleDeafen = useCallback(() => {
+    if (connection && currentUser) {
+      if (!connection.isInChannel()) {
+        console.log('Not in a channel yet');
+        return;
+      }
+
+      const currentState = userStatesRef.current.get(currentUser.user_id) || {
+        muted: false,
+        deafened: false
+      };
+
+      const newState = {
+        ...currentState,
+        deafened: !currentState.deafened
+      };
+
+      // 상태 업데이트
+      userStatesRef.current.set(currentUser.user_id, newState);
+      connection.updateState(newState);
+      voiceChatStore.updateUserStatus(currentUser.user_id, {
+        ...currentUser,
         deafened: newState.deafened
       });
+
+      // WebRTC 연결에 deafened 상태 전달
+      const webrtc = WebRTCConnection.getInstance();
+      webrtc.toggleDeafened(newState.deafened);
     }
   }, [connection, currentUser, voiceChatStore]);
 

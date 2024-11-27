@@ -1,5 +1,6 @@
 import { CallConnection } from '../callConnection';
 import { WebRTCConfig, WebRTCConnectionOptions } from './types';
+import { useVoiceChat } from '@/hooks/useVoiceChat.ts';
 
 interface WebRTCEvents {
   onTrack?: (stream: MediaStream) => void;
@@ -130,6 +131,8 @@ export class WebRTCConnection {
         } : false,  // 음성 채널이면 video: false
       });
 
+      this.setupVoiceDetection();
+
       if (videoElement && isVideoChannel) {
         videoElement.srcObject = this.localStream;
       }
@@ -169,6 +172,10 @@ export class WebRTCConnection {
       if (videoElement && this.peerConnection) {
         this.peerConnection.ontrack = (event) => {
           console.log('Received remote track:', event.track);
+          // 초기 deafened 상태 체크
+          const isDeafened = useVoiceChat.getState().isDeafened;
+          event.track.enabled = !isDeafened;  // deafened 상태면 트랙 비활성화
+
           videoElement.srcObject = event.streams[0];
           this.events?.onTrack?.(event.streams[0]);
         };
@@ -192,6 +199,17 @@ export class WebRTCConnection {
       this.dispose();
     }
   }
+
+  async toggleDeafened(deafened: boolean) {
+    if (this.peerConnection) {
+      this.peerConnection.getReceivers().forEach(receiver => {
+        if (receiver.track) {
+          receiver.track.enabled = !deafened;
+        }
+      });
+    }
+  }
+
 
   async processSdpAnswer(sdpAnswer: string) {
     if (!this.peerConnection) {
@@ -230,6 +248,50 @@ export class WebRTCConnection {
       console.error('Failed to add ICE candidate:', error);
       throw error;
     }
+  }
+
+  private setupVoiceDetection() {
+    if (!this.localStream) return;
+
+    const audioContext = new AudioContext();
+    const audioSource = audioContext.createMediaStreamSource(this.localStream);
+    const analyser = audioContext.createAnalyser();
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+    audioSource.connect(analyser);
+    let animationFrameId: number;
+
+    const checkAudioLevel = () => {
+      const state = useVoiceChat.getState();
+
+      if (this.callConnection?.state.currentUser) {
+        const userId = this.callConnection.state.currentUser.user_id;
+
+        if (state.isMuted) {
+          state.updateUserSpeaking(userId, false);
+          return;
+        }
+
+        analyser.getByteFrequencyData(dataArray);
+        const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+        const isSpeaking = average > 30;
+        state.updateUserSpeaking(userId, isSpeaking);
+
+        // mute 상태가 아닐 때만 다음 프레임 요청
+        animationFrameId = requestAnimationFrame(checkAudioLevel);
+      }
+    };
+
+    // 초기 시작
+    checkAudioLevel();
+
+    // cleanup 용도로 반환
+    return () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+      audioContext.close();
+    };
   }
 
   async replaceAudioTrack(track: MediaStreamTrack) {

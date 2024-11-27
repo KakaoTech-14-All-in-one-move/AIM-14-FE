@@ -1,6 +1,7 @@
 import { HeadphoneOff, MicOff } from 'lucide-react';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage.tsx';
 import React from 'react';
+import { useVoiceChat } from '@/hooks/useVoiceChat.ts';
 
 interface UserBoxProps {
   user: {
@@ -14,24 +15,28 @@ interface UserBoxProps {
 }
 
 export const UserBox: React.FC<UserBoxProps> = ({ user }) => {
+  const speakingUsers = useVoiceChat(state => state.speakingUsers);
+  const isSpeaking = speakingUsers.has(user.id);
 
   return (
     <div
-      className={`relative w-full aspect-video bg-gray-900 rounded-xl overflow-hidden shadow-lg
-        ${user.isSpeaking ? 'ring-2 ring-green-500' : ''}
-        transition-all duration-200 hover:shadow-xl`}
-    >
-      {/* 유저 이미지/아바타 영역 */}
+      className="relative w-full aspect-video bg-gray-900 rounded-xl overflow-hidden shadow-lg transition-all duration-200 hover:shadow-xl">
+      {/* 프로필 이미지 영역만 초록색 원 효과 적용 */}
       <div className="absolute inset-0 flex items-center justify-center">
-        {user.imageUrl ? (
-          <img
-            src={import.meta.env.VITE_BE_SERVER_URL + user.imageUrl}
-            alt={user.nickname}
-            className="w-28 h-28 rounded-full mr-2"
-          />
-        ) : (
-          <DefaultProfileImage username={user.nickname} size={80} margin="mr-1" />
-        )}
+        <div className={`relative ${isSpeaking ? 'ring-2 ring-green-500 rounded-full' : ''}`}>
+          {user.imageUrl ? (
+            <img
+              src={import.meta.env.VITE_BE_SERVER_URL + user.imageUrl}
+              alt={user.nickname}
+              className="w-28 h-28 rounded-full"
+            />
+          ) : (
+            <DefaultProfileImage username={user.nickname} size={80} />
+          )}
+          {isSpeaking && (
+            <div className="absolute inset-0 rounded-full border-2 border-green-500 animate-pulse" />
+          )}
+        </div>
       </div>
 
       {/* 상단의 음소거 상태 표시 */}

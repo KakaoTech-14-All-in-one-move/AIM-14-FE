@@ -139,6 +139,8 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
       member.channel_type === type.toUpperCase()
     );
 
+    const speakingUsers = useVoiceChat(state => state.speakingUsers);
+
     return (
       <>
         {channelMembers.map(member => (

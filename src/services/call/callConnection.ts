@@ -37,7 +37,7 @@ export class CallConnection {
   private currentChannelId: string | null = null;
   private onStateUpdate: (state: CallState) => void;
   private accessToken: string;
-  private state: CallState = {
+  state: CallState = {
     users: [],
     currentUser: null,
     connectionStatus: 'DISCONNECTED',
