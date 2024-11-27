@@ -1,7 +1,8 @@
 export const CALL_API = {
   GET_WEBSOCKET_URL: '/api/v1/call',
   DEFAULT_SERVER_ID: '1',
-  DEFAULT_CHANNEL_ID: '5143992e-9dcd-45fe-bcc7-e337417b0cfe',
+  DEFAULT_VOICE_CHANNEL_ID: '1',
+  DEFAULT_VIDEO_CHANNEL_ID: '2',
 };
 
 export const OP_CODES = {
@@ -17,6 +18,14 @@ export const OP_CODES = {
   LEAVE_CHANNEL_ACK: 14,
   STATE_UPDATE: 5,
   STATE_UPDATE_ACK: 15,
+  PRESENTER: 6,
+  PRESENTER_ACK: 16,
+  VIEWER: 7,
+  VIEWER_ACK: 17,
+  ICE_CANDIDATE: 8,
+  ICE_CANDIDATE_ACK: 18,
+  STOP: 9,
+  STOP_ACK: 19,
 } as const;
 
 export const RECONNECT_DELAY = 5000;

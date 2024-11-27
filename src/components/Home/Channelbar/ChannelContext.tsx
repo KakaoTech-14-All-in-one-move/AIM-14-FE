@@ -144,8 +144,8 @@ export const ChannelProvider: React.FC<ChannelProviderProps> = ({ children }) =>
       prev.map(channel =>
         channel.id === channelId
           ? { ...channel, name: newName }
-          : channel
-      )
+          : channel,
+      ),
     );
   }, []);
 
@@ -221,7 +221,7 @@ export const ChannelProvider: React.FC<ChannelProviderProps> = ({ children }) =>
     deactivateChannel,
     joinChannel,
     leaveChannel,
-    currentUser: user
+    currentUser: user,
   }), [
     channels,
     addChannel,
@@ -234,7 +234,7 @@ export const ChannelProvider: React.FC<ChannelProviderProps> = ({ children }) =>
     deactivateChannel,
     joinChannel,
     leaveChannel,
-    user
+    user,
   ]);
 
   return (

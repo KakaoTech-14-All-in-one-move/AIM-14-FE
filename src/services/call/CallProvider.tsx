@@ -1,14 +1,17 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { CallConnection } from '@/services/call/callConnection';
-import { CallState, CallUserData } from '@/services/call/types';
+import { CallState, CallUserData, MediaChannelType, VoiceStateUpdate } from '@/services/call/types';
 import { useAuthStore } from '@/stores/authStore';
 import { useVoiceChat } from '@/hooks/useVoiceChat';
+import { WebRTCProvider } from '@/services/call/webrtc/WebRTCProvider.tsx';
 
 interface CallContextType {
-  users: CallUserData[];
-  currentUser: CallUserData | null;
   connection: CallConnection | null;
-  connectionStatus: string;
+  currentUser: CallUserData | null;
+  isConnected: boolean;
+  joinChannel: (channelId: string, type: MediaChannelType) => void;
+  leaveChannel: () => void;
+  updateUserState: (state: VoiceStateUpdate) => void;
 }
 
 const CallContext = createContext<CallContextType | null>(null);
@@ -100,6 +103,7 @@ export function CallProvider({ children }: CallProviderProps) {
 
   return (
     <CallContext.Provider value={contextValue}>
+      <WebRTCProvider>
       {children}
       {process.env.NODE_ENV === 'development' && (
         <div className="fixed bottom-2 right-2 bg-gray-800 text-white px-3 py-1 rounded-md text-sm z-50">
@@ -107,6 +111,7 @@ export function CallProvider({ children }: CallProviderProps) {
           {state.users.length > 0 && ` | Users: ${state.users.length}`}
         </div>
       )}
+      </WebRTCProvider>
     </CallContext.Provider>
   );
 }

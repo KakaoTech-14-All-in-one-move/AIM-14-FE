@@ -9,6 +9,7 @@ import {
 import { CALL_API, OP_CODES, RECONNECT_DELAY } from '@/services/call/constants';
 import { apiClient } from '@/api/apiClient';
 import { isEqual } from 'lodash';
+import { WebRTCConnection } from '@/services/call/webrtc/WebRTCConnection.ts';
 
 interface CallServerResponse {
   url: string;
@@ -20,8 +21,12 @@ type MessageHandlerMap = {
   [OP_CODES.LEAVE_CHANNEL_ACK]: (data: any) => void;
   [OP_CODES.STATE_UPDATE_ACK]: (data: any) => void;
   [OP_CODES.INITIAL_ACK]: (data: any) => void;
-  [OP_CODES.IDENTIFY_ACK]: (data: any) => void;  // 추가
+  [OP_CODES.IDENTIFY_ACK]: (data: any) => void;
   [OP_CODES.HEARTBEAT_ACK]: () => void;
+  [OP_CODES.PRESENTER_ACK]: (data: any) => void;
+  [OP_CODES.VIEWER_ACK]: (data: any) => void
+  [OP_CODES.ICE_CANDIDATE_ACK]: (data: any) => void;
+  [OP_CODES.STOP_ACK]: () => void;
 };
 
 export class CallConnection {
@@ -82,10 +87,38 @@ export class CallConnection {
     this.scheduleReconnect();
   }
 
+  async sendPresenterOffer(sdpOffer: string) {
+    console.log('Sending presenter offer');
+    this.sendOp(OP_CODES.PRESENTER, {
+      // server_id: this.currentServerId,
+      channel_id: this.currentChannelId,
+      sdp_offer: sdpOffer,
+    });
+  }
+
+  async sendViewerOffer(sdpOffer: string) {
+    console.log('Sending viewer offer:', sdpOffer);
+    this.sendOp(OP_CODES.VIEWER, {
+      // server_id: this.currentServerId,
+      channel_id: this.currentChannelId,
+      sdp_offer: sdpOffer,
+    });
+  }
+
+  async sendIceCandidate(candidate: RTCIceCandidate) {
+    console.log('Sending ICE candidate:', candidate);
+    this.sendOp(OP_CODES.ICE_CANDIDATE, {
+      // server_id: this.currentServerId,
+      channel_id: this.currentChannelId,
+      candidate: candidate.toJSON(),
+      sdp_mid: candidate.sdpMid,
+      sdp_m_line_index: candidate.sdpMLineIndex
+    });
+  }
+
   private messageHandlers: MessageHandlerMap = {
     [OP_CODES.JOIN_CHANNEL_ACK]: (data: any) => {
       if (!data) return;
-      // console.log('채널 입장 완료');
 
       if (this.isCallUserData(data)) {
         this.updateUsers(prevUsers => {
@@ -153,7 +186,61 @@ export class CallConnection {
 
     [OP_CODES.HEARTBEAT_ACK]: () => {
     },
+
+    [OP_CODES.STOP_ACK]: () => {
+    },
+
+    [OP_CODES.PRESENTER_ACK]: (data: any) => {
+      console.log('Received presenter answer:', data);
+      if (data?.sdp_answer) {  // 서버 응답 형식에 맞게 수정
+        const webrtc = WebRTCConnection.getInstance();
+        webrtc.processSdpAnswer(data.sdp_answer);
+      }
+    },
+
+    [OP_CODES.VIEWER_ACK]: (data: any) => {
+      console.log('Received viewer answer:', data);
+      if (data?.sdp_answer) {  // 서버 응답 형식에 맞게 수정
+        const webrtc = WebRTCConnection.getInstance();
+        webrtc.processSdpAnswer(data.sdp_answer);
+      }
+    },
+
+    [OP_CODES.ICE_CANDIDATE_ACK]: (data: any) => {
+      console.log('Received ICE candidate:', data);
+      if (data?.candidate) {
+        const webrtc = WebRTCConnection.getInstance();
+        webrtc.addIceCandidate(data.candidate);
+      }
+    },
   };
+
+  private handleMessage = (event: MessageEvent) => {
+    try {
+      const message: CallServerMessage = JSON.parse(event.data);
+      console.log('Received message:', message);  // 디버깅을 위한 로그 추가
+
+      const handler = this.messageHandlers[message.op];
+      if (handler) {
+        handler(message.data);
+      } else {
+        console.warn('No handler for message type:', message.op);
+      }
+    } catch (error) {
+      console.error('Message handling error:', error);
+    }
+  };
+
+  private sendOp(op: number, data?: any) {
+    if (this.ws?.readyState !== WebSocket.OPEN) {
+      console.warn('WebSocket not open');
+      return;
+    }
+
+    const message = JSON.stringify({ op, data });
+    console.log('Sending message:', { op, data });  // 디버깅을 위한 로그 추가
+    this.ws.send(message);
+  }
 
   private handleOpen = () => {
     console.log('웹소켓 연결됨');
@@ -180,20 +267,6 @@ export class CallConnection {
     });
   }
 
-  private handleMessage = (event: MessageEvent) => {
-    try {
-      const message: CallServerMessage = JSON.parse(event.data);
-      // console.log('📨 Received:', message);
-
-      const handler = this.messageHandlers[message.op];
-      if (handler) {
-        handler(message.data);
-      }
-    } catch (error) {
-      console.error('❌ Message handling error:', error);
-    }
-  };
-
   private setupHeartbeat(interval: number | undefined) {
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
@@ -208,17 +281,6 @@ export class CallConnection {
     }, interval);
 
     console.log('💓 Heartbeat set:', interval, 'ms');
-  }
-
-  private sendOp(op: number, data?: any) {
-    if (this.ws?.readyState !== WebSocket.OPEN) {
-      console.warn('⚠️ WebSocket not open');
-      return;
-    }
-
-    const message = JSON.stringify({ op, data });
-    this.ws.send(message);
-    // console.log('📤 Sent:', { op, data });
   }
 
   private updateCurrentUser = (user: CallUserData | null) => {
@@ -290,6 +352,12 @@ export class CallConnection {
     if (!this.currentChannelId) return;
 
     console.log('👋 Leaving channel:', this.currentChannelId);
+
+    const webrtc = WebRTCConnection.getInstance();
+    webrtc.dispose();
+
+    this.sendOp(OP_CODES.STOP);
+
     this.sendOp(OP_CODES.LEAVE_CHANNEL, {
       server_id: this.currentServerId,
       channel_id: this.currentChannelId,
