@@ -1,21 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { VideoUserBox } from '@/components/Video/VideoUserBox';
 import { VideoControls } from '@/components/Video/VideoControls';
 import { useCall } from '@/services/call/CallProvider';
 import { useVoiceChat } from '@/hooks/useVoiceChat';
-
-interface DisplayUser {
-  id: string;
-  nickname: string;
-  isSpeaking: boolean;
-  isMuted: boolean;
-  isDeafened: boolean;
-  isVideoOn: boolean;
-  isScreenSharing: boolean;
-  imageUrl?: string;
-  stream?: MediaStream;
-}
 
 export const VideoContent = () => {
   const [showControls, setShowControls] = useState(false);
@@ -32,45 +20,23 @@ export const VideoContent = () => {
     }
   }, [connection, connectionStatus, currentUser]);
 
-  // DisplayUser 인터페이스에 맞게 사용자 데이터 변환
-  const displayUsers: DisplayUser[] = voiceChatStore.users.map(user => {
-    console.log('매핑 전 원본 사용자 데이터:', user); // 디버깅용
+  // VoiceChat store users 상태 모니터링
+  useEffect(() => {
+    console.log('VoiceChat store users:', voiceChatStore.users);
+  }, [voiceChatStore.users]);
 
-    const displayUser: DisplayUser = {
-      id: user.user_id,
-      nickname: user.username,
-      isSpeaking: user.speaking,
-      isMuted: user.muted,
-      isDeafened: user.deafened,
-      isVideoOn: user.camera_on,
-      isScreenSharing: user.screen_sharing,
-      imageUrl: user.profile_image,
-      stream: user.stream,  // MediaStream 객체 매핑
-    };
+  const uniqueUsers = useMemo(() => {
+    const userMap = new Map();
+    voiceChatStore.users.forEach(user => {
+      const key = `${user.channel_type}-${user.user_id}-${user.channel_id}`;
+      if (!userMap.has(key)) {
+        userMap.set(key, user);
+      }
+    });
+    return Array.from(userMap.values());
+  }, [voiceChatStore.users]);
 
-    console.log('매핑 후 디스플레이 사용자 데이터:', displayUser); // 디버깅용
-    return displayUser;
-  });
-
-  // 화면 공유 사용자 추가
-  voiceChatStore.users.forEach(user => {
-    if (user.screen_sharing && user.stream) {
-      console.log('화면 공유 스트림 추가:', user);
-      displayUsers.push({
-        id: `screen-${user.user_id}`,
-        nickname: `${user.username}의 화면`,
-        isSpeaking: false,
-        isMuted: user.muted,
-        isDeafened: user.deafened,
-        isVideoOn: true,
-        isScreenSharing: true,
-        imageUrl: user.profile_image,
-        stream: user.stream,
-      });
-    }
-  });
-
-  if (!displayUsers?.length) return null;
+  if (!uniqueUsers?.length) return null;
 
   return (
     <div
@@ -81,21 +47,35 @@ export const VideoContent = () => {
       <div className="flex-1 w-full flex items-center justify-center">
         <div
           className={`grid gap-8 w-full max-w-[1200px] mx-auto ${
-            displayUsers.length === 1
+            uniqueUsers.length === 1
               ? 'grid-cols-1'
-              : displayUsers.length === 2
+              : uniqueUsers.length === 2
                 ? 'grid-cols-2'
-                : displayUsers.length === 3 || displayUsers.length === 4
+                : uniqueUsers.length === 3 || uniqueUsers.length === 4
                   ? 'grid-cols-2'
                   : 'grid-cols-3'
           }`}
         >
-          {displayUsers.map(user => (
-            <VideoUserBox
-              key={user.id}
-              user={user}
-            />
-          ))}
+          {uniqueUsers.map(user => {
+            const userKey = `${user.channel_type}-${user.user_id}-${user.channel_id}-${user.screen_sharing ? 'screen' : 'cam'}`;
+
+            return (
+              <VideoUserBox
+                key={userKey}
+                user={{
+                  id: user.user_id,
+                  nickname: user.username,
+                  isSpeaking: user.speaking,
+                  isMuted: user.muted,
+                  isDeafened: user.deafened,
+                  isVideoOn: user.camera_on,
+                  isScreenSharing: user.screen_sharing,
+                  imageUrl: user.profile_image,
+                  stream: user.stream,
+                }}
+              />
+            );
+          })}
         </div>
       </div>
       <VideoControls show={showControls} />

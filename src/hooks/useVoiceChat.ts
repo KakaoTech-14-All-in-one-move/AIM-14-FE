@@ -16,42 +16,59 @@ interface VoiceChatStore {
   updateUserSpeaking: (userId: string, isSpeaking: boolean) => void;
 }
 
-export const useVoiceChat = create<VoiceChatStore>((set, _) => ({
+export const useVoiceChat = create<VoiceChatStore>((set) => ({
   users: [],
   isMuted: false,
   isDeafened: false,
   speakingUsers: new Set<string>(),
 
-  setUsers: (users) => set({ users: users }),
+  setUsers: (users) => set({ users }),
 
-  addUser: (user) => set(state => ({
-    users: [...state.users, user]
-  })),
+  addUser: (user) => set((state) => {
+    // 이미 존재하는 사용자인지 확인
+    const existingUserIndex = state.users.findIndex(
+      u => u.user_id === user.user_id &&
+        u.channel_id === user.channel_id &&
+        u.channel_type === user.channel_type
+    );
+
+    if (existingUserIndex !== -1) {
+      // 기존 사용자가 있다면 업데이트
+      const updatedUsers = [...state.users];
+      updatedUsers[existingUserIndex] = {
+        ...updatedUsers[existingUserIndex],
+        ...user
+      };
+      return { users: updatedUsers };
+    }
+
+    // 새로운 사용자라면 추가
+    return { users: [...state.users, user] };
+  }),
 
   removeUser: (userId) => set(state => ({
-    users: state.users.filter(u => u.user_id !== userId)
+    users: state.users.filter(u => u.user_id !== userId),
+    // 사용자가 제거될 때 speaking 상태도 함께 제거
+    speakingUsers: new Set(
+      Array.from(state.speakingUsers).filter(id => id !== userId)
+    )
   })),
 
-  updateUserStatus: (userId: string, updates: Partial<CallUserData>) => {
+  updateUserStatus: (userId: string, updates: Partial<CallUserData>) =>
     set((state) => ({
       users: state.users.map((user) =>
-        user.user_id === userId
-          ? { ...user, ...updates }
-          : user
+        user.user_id === userId ? { ...user, ...updates } : user
       )
-    }));
-  },
+    })),
 
   updateUserSpeaking: (userId: string, isSpeaking: boolean) =>
-    set((state) => {
-      const newSpeakingUsers = new Set(state.speakingUsers);
-      if (isSpeaking) {
-        newSpeakingUsers.add(userId);
-      } else {
-        newSpeakingUsers.delete(userId);
-      }
-      return { speakingUsers: newSpeakingUsers };
-    }),
+    set((state) => ({
+      speakingUsers: new Set(
+        isSpeaking
+          ? [...Array.from(state.speakingUsers), userId]
+          : Array.from(state.speakingUsers).filter(id => id !== userId)
+      )
+    })),
 
   toggleMute: () => set(state => ({ isMuted: !state.isMuted })),
 

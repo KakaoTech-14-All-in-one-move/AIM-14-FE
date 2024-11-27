@@ -23,7 +23,9 @@ export class WebRTCConnection {
   private isPresenter: boolean = false;
   private reconnectAttempts: number = 0;
   private readonly MAX_RECONNECT_ATTEMPTS = 3;
-  private pendingCandidates: RTCIceCandidate[] = []; // 추가된 부분
+  private pendingCandidates: RTCIceCandidate[] = [];
+  private audioStream: MediaStream | null = null;
+  private videoStream: MediaStream | null = null;
 
   private constructor() {
   }
@@ -118,42 +120,42 @@ export class WebRTCConnection {
       this.isPresenter = true;
       await this.initializePeerConnection(options);
 
-      // 비디오 채널인지 확인 (videoElement가 존재하면 비디오 채널)
+      // 채널 타입에 따른 미디어 스트림 요청
       const isVideoChannel = !!videoElement;
-
-      console.log(`Requesting media stream for presenter (${isVideoChannel ? 'video' : 'voice'} channel)`);
-      this.localStream = await navigator.mediaDevices.getUserMedia({
+      const constraints = {
         audio: true,
         video: isVideoChannel ? {
           width: { ideal: 1280 },
           height: { ideal: 720 },
-          frameRate: { ideal: 30 },
-        } : false,  // 음성 채널이면 video: false
-      });
+          frameRate: { ideal: 30 }
+        } : false
+      };
 
+      console.log(`Requesting media stream for ${isVideoChannel ? 'video' : 'voice'} channel`);
+      this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+      // 음성 감지 설정
       this.setupVoiceDetection();
 
+      // 비디오 채널인 경우에만 로컬 비디오 표시
       if (videoElement && isVideoChannel) {
         videoElement.srcObject = this.localStream;
       }
 
-      console.log('Adding tracks to peer connection');
+      // 트랙 추가
       this.localStream.getTracks().forEach(track => {
-        if (this.localStream && this.peerConnection) {
-          this.peerConnection.addTrack(track, this.localStream);
+        if (this.peerConnection) {
+          this.peerConnection.addTrack(track, this.localStream!);
         }
       });
 
-      console.log('Creating presenter offer');
+      // Offer 생성 및 전송
       const offer = await this.peerConnection!.createOffer({
-        offerToReceiveAudio: false,
-        offerToReceiveVideo: isVideoChannel,  // 음성/비디오 채널에 따라 설정
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: isVideoChannel
       });
 
-      console.log('Setting local description');
       await this.peerConnection!.setLocalDescription(offer);
-
-      console.log('Sending presenter offer to server');
       this.callConnection!.sendPresenterOffer(offer.sdp!);
 
     } catch (error) {
@@ -161,6 +163,48 @@ export class WebRTCConnection {
       this.events?.onError?.(error as Error);
       this.dispose();
     }
+  }
+
+  dispose() {
+    console.log('Disposing WebRTC connection');
+
+    if (this.audioStream) {
+      this.audioStream.getTracks().forEach(t => t.stop());
+      this.audioStream = null;
+    }
+    if (this.videoStream) {
+      this.videoStream.getTracks().forEach(t => t.stop());
+      this.videoStream = null;
+    }
+
+
+    // 모든 미디어 트랙 정리
+    if (this.localStream) {
+      this.localStream.getTracks().forEach(track => {
+        track.stop();
+        console.log(`Stopped track: ${track.kind}`);
+      });
+      this.localStream = null;
+    }
+
+    // PeerConnection 정리
+    if (this.peerConnection) {
+      this.peerConnection.getSenders().forEach(sender => {
+        if (sender.track) {
+          sender.track.stop();
+        }
+      });
+      this.peerConnection.close();
+      this.peerConnection = null;
+    }
+
+    this.callConnection = null;
+    this.events = null;
+    this.isPresenter = false;
+    this.reconnectAttempts = 0;
+    this.pendingCandidates = [];
+
+    console.log('WebRTC connection disposed');
   }
 
   async initializeViewer(videoElement: HTMLVideoElement | null, options?: WebRTCConnectionOptions) {
@@ -210,6 +254,45 @@ export class WebRTCConnection {
     }
   }
 
+  async replaceVideoTrack(track: MediaStreamTrack) {
+    if (!this.peerConnection) return;
+
+    const sender = this.peerConnection.getSenders()
+      .find(s => s.track?.kind === 'video');
+
+    if (sender) {
+      await sender.replaceTrack(track);
+    } else {
+      this.peerConnection.addTrack(track, this.videoStream || new MediaStream([track]));
+    }
+
+    // 비디오 스트림 업데이트
+    if (this.videoStream) {
+      const oldTracks = this.videoStream.getTracks();
+      oldTracks.forEach(t => t.stop());
+    }
+    this.videoStream = new MediaStream([track]);
+  }
+
+  async replaceAudioTrack(track: MediaStreamTrack) {
+    if (!this.peerConnection) return;
+
+    const sender = this.peerConnection.getSenders()
+      .find(s => s.track?.kind === 'audio');
+
+    if (sender) {
+      await sender.replaceTrack(track);
+    } else {
+      this.peerConnection.addTrack(track, this.audioStream || new MediaStream([track]));
+    }
+
+    // 오디오 스트림 업데이트
+    if (this.audioStream) {
+      const oldTracks = this.audioStream.getTracks();
+      oldTracks.forEach(t => t.stop());
+    }
+    this.audioStream = new MediaStream([track]);
+  }
 
   async processSdpAnswer(sdpAnswer: string) {
     if (!this.peerConnection) {
@@ -294,52 +377,6 @@ export class WebRTCConnection {
     };
   }
 
-  async replaceAudioTrack(track: MediaStreamTrack) {
-    if (!this.peerConnection) {
-      throw new Error('No peer connection established');
-    }
-
-    try {
-      const sender = this.peerConnection
-        .getSenders()
-        .find(s => s.track?.kind === 'audio');
-
-      if (sender) {
-        console.log('Replacing audio track');
-        await sender.replaceTrack(track);
-        console.log('Audio track replaced successfully');
-      } else {
-        throw new Error('No audio sender found');
-      }
-    } catch (error) {
-      console.error('Failed to replace audio track:', error);
-      throw error;
-    }
-  }
-
-  async replaceVideoTrack(track: MediaStreamTrack) {
-    if (!this.peerConnection) {
-      throw new Error('No peer connection established');
-    }
-
-    try {
-      const sender = this.peerConnection
-        .getSenders()
-        .find(s => s.track?.kind === 'video');
-
-      if (sender) {
-        console.log('Replacing video track');
-        await sender.replaceTrack(track);
-        console.log('Video track replaced successfully');
-      } else {
-        throw new Error('No video sender found');
-      }
-    } catch (error) {
-      console.error('Failed to replace video track:', error);
-      throw error;
-    }
-  }
-
   async toggleAudio(enabled: boolean) {
     if (this.localStream) {
       this.localStream.getAudioTracks().forEach(track => {
@@ -368,37 +405,5 @@ export class WebRTCConnection {
 
   getLocalStream(): MediaStream | null {
     return this.localStream;
-  }
-
-  dispose() {
-    console.log('Disposing WebRTC connection');
-
-    if (this.localStream) {
-      this.localStream.getTracks().forEach(track => {
-        track.enabled = false;
-        track.stop();
-        console.log(`Stopped track: ${track.kind}`);
-      });
-      this.localStream = null;
-    }
-
-    if (this.peerConnection) {
-      // 모든 sender의 track도 정지
-      this.peerConnection.getSenders().forEach(sender => {
-        if (sender.track) {
-          sender.track.enabled = false;
-          sender.track.stop();
-        }
-      });
-      this.peerConnection.close();
-      this.peerConnection = null;
-    }
-
-    this.callConnection = null;
-    this.events = null;
-    this.isPresenter = false;
-    this.reconnectAttempts = 0;
-    this.pendingCandidates = [];
-    console.log('WebRTC connection disposed');
   }
 }

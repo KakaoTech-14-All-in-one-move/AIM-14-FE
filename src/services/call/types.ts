@@ -23,6 +23,7 @@ export interface ChannelMapping {
 
 // User and state related types
 export interface CallUserData {
+  stream?: MediaStream | null | undefined;
   user_id: string;
   username: string;
   profile_image: string;

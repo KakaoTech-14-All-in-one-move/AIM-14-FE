@@ -12,48 +12,61 @@ interface VideoUserBoxProps {
     isVideoOn: boolean;
     isScreenSharing: boolean;
     imageUrl?: string;
-    stream?: MediaStream;
+    stream?: MediaStream | null | undefined;
   };
 }
 
 export const VideoUserBox: React.FC<VideoUserBoxProps> = ({ user }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // 스트림 연결 처리
   useEffect(() => {
     const videoElement = videoRef.current;
     if (!videoElement) return;
 
-    if (user.stream && (user.isVideoOn || user.isScreenSharing)) {
-      console.log('Setting up video stream for user:', {
-        userId: user.id,
-        stream: user.stream,
-        tracks: user.stream.getTracks()
-      });
+    const handleStreamChange = async () => {
+      try {
+        if (user.stream && (user.isVideoOn || user.isScreenSharing)) {
+          console.log('Setting up video stream for user:', {
+            userId: user.id,
+            stream: user.stream,
+            tracks: user.stream.getTracks()
+          });
 
-      videoElement.srcObject = user.stream;
+          // 이전 스트림 정리
+          if (videoElement.srcObject) {
+            videoElement.srcObject = null;
+          }
 
-      // 비디오 재생 시작
-      const playVideo = async () => {
-        try {
+          // 새 스트림 설정
+          videoElement.srcObject = user.stream;
+
+          // loadedmetadata 이벤트를 기다린 후 재생 시도
+          await new Promise((resolve) => {
+            videoElement.onloadedmetadata = () => resolve(true);
+          });
+
+          // 재생 시도 (자동 재생 정책을 고려하여 muted 상태로 재생)
+          videoElement.muted = true;
           await videoElement.play();
-        } catch (error) {
-          console.error('Failed to play video:', error);
+
+          // 실제 mute 상태 적용
+          videoElement.muted = user.isMuted;
+        } else {
+          videoElement.srcObject = null;
         }
-      };
+      } catch (error) {
+        console.error('Video playback error:', error);
+      }
+    };
 
-      playVideo();
-    } else {
-      videoElement.srcObject = null;
-    }
+    handleStreamChange();
 
-    // cleanup
     return () => {
       if (videoElement.srcObject) {
         videoElement.srcObject = null;
       }
     };
-  }, [user.stream, user.isVideoOn, user.isScreenSharing]);
+  }, [user.stream, user.isVideoOn, user.isScreenSharing, user.isMuted]);
 
   return (
     <div
@@ -61,13 +74,11 @@ export const VideoUserBox: React.FC<VideoUserBoxProps> = ({ user }) => {
         ${user.isSpeaking ? 'ring-2 ring-green-500' : ''}
         transition-all duration-200 hover:shadow-xl`}
     >
-      {/* 비디오 또는 유저 이미지 표시 */}
       {user.stream && (user.isVideoOn || user.isScreenSharing) ? (
         <video
           ref={videoRef}
           autoPlay
           playsInline
-          muted={user.isMuted}
           className={`w-full h-full ${user.isScreenSharing ? 'object-contain' : 'object-cover'}`}
         />
       ) : (
@@ -76,7 +87,7 @@ export const VideoUserBox: React.FC<VideoUserBoxProps> = ({ user }) => {
             <img
               src={import.meta.env.VITE_BE_SERVER_URL + user.imageUrl}
               alt={user.nickname}
-              className="w-28 h-28 rounded-full mr-2"
+              className="w-28 h-28 rounded-full"
             />
           ) : (
             <DefaultProfileImage username={user.nickname} size={80} margin="mr-1" />

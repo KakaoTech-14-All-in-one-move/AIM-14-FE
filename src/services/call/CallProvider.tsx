@@ -9,6 +9,7 @@ interface CallContextType {
   connection: CallConnection | null;
   currentUser: CallUserData | null;
   isConnected: boolean;
+  connectionStatus: string;
   joinChannel: (channelId: string, type: MediaChannelType) => void;
   leaveChannel: () => void;
   updateUserState: (state: VoiceStateUpdate) => void;
