@@ -127,8 +127,8 @@ export class WebRTCConnection {
         video: isVideoChannel ? {
           width: { ideal: 1280 },
           height: { ideal: 720 },
-          frameRate: { ideal: 30 }
-        } : false
+          frameRate: { ideal: 30 },
+        } : false,
       };
 
       console.log(`Requesting media stream for ${isVideoChannel ? 'video' : 'voice'} channel`);
@@ -152,7 +152,7 @@ export class WebRTCConnection {
       // Offer 생성 및 전송
       const offer = await this.peerConnection!.createOffer({
         offerToReceiveAudio: true,
-        offerToReceiveVideo: isVideoChannel
+        offerToReceiveVideo: isVideoChannel,
       });
 
       await this.peerConnection!.setLocalDescription(offer);
@@ -254,26 +254,6 @@ export class WebRTCConnection {
     }
   }
 
-  async replaceVideoTrack(track: MediaStreamTrack) {
-    if (!this.peerConnection) return;
-
-    const sender = this.peerConnection.getSenders()
-      .find(s => s.track?.kind === 'video');
-
-    if (sender) {
-      await sender.replaceTrack(track);
-    } else {
-      this.peerConnection.addTrack(track, this.videoStream || new MediaStream([track]));
-    }
-
-    // 비디오 스트림 업데이트
-    if (this.videoStream) {
-      const oldTracks = this.videoStream.getTracks();
-      oldTracks.forEach(t => t.stop());
-    }
-    this.videoStream = new MediaStream([track]);
-  }
-
   async processSdpAnswer(sdpAnswer: string) {
     if (!this.peerConnection) {
       throw new Error('No peer connection established');
@@ -357,6 +337,27 @@ export class WebRTCConnection {
     };
   }
 
+  async replaceVideoTrack(track: MediaStreamTrack | null) {
+    if (!this.peerConnection) return;
+
+    const sender = this.peerConnection.getSenders()
+      .find(s => s.track?.kind === 'video');
+
+    if (sender) {
+      await sender.replaceTrack(track);
+    } else if (track) {
+      this.peerConnection.addTrack(track, new MediaStream([track]));
+    }
+
+    // Update video stream reference
+    if (track) {
+      this.videoStream = new MediaStream([track]);
+    } else if (this.videoStream) {
+      this.videoStream.getTracks().forEach(t => t.stop());
+      this.videoStream = null;
+    }
+  }
+
   async removeVideoTrack() {
     if (!this.peerConnection) return;
 
@@ -365,6 +366,10 @@ export class WebRTCConnection {
 
     if (sender) {
       await sender.replaceTrack(null);
+
+      if (sender.track) {
+        sender.track.stop();
+      }
     }
 
     if (this.videoStream) {

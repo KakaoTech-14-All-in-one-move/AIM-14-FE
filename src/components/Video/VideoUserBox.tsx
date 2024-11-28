@@ -26,36 +26,39 @@ export const VideoUserBox: React.FC<VideoUserBoxProps> = ({ user }) => {
     const handleStreamChange = async () => {
       try {
         if (user.stream && (user.isVideoOn || user.isScreenSharing)) {
-          console.log('Setting up video stream for user:', {
-            userId: user.id,
-            stream: user.stream,
-            tracks: user.stream.getTracks()
-          });
-
           // 이전 스트림 정리
           if (videoElement.srcObject) {
             videoElement.srcObject = null;
           }
 
-          // 새 스트림 설정
-          videoElement.srcObject = user.stream;
-
-          // loadedmetadata 이벤트를 기다린 후 재생 시도
-          await new Promise((resolve) => {
-            videoElement.onloadedmetadata = () => resolve(true);
+          console.log('Setting up video stream:', {
+            isVideoOn: user.isVideoOn,
+            isScreenSharing: user.isScreenSharing,
+            stream: user.stream,
           });
 
-          // 재생 시도 (자동 재생 정책을 고려하여 muted 상태로 재생)
-          videoElement.muted = true;
-          await videoElement.play();
+          videoElement.srcObject = user.stream;
+
+          try {
+            // loadedmetadata 이벤트를 기다린 후 재생 시도
+            await videoElement.play();
+            console.log('Video playback started successfully');
+          } catch (playError) {
+            console.error('Failed to start video playback:', playError);
+            // 자동 재생 실패 시 muted로 재시도
+            videoElement.muted = true;
+            await videoElement.play();
+          }
 
           // 실제 mute 상태 적용
           videoElement.muted = user.isMuted;
         } else {
-          videoElement.srcObject = null;
+          if (videoElement.srcObject) {
+            videoElement.srcObject = null;
+          }
         }
       } catch (error) {
-        console.error('Video playback error:', error);
+        console.error('Video stream setup error:', error);
       }
     };
 

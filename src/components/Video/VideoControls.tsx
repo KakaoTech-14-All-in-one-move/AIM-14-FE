@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useCall } from '@/services/call/CallProvider';
-import { useVoiceChat } from '@/hooks/useVoiceChat';
+import { useVideoChat } from '@/hooks/useVideoChat';
 import { useCallback, useEffect, useRef } from 'react';
 import {
   Camera,
@@ -13,17 +13,14 @@ import {
   MonitorUp,
   PhoneOff,
 } from 'lucide-react';
-import { ControlButton } from '../Voice/ControlButton';
-import { WebRTCConnection } from '@/services/call/webrtc/WebRTCConnection.ts';
-
-interface VideoControlsProps {
-  show: boolean;
-}
+import { ControlButton } from '../Video/ControlButton';
+import { WebRTCConnection } from '@/services/call/webrtc/WebRTCConnection';
+import { VideoControlsProps } from '@/components/Video/types/video';
 
 export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
   const navigate = useNavigate();
   const { connection, currentUser } = useCall();
-  const voiceChatStore = useVoiceChat();
+  const videoChatStore = useVideoChat();
 
   // 비디오/오디오 스트림 ref
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -48,31 +45,20 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
     if (!connection || !currentUser) return;
 
     try {
-      const videoEnabled = !currentUser.camera_on;
-
-      // 화면 공유 중이라면 전환 확인
-      if (videoEnabled && currentUser.screen_sharing) {
-        const confirmSwitch = window.confirm(
-          '화면 공유를 중단하고 카메라를 활성화하시겠습니까?',
-        );
-        if (!confirmSwitch) return;
-
-        // 화면 공유 중단
-        if (screenStreamRef.current) {
-          screenStreamRef.current.getTracks().forEach(track => track.stop());
-          screenStreamRef.current = null;
-        }
-
-        // 화면 공유 VideoBox 제거
-        voiceChatStore.removeUser(currentUser.user_id + '_screen');
-
-        connection.updateState({
-          screen_sharing: false,
-        });
-      }
+      const videoEnabled = !videoChatStore.isCameraOn;
 
       if (videoEnabled) {
-        // 카메라 켜기
+        // 화면 공유 중이면 먼저 중지
+        if (videoChatStore.isScreenSharing) {
+          if (screenStreamRef.current) {
+            screenStreamRef.current.getTracks().forEach(track => track.stop());
+            screenStreamRef.current = null;
+          }
+          videoChatStore.removeUser(currentUser.user_id + '_screen');
+          videoChatStore.toggleScreenShare();  // 화면 공유 상태도 토글
+        }
+
+        // 카메라 시작
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             width: { ideal: 1280 },
@@ -81,45 +67,51 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
           audio: false,
         });
 
+        // 기존 스트림 정리
         if (localStreamRef.current) {
           localStreamRef.current.getTracks().forEach(track => track.stop());
         }
         localStreamRef.current = stream;
 
-        // WebRTC 연결에 비디오 트랙 추가
+        // WebRTC 연결 설정
         const webrtc = WebRTCConnection.getInstance();
+        await webrtc.initializePresenter(null);  // WebRTC 초기화
         await webrtc.replaceVideoTrack(stream.getVideoTracks()[0]);
 
+        // 서버 상태 업데이트
         connection.updateState({
           camera_on: true,
           screen_sharing: false,
         });
 
-        voiceChatStore.updateUserStatus(currentUser.user_id, {
+        // 로컬 상태 업데이트
+        videoChatStore.updateUserStatus(currentUser.user_id, {
           camera_on: true,
           screen_sharing: false,
           stream,
         });
+        videoChatStore.toggleCamera();
+
       } else {
-        // 카메라 끄기
+        // 카메라 중지
         if (localStreamRef.current) {
           localStreamRef.current.getTracks().forEach(track => track.stop());
           localStreamRef.current = null;
 
-          // WebRTC 연결에서 비디오 트랙 제거
           const webrtc = WebRTCConnection.getInstance();
-          await webrtc.initializePresenter(null);
           await webrtc.removeVideoTrack();
         }
 
+        // 상태 업데이트
         connection.updateState({
           camera_on: false,
         });
 
-        voiceChatStore.updateUserStatus(currentUser.user_id, {
+        videoChatStore.updateUserStatus(currentUser.user_id, {
           camera_on: false,
           stream: null,
         });
+        videoChatStore.toggleCamera();
       }
     } catch (error) {
       console.error('Failed to toggle camera:', error);
@@ -129,16 +121,34 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
         alert('카메라를 시작하는데 문제가 발생했습니다.');
       }
     }
-  }, [connection, currentUser, voiceChatStore]);
+  }, [connection, currentUser, videoChatStore]);
 
   const handleToggleScreenShare = useCallback(async () => {
     if (!connection || !currentUser) return;
 
     try {
-      const screenSharingEnabled = !currentUser.screen_sharing;
+      const screenSharingEnabled = !videoChatStore.isScreenSharing;
 
       if (screenSharingEnabled) {
-        // 화면 공유 시작
+        // If camera is on, turn it off first
+        if (videoChatStore.isCameraOn) {
+          if (localStreamRef.current) {
+            localStreamRef.current.getTracks().forEach(track => track.stop());
+            localStreamRef.current = null;
+          }
+
+          connection.updateState({
+            camera_on: false,
+          });
+
+          videoChatStore.updateUserStatus(currentUser.user_id, {
+            camera_on: false,
+            stream: null,
+          });
+          videoChatStore.toggleCamera();
+        }
+
+        // Start screen sharing
         const displayStream = await navigator.mediaDevices.getDisplayMedia({
           video: {
             width: { ideal: 1920 },
@@ -147,67 +157,55 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
           audio: false,
         });
 
-        // 화면 공유가 중단되었을 때 자동으로 상태 업데이트
+        // Handle stream end event
         displayStream.getVideoTracks()[0].onended = () => {
           handleToggleScreenShare();
         };
 
-        // 기존 카메라 스트림 중지
-        if (localStreamRef.current) {
-          localStreamRef.current.getTracks().forEach(track => track.stop());
-          localStreamRef.current = null;
-        }
-
         screenStreamRef.current = displayStream;
 
-        // WebRTC 연결에 화면 공유 트랙 추가
         const webrtc = WebRTCConnection.getInstance();
-        await webrtc.initializePresenter(null);
         await webrtc.replaceVideoTrack(displayStream.getVideoTracks()[0]);
 
-        // 서버 상태 업데이트
         connection.updateState({
           screen_sharing: true,
           camera_on: false,
         });
 
-        // 새로운 화면 공유 VideoBox를 위한 상태 업데이트
-        voiceChatStore.addUser({
+        // Add screen share video box
+        videoChatStore.addUser({
           ...currentUser,
           user_id: currentUser.user_id + '_screen',
           screen_sharing: true,
           camera_on: false,
           stream: displayStream,
         });
-
-        voiceChatStore.updateUserStatus(currentUser.user_id, {
-          camera_on: false,
-          screen_sharing: false,
-          stream: null,  // 기존 카메라 스트림 제거
-        });
+        videoChatStore.toggleScreenShare();
 
       } else {
-        // 화면 공유 중지
         if (screenStreamRef.current) {
           screenStreamRef.current.getTracks().forEach(track => track.stop());
           screenStreamRef.current = null;
+
+          const webrtc = WebRTCConnection.getInstance();
+          await webrtc.removeVideoTrack();
         }
 
-        // 화면 공유 VideoBox 제거
-        voiceChatStore.removeUser(currentUser.user_id + '_screen');
+        videoChatStore.removeUser(currentUser.user_id + '_screen');
 
         connection.updateState({
           screen_sharing: false,
         });
 
-        voiceChatStore.updateUserStatus(currentUser.user_id, {
+        videoChatStore.updateUserStatus(currentUser.user_id, {
           screen_sharing: false,
         });
+        videoChatStore.toggleScreenShare();
       }
     } catch (error) {
       console.error('Failed to toggle screen share:', error);
     }
-  }, [connection, currentUser, voiceChatStore]);
+  }, [connection, currentUser, videoChatStore]);
 
   const handleToggleMute = useCallback(() => {
     if (!connection || !currentUser) return;
@@ -216,17 +214,15 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
       return;
     }
 
-    // 서버 상태 업데이트
     connection.updateState({
-      muted: !currentUser.muted,
+      muted: !videoChatStore.isMuted,
     });
 
-    // 로컬 상태 업데이트
-    voiceChatStore.updateUserStatus(currentUser.user_id, {
-      ...currentUser,
-      muted: !currentUser.muted,
+    videoChatStore.updateUserStatus(currentUser.user_id, {
+      muted: !videoChatStore.isMuted,
     });
-  }, [connection, currentUser, voiceChatStore]);
+    videoChatStore.toggleMute();
+  }, [connection, currentUser, videoChatStore]);
 
   const handleToggleDeafen = useCallback(() => {
     if (!connection || !currentUser) return;
@@ -235,44 +231,33 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
       return;
     }
 
-    // 서버 상태 업데이트
     connection.updateState({
-      deafened: !currentUser.deafened,
+      deafened: !videoChatStore.isDeafened,
     });
 
-    // 로컬 상태 업데이트
-    voiceChatStore.updateUserStatus(currentUser.user_id, {
-      ...currentUser,
-      deafened: !currentUser.deafened,
+    videoChatStore.updateUserStatus(currentUser.user_id, {
+      deafened: !videoChatStore.isDeafened,
     });
-  }, [connection, currentUser, voiceChatStore]);
+    videoChatStore.toggleDeafen();
+  }, [connection, currentUser, videoChatStore]);
 
   const handleDisconnect = useCallback(() => {
     if (!connection) return;
 
-    // 모든 미디어 스트림 정리
     if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => {
-        track.stop();
-        console.log('Stopped track:', track.kind);
-      });
+      localStreamRef.current.getTracks().forEach(track => track.stop());
       localStreamRef.current = null;
     }
     if (screenStreamRef.current) {
-      screenStreamRef.current.getTracks().forEach(track => {
-        track.stop();
-        console.log('Stopped track:', track.kind);
-      });
+      screenStreamRef.current.getTracks().forEach(track => track.stop());
       screenStreamRef.current = null;
     }
 
-    // WebRTC 연결 정리
     const webrtc = WebRTCConnection.getInstance();
-    webrtc.dispose(); // WebRTC 연결과 모든 미디어 트랙을 정리
+    webrtc.dispose();
 
-    // VoiceChat 스토어 상태 초기화
     if (currentUser) {
-      voiceChatStore.updateUserStatus(currentUser.user_id, {
+      videoChatStore.updateUserStatus(currentUser.user_id, {
         camera_on: false,
         screen_sharing: false,
         stream: null,
@@ -281,34 +266,38 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
 
     connection.leaveChannel();
     navigate('/home');
-  }, [connection, navigate, currentUser, voiceChatStore]);
+  }, [connection, navigate, currentUser, videoChatStore]);
 
   return (
-    <div className={`absolute bottom-6 left-1/2 transform -translate-x-1/2 flex items-center space-x-2
-transition-opacity duration-200 ${show ? 'opacity-100' : 'opacity-0'}`}>
+    <div
+      className={`absolute bottom-6 left-1/2 transform -translate-x-1/2 flex items-center space-x-2
+        transition-opacity duration-200 ${show ? 'opacity-100' : 'opacity-0'}`}
+    >
       <ControlButton
-        icon={currentUser?.camera_on ? Camera : CameraOff}
+        icon={videoChatStore.isCameraOn ? Camera : CameraOff}
         onClick={handleToggleCamera}
-        tooltip={currentUser?.camera_on ? 'Turn Off Camera' : 'Turn On Camera'}
-        active={!currentUser?.camera_on}
+        tooltip={videoChatStore.isCameraOn ? 'Turn Off Camera' : 'Turn On Camera'}
+        active={videoChatStore.isCameraOn}
+        disabled={videoChatStore.isScreenSharing}
       />
       <ControlButton
-        icon={currentUser?.muted ? MicOff : Mic}
+        icon={videoChatStore.isMuted ? MicOff : Mic}
         onClick={handleToggleMute}
-        tooltip={currentUser?.muted ? 'Unmute' : 'Mute'}
-        active={currentUser?.muted}
+        tooltip={videoChatStore.isMuted ? 'Unmute' : 'Mute'}
+        active={videoChatStore.isMuted}
       />
       <ControlButton
-        icon={currentUser?.deafened ? HeadphoneOff : Headphones}
+        icon={videoChatStore.isDeafened ? HeadphoneOff : Headphones}
         onClick={handleToggleDeafen}
-        tooltip={currentUser?.deafened ? 'Undeafen' : 'Deafen'}
-        active={currentUser?.deafened}
+        tooltip={videoChatStore.isDeafened ? 'Undeafen' : 'Deafen'}
+        active={videoChatStore.isDeafened}
       />
       <ControlButton
-        icon={currentUser?.screen_sharing ? MonitorOff : MonitorUp}
+        icon={videoChatStore.isScreenSharing ? MonitorOff : MonitorUp}
         onClick={handleToggleScreenShare}
-        tooltip={currentUser?.screen_sharing ? 'Stop Sharing' : 'Share Screen'}
-        active={currentUser?.screen_sharing}
+        tooltip={videoChatStore.isScreenSharing ? 'Stop Screen Share' : 'Share Screen'}
+        active={videoChatStore.isScreenSharing}
+        disabled={videoChatStore.isCameraOn}
       />
       <ControlButton
         icon={PhoneOff}
