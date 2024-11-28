@@ -274,26 +274,6 @@ export class WebRTCConnection {
     this.videoStream = new MediaStream([track]);
   }
 
-  async replaceAudioTrack(track: MediaStreamTrack) {
-    if (!this.peerConnection) return;
-
-    const sender = this.peerConnection.getSenders()
-      .find(s => s.track?.kind === 'audio');
-
-    if (sender) {
-      await sender.replaceTrack(track);
-    } else {
-      this.peerConnection.addTrack(track, this.audioStream || new MediaStream([track]));
-    }
-
-    // 오디오 스트림 업데이트
-    if (this.audioStream) {
-      const oldTracks = this.audioStream.getTracks();
-      oldTracks.forEach(t => t.stop());
-    }
-    this.audioStream = new MediaStream([track]);
-  }
-
   async processSdpAnswer(sdpAnswer: string) {
     if (!this.peerConnection) {
       throw new Error('No peer connection established');
@@ -375,6 +355,22 @@ export class WebRTCConnection {
       }
       audioContext.close();
     };
+  }
+
+  async removeVideoTrack() {
+    if (!this.peerConnection) return;
+
+    const sender = this.peerConnection.getSenders()
+      .find(s => s.track?.kind === 'video');
+
+    if (sender) {
+      await sender.replaceTrack(null);
+    }
+
+    if (this.videoStream) {
+      this.videoStream.getTracks().forEach(t => t.stop());
+      this.videoStream = null;
+    }
   }
 
   async toggleAudio(enabled: boolean) {

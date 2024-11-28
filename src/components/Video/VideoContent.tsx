@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
 import { VideoUserBox } from '@/components/Video/VideoUserBox';
 import { VideoControls } from '@/components/Video/VideoControls';
 import { useCall } from '@/services/call/CallProvider';
@@ -9,7 +8,6 @@ export const VideoContent = () => {
   const [showControls, setShowControls] = useState(false);
   const { currentUser, connection, connectionStatus } = useCall();
   const voiceChatStore = useVoiceChat();
-  useParams();
 
   // 채널 연결 상태 모니터링
   useEffect(() => {

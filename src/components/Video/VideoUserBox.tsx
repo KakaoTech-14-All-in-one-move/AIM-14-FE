@@ -107,7 +107,7 @@ export const VideoUserBox: React.FC<VideoUserBoxProps> = ({ user }) => {
             <HeadphoneOff className="w-6 h-6 text-white" />
           </div>
         )}
-        {!user.isVideoOn && (
+        {!user.isVideoOn && !user.isScreenSharing && (
           <div className="bg-red-500 rounded-full p-3">
             <CameraOff className="w-6 h-6 text-white" />
           </div>
