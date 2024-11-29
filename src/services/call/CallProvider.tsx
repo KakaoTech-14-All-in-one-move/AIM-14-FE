@@ -112,11 +112,29 @@ export function CallProvider({ children }: CallProviderProps) {
     };
   }, []);
 
-  const contextValue = {
-    users: state.users,
+  const joinChannel = useCallback((channelId: string, type: MediaChannelType) => {
+    connectionRef.current?.joinChannel(channelId, type);
+  }, []);
+
+  const leaveChannel = useCallback(() => {
+    if (connectionRef.current) {
+      connectionRef.current.leaveChannel();
+      useVoiceChat.getState().resetState();
+    }
+  }, []);
+
+  const updateUserState = useCallback((state: VoiceStateUpdate) => {
+    connectionRef.current?.updateState(state);
+  }, []);
+
+  const contextValue: CallContextType = {
     currentUser: state.currentUser,
     connection: connectionRef.current,
-    connectionStatus: state.connectionStatus
+    connectionStatus: state.connectionStatus,
+    isConnected: state.connectionStatus === 'CONNECTED',
+    joinChannel,
+    leaveChannel,
+    updateUserState
   };
 
   return (
