@@ -59,6 +59,12 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
     const name = prompt('채널 이름을 입력하세요:');
     if (!name) return;
 
+    // 이미 해당 채널에 입장한 상태인지 확인
+    if (connection.isInChannel() && connection.currentChannelId === channelId) {
+      console.log('Already in this channel');
+      return;
+    }
+
     try {
       await channelStore.addChannel(selectedServerId, {
         channelName: name,

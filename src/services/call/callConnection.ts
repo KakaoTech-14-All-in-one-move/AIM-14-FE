@@ -34,7 +34,7 @@ export class CallConnection {
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private reconnectTimeout: NodeJS.Timeout | null = null;
   private currentServerId: string = CALL_API.DEFAULT_SERVER_ID;
-  private currentChannelId: string | null = null;
+  currentChannelId: string | null = null;
   private onStateUpdate: (state: CallState) => void;
   private accessToken: string;
   state: CallState = {
