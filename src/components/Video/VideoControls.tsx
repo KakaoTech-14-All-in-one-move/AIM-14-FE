@@ -54,8 +54,19 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
             screenStreamRef.current.getTracks().forEach(track => track.stop());
             screenStreamRef.current = null;
           }
+
+          // WebRTC 트랙 제거
+          const webrtc = WebRTCConnection.getInstance();
+          await webrtc.removeVideoTrack();
+
+          // 화면 공유 상태 업데이트
           videoChatStore.removeUser(currentUser.user_id + '_screen');
-          videoChatStore.toggleScreenShare();  // 화면 공유 상태도 토글
+          videoChatStore.toggleScreenShare();
+
+          // 서버에 화면 공유 중지 상태 전송
+          connection.updateState({
+            screen_sharing: false
+          });
         }
 
         // 카메라 시작
@@ -75,7 +86,6 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
 
         // WebRTC 연결 설정
         const webrtc = WebRTCConnection.getInstance();
-        await webrtc.initializePresenter(null);  // WebRTC 초기화
         await webrtc.replaceVideoTrack(stream.getVideoTracks()[0]);
 
         // 서버 상태 업데이트
@@ -102,11 +112,12 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
           await webrtc.removeVideoTrack();
         }
 
-        // 상태 업데이트
+        // 서버 상태 업데이트
         connection.updateState({
           camera_on: false,
         });
 
+        // 로컬 상태 업데이트
         videoChatStore.updateUserStatus(currentUser.user_id, {
           camera_on: false,
           stream: null,
@@ -130,13 +141,17 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
       const screenSharingEnabled = !videoChatStore.isScreenSharing;
 
       if (screenSharingEnabled) {
-        // If camera is on, turn it off first
+        // 카메라가 켜져있으면 먼저 끄기
         if (videoChatStore.isCameraOn) {
           if (localStreamRef.current) {
             localStreamRef.current.getTracks().forEach(track => track.stop());
             localStreamRef.current = null;
           }
 
+          const webrtc = WebRTCConnection.getInstance();
+          await webrtc.removeVideoTrack();
+
+          // 카메라 끄기 상태 서버에 전송
           connection.updateState({
             camera_on: false,
           });
@@ -148,7 +163,7 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
           videoChatStore.toggleCamera();
         }
 
-        // Start screen sharing
+        // 화면 공유 시작
         const displayStream = await navigator.mediaDevices.getDisplayMedia({
           video: {
             width: { ideal: 1920 },
@@ -157,7 +172,7 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
           audio: false,
         });
 
-        // Handle stream end event
+        // 화면 공유 종료 이벤트 핸들러
         displayStream.getVideoTracks()[0].onended = () => {
           handleToggleScreenShare();
         };
@@ -167,19 +182,23 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
         const webrtc = WebRTCConnection.getInstance();
         await webrtc.replaceVideoTrack(displayStream.getVideoTracks()[0]);
 
+        // 서버 상태 업데이트
         connection.updateState({
           screen_sharing: true,
           camera_on: false,
         });
 
-        // Add screen share video box
-        videoChatStore.addUser({
+        // 화면 공유 비디오 박스 추가
+        const screenShareUser = {
           ...currentUser,
           user_id: currentUser.user_id + '_screen',
           screen_sharing: true,
           camera_on: false,
           stream: displayStream,
-        });
+        };
+
+        // VideoChat store 상태 업데이트
+        videoChatStore.addUser(screenShareUser);
         videoChatStore.toggleScreenShare();
 
       } else {
@@ -191,12 +210,15 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
           await webrtc.removeVideoTrack();
         }
 
+        // 화면 공유 사용자 제거
         videoChatStore.removeUser(currentUser.user_id + '_screen');
 
+        // 서버 상태 업데이트
         connection.updateState({
           screen_sharing: false,
         });
 
+        // 로컬 상태 업데이트
         videoChatStore.updateUserStatus(currentUser.user_id, {
           screen_sharing: false,
         });

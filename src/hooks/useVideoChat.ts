@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { CallUserData } from '@/services/call/types';
 
 interface VideoChatStore {
+  isSpeaking: boolean;
   users: CallUserData[];
   isCameraOn: boolean;
   isScreenSharing: boolean;
@@ -32,6 +33,7 @@ const initialState = {
 export const useVideoChat = create<VideoChatStore>((set) => ({
   ...initialState,
   users: [],
+  isSpeaking: false,
   isCameraOn: false,
   isScreenSharing: false,
   isMuted: false,

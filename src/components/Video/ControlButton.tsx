@@ -9,8 +9,6 @@ interface ControlButtonProps {
   disabled?: boolean;
   className?: string;
 }
-
-// ControlButton.tsx
 export const ControlButton: React.FC<ControlButtonProps> = ({
                                                               icon: Icon,
                                                               onClick,
@@ -19,9 +17,11 @@ export const ControlButton: React.FC<ControlButtonProps> = ({
                                                               disabled = false,
                                                               className = ''
                                                             }) => {
-  const defaultClass = active
-    ? 'bg-red-500 hover:bg-red-600'
-    : 'bg-gray-700 hover:bg-gray-600';
+  const isCameraButton = tooltip.includes('Camera');
+
+  const defaultClass = isCameraButton
+    ? (active ? 'bg-gray-700 hover:bg-gray-600' : 'bg-red-500 hover:bg-red-600')
+    : (active ? 'bg-red-500 hover:bg-red-600' : 'bg-gray-700 hover:bg-gray-600');
 
   return (
     <button
@@ -31,7 +31,7 @@ export const ControlButton: React.FC<ControlButtonProps> = ({
         ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
         ${className || defaultClass}`}
     >
-      <Icon className={`w-5 h-5 text-white`} />
+      <Icon className="w-5 h-5 text-white" />
       <span
         className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs
           py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200

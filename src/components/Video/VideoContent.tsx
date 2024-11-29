@@ -23,38 +23,42 @@ export const VideoContent = () => {
     console.log('VideoChat store users:', videoChatStore.users);
   }, [videoChatStore.users]);
 
-  // VideoContent.tsx의 기존 users 매핑 부분을 수정
   const uniqueUsers = useMemo(() => {
-    // 현재 사용자가 없으면 빈 배열 반환
     if (!currentUser) return [];
 
-    // 기본적으로 현재 사용자를 포함
-    const defaultUser = {
-      ...currentUser,
-      stream: null, // stream은 별도로 관리됨
-    };
-
     const userMap = new Map();
-    // 현재 사용자를 먼저 추가
-    userMap.set(currentUser.user_id, defaultUser);
 
-    // videoChatStore의 users를 순회하며 추가
     videoChatStore.users.forEach(user => {
-      const key = user.user_id;
-      const existingUser = userMap.get(key);
+      const isCurrentUser = user.user_id === currentUser.user_id;
+      const isScreenShare = user.user_id === `${currentUser.user_id}_screen`;
 
-      // 기존 사용자가 있다면 스트림과 상태를 보존하면서 업데이트
-      userMap.set(key, {
-        ...(existingUser || {}),  // 기존 사용자 정보 보존
-        ...user,  // 새로운 정보로 업데이트
-        camera_on: user.camera_on || (key === currentUser.user_id && videoChatStore.isCameraOn),
-        screen_sharing: user.screen_sharing || (key === currentUser.user_id && videoChatStore.isScreenSharing),
-        stream: existingUser?.stream || user.stream,  // 기존 스트림 보존
+      userMap.set(user.user_id, {
+        ...user,
+        camera_on: isCurrentUser ? videoChatStore.isCameraOn : user.camera_on,
+        screen_sharing: isScreenShare ? videoChatStore.isScreenSharing : user.screen_sharing,
+        muted: isCurrentUser ? videoChatStore.isMuted : user.muted,
+        deafened: isCurrentUser ? videoChatStore.isDeafened : user.deafened,
+        speaking: isCurrentUser ? videoChatStore.isSpeaking : user.speaking,
       });
     });
 
+    // 현재 사용자가 맵에 없다면 추가
+    if (!userMap.has(currentUser.user_id)) {
+      userMap.set(currentUser.user_id, {
+        ...currentUser,
+        camera_on: videoChatStore.isCameraOn,
+        screen_sharing: false,
+        muted: videoChatStore.isMuted,
+        deafened: videoChatStore.isDeafened,
+        speaking: videoChatStore.isSpeaking,
+        stream: null,
+      });
+    }
+
     return Array.from(userMap.values());
-  }, [currentUser, videoChatStore.users, videoChatStore.isCameraOn, videoChatStore.isScreenSharing]);
+  }, [currentUser, videoChatStore.users, videoChatStore.isCameraOn,
+    videoChatStore.isScreenSharing, videoChatStore.isMuted,
+    videoChatStore.isDeafened, videoChatStore.isSpeaking]);
 
 // uniqueUsers 체크 조건 수정
   if (!currentUser) return null; // 사용자가 없을 때만 null 반환
