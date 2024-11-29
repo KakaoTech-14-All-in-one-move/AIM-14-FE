@@ -19,74 +19,67 @@ interface VideoUserBoxProps {
 export const VideoUserBox: React.FC<VideoUserBoxProps> = ({ user }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
 
+  // VideoUserBox.tsx의 useEffect 부분 수정
   useEffect(() => {
     const videoElement = videoRef.current;
     if (!videoElement) return;
 
     const handleStreamChange = async () => {
       try {
-        // 비디오 스트림이 있고, 카메라나 화면 공유가 켜져있을 때
         if (user.stream && (user.isVideoOn || user.isScreenSharing)) {
-          console.log('Setting up video stream for user:', user.id, {
-            stream: user.stream,
-            isVideoOn: user.isVideoOn,
-            isScreenSharing: user.isScreenSharing
-          });
-
-          // 이전 스트림 정리
-          if (videoElement.srcObject) {
-            const oldStream = videoElement.srcObject as MediaStream;
-            oldStream.getTracks().forEach(track => track.stop());
-            videoElement.srcObject = null;
-          }
-
-          // 새 스트림 설정 전에 약간의 지연을 줍니다
-          await new Promise(resolve => setTimeout(resolve, 100));
-
-          // 새 스트림 설정
-          videoElement.srcObject = user.stream;
-          videoElement.muted = true;
-
-          try {
-            // play 시도 전에 readyState 확인
-            if (videoElement.readyState >= 2) { // HAVE_CURRENT_DATA 이상
-              await videoElement.play();
-              console.log('Video playback started successfully for user:', user.id);
-            } else {
-              // 미디어가 로드될 때까지 대기
-              await new Promise((resolve) => {
-                videoElement.addEventListener('loadeddata', resolve, { once: true });
-              });
-              await videoElement.play();
-            }
-          } catch (playError) {
-            console.error('Failed to start video playback:', playError);
-            // 실패 시 재시도
+          // 이전 스트림과 다를 때만 srcObject 업데이트
+          if (videoElement.srcObject !== user.stream) {
+            videoElement.srcObject = user.stream;
             videoElement.muted = true;
-            await videoElement.play();
+
+            // loadedmetadata 이벤트를 기다린 후 재생 시도
+            await new Promise((resolve) => {
+              const handleLoaded = () => {
+                videoElement.removeEventListener('loadedmetadata', handleLoaded);
+                resolve(null);
+              };
+              videoElement.addEventListener('loadedmetadata', handleLoaded);
+            });
+
+            // 재생 시도 및 재시도 로직
+            const attemptPlay = async (retries: number = 3): Promise<void> => {
+              try {
+                await videoElement.play();
+                console.log('Video playback started successfully');
+              } catch (error: unknown) {
+                if (retries > 0 && error instanceof DOMException && error.name === 'AbortError') {
+                  console.log(`Retrying playback, attempts left: ${retries-1}`);
+                  await new Promise(resolve => setTimeout(resolve, 200));
+                  await attemptPlay(retries - 1);
+                } else {
+                  console.error('Failed to start video playback:', error);
+                  throw error;
+                }
+              }
+            };
+
+            await attemptPlay();
           }
         } else {
+          // 비디오가 꺼져있을 때 srcObject 제거
           if (videoElement.srcObject) {
-            const oldStream = videoElement.srcObject as MediaStream;
-            oldStream.getTracks().forEach(track => track.stop());
             videoElement.srcObject = null;
           }
         }
       } catch (error) {
-        console.error('Video stream setup error:', error);
+        console.error('Error in handleStreamChange:', error);
       }
     };
+
     handleStreamChange();
 
-    // Cleanup function
+    // Cleanup
     return () => {
       if (videoElement.srcObject) {
-        const stream = videoElement.srcObject as MediaStream;
-        stream.getTracks().forEach(track => track.stop());
         videoElement.srcObject = null;
       }
     };
-  }, [user.stream, user.isVideoOn, user.isScreenSharing, user.id]);
+  }, [user.stream, user.isVideoOn, user.isScreenSharing]);
 
   return (
     <div

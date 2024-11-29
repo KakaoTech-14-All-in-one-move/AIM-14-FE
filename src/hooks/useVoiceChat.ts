@@ -14,7 +14,15 @@ interface VoiceChatStore {
   toggleMute: () => void;
   toggleDeafen: () => void;
   updateUserSpeaking: (userId: string, isSpeaking: boolean) => void;
+  resetState: () => void;
 }
+
+const initialState = {
+  users: [],
+  isMuted: false,
+  isDeafened: false,
+  speakingUsers: new Set<string>(),
+};
 
 export const useVoiceChat = create<VoiceChatStore>((set) => ({
   users: [],
@@ -72,5 +80,9 @@ export const useVoiceChat = create<VoiceChatStore>((set) => ({
 
   toggleMute: () => set(state => ({ isMuted: !state.isMuted })),
 
-  toggleDeafen: () => set(state => ({ isDeafened: !state.isDeafened }))
+  toggleDeafen: () => set(state => ({ isDeafened: !state.isDeafened })),
+
+  resetState: () => {
+    set(initialState);
+  },
 }));

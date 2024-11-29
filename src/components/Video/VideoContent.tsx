@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { VideoUserBox } from '@/components/Video/VideoUserBox';
 import { VideoControls } from '@/components/Video/VideoControls';
 import { useCall } from '@/services/call/CallProvider';
@@ -9,9 +9,15 @@ export const VideoContent = () => {
   const { currentUser } = useCall();
   const videoChatStore = useVideoChat();
 
-  const allUsers = currentUser
-    ? [...videoChatStore.users.filter(u => u.user_id !== currentUser.user_id), currentUser]
-    : videoChatStore.users;
+  const allUsers = useMemo(() => {
+    const currentUserInStore = videoChatStore.users.find(
+      u => u.user_id === currentUser?.user_id
+    );
+    return currentUserInStore
+      ? videoChatStore.users
+      : [...videoChatStore.users, currentUser];
+  }, [videoChatStore.users, currentUser]);
+
 
   if (!allUsers?.length) return null;
 

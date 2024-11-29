@@ -23,18 +23,18 @@ export interface ChannelMapping {
 
 // User and state related types
 export interface CallUserData {
-  stream?: MediaStream | null | undefined;
   user_id: string;
-  username: string;
-  profile_image: string;
+  username: string;  // 필수 필드로 변경
   server_id: string;
   channel_id: string;
-  channel_type: MediaChannelType;
-  muted: boolean;
-  deafened: boolean;
-  speaking: boolean;
-  camera_on: boolean;
-  screen_sharing: boolean;
+  channel_type: string;
+  profile_image?: string;
+  speaking?: boolean;
+  muted?: boolean;
+  deafened?: boolean;
+  camera_on?: boolean;
+  screen_sharing?: boolean;
+  stream?: MediaStream | null;
 }
 
 export type VoiceStateUpdate = Partial<Pick<CallUserData,

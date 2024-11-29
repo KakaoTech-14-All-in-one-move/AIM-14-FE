@@ -73,7 +73,14 @@ export function CallProvider({ children }: CallProviderProps) {
 
   useEffect(() => {
     if (state.users.length >= 0) {
-      useVoiceChat.getState().setUsers(state.users);
+      const currentStoreUsers = useVoiceChat.getState().users;
+      const updatedUsers = state.users.map(newUser => {
+        const existingUser = currentStoreUsers.find(u => u.user_id === newUser.user_id);
+        return existingUser?.stream
+          ? { ...newUser, stream: existingUser.stream }
+          : newUser;
+      });
+      useVoiceChat.getState().setUsers(updatedUsers);
     }
   }, [state.users]);
 
@@ -94,6 +101,16 @@ export function CallProvider({ children }: CallProviderProps) {
       connectionRef.current = null;
     };
   }, [accessToken, user, handleStateUpdate]);
+
+  useEffect(() => {
+    return () => {
+      // CallProvider가 언마운트될 때 정리
+      if (connectionRef.current) {
+        connectionRef.current.leaveChannel();
+        useVoiceChat.getState().resetState();
+      }
+    };
+  }, []);
 
   const contextValue = {
     users: state.users,

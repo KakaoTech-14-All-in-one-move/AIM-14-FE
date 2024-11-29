@@ -2,8 +2,8 @@ import { create } from 'zustand';
 import { CallUserData } from '@/services/call/types';
 
 interface VideoChatStore {
-  isSpeaking: boolean;
   users: CallUserData[];
+  isSpeaking: boolean;
   isCameraOn: boolean;
   isScreenSharing: boolean;
   isMuted: boolean;
@@ -19,19 +19,10 @@ interface VideoChatStore {
   toggleMute: () => void;
   toggleDeafen: () => void;
   updateUserSpeaking: (userId: string, isSpeaking: boolean) => void;
+  resetState: () => void;
 }
 
 const initialState = {
-  users: [],
-  isCameraOn: false,
-  isScreenSharing: false,
-  isMuted: false,
-  isDeafened: false,
-  speakingUsers: new Set<string>(),
-};
-
-export const useVideoChat = create<VideoChatStore>((set) => ({
-  ...initialState,
   users: [],
   isSpeaking: false,
   isCameraOn: false,
@@ -39,59 +30,108 @@ export const useVideoChat = create<VideoChatStore>((set) => ({
   isMuted: false,
   isDeafened: false,
   speakingUsers: new Set<string>(),
+};
+
+export const useVideoChat = create<VideoChatStore>((set, get) => ({
+  ...initialState,
 
   setUsers: (users) => set({ users }),
 
-  addUser: (user) => set((state) => {
-    // 이미 존재하는 사용자인지 확인
-    const existingUserIndex = state.users.findIndex(
-      u => u.user_id === user.user_id &&
-        u.channel_id === user.channel_id &&
-        u.channel_type === user.channel_type
+  addUser: (user) => {
+    const currentState = get();
+    console.log('Current store state:', currentState);
+
+    const existingUserIndex = currentState.users.findIndex(
+      u => u.user_id === user.user_id
     );
 
+    let newUsers;
     if (existingUserIndex !== -1) {
-      // 기존 사용자가 있다면 업데이트
-      const updatedUsers = [...state.users];
-      updatedUsers[existingUserIndex] = {
-        ...updatedUsers[existingUserIndex],
+      newUsers = [...currentState.users];
+      newUsers[existingUserIndex] = {
+        ...newUsers[existingUserIndex],
         ...user
       };
-      return { users: updatedUsers };
+    } else {
+      newUsers = [...currentState.users, user];
     }
 
-    // 새로운 사용자라면 추가
-    return { users: [...state.users, user] };
-  }),
+    // 상태 업데이트를 한 번에 처리
+    set({
+      ...currentState,
+      users: newUsers
+    });
+
+    // 업데이트 확인
+    const updatedState = get();
+    console.log('Updated store state:', updatedState);
+
+    return updatedState;
+  },
 
   removeUser: (userId) => set(state => ({
+    ...state,
     users: state.users.filter(u => u.user_id !== userId),
     speakingUsers: new Set(
       Array.from(state.speakingUsers).filter(id => id !== userId)
     )
   })),
 
-  updateUserStatus: (userId: string, updates: Partial<CallUserData>) =>
-    set((state) => ({
-      users: state.users.map((user) =>
-        user.user_id === userId ? { ...user, ...updates } : user
-      )
-    })),
+  updateUserStatus: (userId, updates) => {
+    const currentUsers = get().users;
+    console.log('Updating user status:', {
+      userId,
+      updates,
+      currentUsers
+    });
 
-  toggleCamera: () => set(state => ({ isCameraOn: !state.isCameraOn })),
+    const userIndex = currentUsers.findIndex(u => u.user_id === userId);
+    let newUsers;
 
-  toggleScreenShare: () => set(state => ({ isScreenSharing: !state.isScreenSharing })),
+    if (userIndex === -1) {
+      newUsers = [...currentUsers, { user_id: userId, ...updates } as CallUserData];
+      console.log('Adding new user with updates:', {
+        userId,
+        newUser: newUsers[newUsers.length - 1]
+      });
+    } else {
+      newUsers = [...currentUsers];
+      newUsers[userIndex] = {
+        ...newUsers[userIndex],
+        ...updates
+      };
+      console.log('Updated existing user:', {
+        userId,
+        updatedUser: newUsers[userIndex]
+      });
+    }
 
-  toggleMute: () => set(state => ({ isMuted: !state.isMuted })),
+    set(state => ({
+      ...state,
+      users: newUsers
+    }));
 
-  toggleDeafen: () => set(state => ({ isDeafened: !state.isDeafened })),
+    console.log('Store state after update:', {
+      users: get().users
+    });
+  },
 
-  updateUserSpeaking: (userId: string, isSpeaking: boolean) =>
-    set((state) => ({
-      speakingUsers: new Set(
-        isSpeaking
-          ? [...Array.from(state.speakingUsers), userId]
-          : Array.from(state.speakingUsers).filter(id => id !== userId)
-      )
-    })),
+  toggleCamera: () => set(state => ({ ...state, isCameraOn: !state.isCameraOn })),
+  toggleScreenShare: () => set(state => ({ ...state, isScreenSharing: !state.isScreenSharing })),
+  toggleMute: () => set(state => ({ ...state, isMuted: !state.isMuted })),
+  toggleDeafen: () => set(state => ({ ...state, isDeafened: !state.isDeafened })),
+
+  updateUserSpeaking: (userId, isSpeaking) => set(state => {
+    const newSpeakingUsers = new Set(state.speakingUsers);
+    if (isSpeaking) {
+      newSpeakingUsers.add(userId);
+    } else {
+      newSpeakingUsers.delete(userId);
+    }
+    return { ...state, speakingUsers: newSpeakingUsers };
+  }),
+
+  resetState: () => {
+    set(initialState);
+  },
 }));

@@ -366,16 +366,16 @@ export class WebRTCConnection {
 
     if (sender) {
       await sender.replaceTrack(track);
+      if (track && this.videoStream) {
+        const oldTracks = this.videoStream.getTracks();
+        oldTracks.forEach(t => t.stop());
+        this.videoStream.addTrack(track);
+      } else if (track) {
+        this.videoStream = new MediaStream([track]);
+      }
     } else if (track) {
       this.peerConnection.addTrack(track, new MediaStream([track]));
-    }
-
-    // Update video stream reference
-    if (track) {
       this.videoStream = new MediaStream([track]);
-    } else if (this.videoStream) {
-      this.videoStream.getTracks().forEach(t => t.stop());
-      this.videoStream = null;
     }
   }
 
