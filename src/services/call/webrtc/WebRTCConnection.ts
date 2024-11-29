@@ -403,7 +403,7 @@ export class WebRTCConnection {
     if (this.localStream) {
       this.localStream.getAudioTracks().forEach(track => {
         track.enabled = enabled;
-        console.log(`Audio ${enabled ? 'enabled' : 'disabled'}`);
+        // console.log(`Audio ${enabled ? 'enabled' : 'disabled'}`);
       });
     }
   }
@@ -412,7 +412,7 @@ export class WebRTCConnection {
     if (this.localStream) {
       this.localStream.getVideoTracks().forEach(track => {
         track.enabled = enabled;
-        console.log(`Video ${enabled ? 'enabled' : 'disabled'}`);
+        // console.log(`Video ${enabled ? 'enabled' : 'disabled'}`);
       });
     }
   }
