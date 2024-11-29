@@ -39,7 +39,6 @@ export const useVideoChat = create<VideoChatStore>((set, get) => ({
 
   addUser: (user) => {
     const currentState = get();
-    console.log('Current store state:', currentState);
 
     const existingUserIndex = currentState.users.findIndex(
       u => u.user_id === user.user_id
@@ -64,7 +63,6 @@ export const useVideoChat = create<VideoChatStore>((set, get) => ({
 
     // 업데이트 확인
     const updatedState = get();
-    console.log('Updated store state:', updatedState);
 
     return updatedState;
   },
@@ -79,41 +77,24 @@ export const useVideoChat = create<VideoChatStore>((set, get) => ({
 
   updateUserStatus: (userId, updates) => {
     const currentUsers = get().users;
-    console.log('Updating user status:', {
-      userId,
-      updates,
-      currentUsers
-    });
 
     const userIndex = currentUsers.findIndex(u => u.user_id === userId);
     let newUsers;
 
     if (userIndex === -1) {
       newUsers = [...currentUsers, { user_id: userId, ...updates } as CallUserData];
-      console.log('Adding new user with updates:', {
-        userId,
-        newUser: newUsers[newUsers.length - 1]
-      });
     } else {
       newUsers = [...currentUsers];
       newUsers[userIndex] = {
         ...newUsers[userIndex],
         ...updates
       };
-      console.log('Updated existing user:', {
-        userId,
-        updatedUser: newUsers[userIndex]
-      });
     }
 
     set(state => ({
       ...state,
       users: newUsers
     }));
-
-    console.log('Store state after update:', {
-      users: get().users
-    });
   },
 
   toggleCamera: () => set(state => ({ ...state, isCameraOn: !state.isCameraOn })),

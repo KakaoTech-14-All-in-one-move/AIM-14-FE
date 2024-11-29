@@ -106,7 +106,7 @@ export class CallConnection {
   }
 
   async sendIceCandidate(candidate: RTCIceCandidate) {
-    console.log('Sending ICE candidate:', candidate);
+    // console.log('Sending ICE candidate:', candidate);
     this.sendOp(OP_CODES.ICE_CANDIDATE, {
       // server_id: this.currentServerId,
       channel_id: this.currentChannelId,
@@ -152,7 +152,7 @@ export class CallConnection {
 
     [OP_CODES.STATE_UPDATE_ACK]: (data: any) => {
       if (!this.isCallUserData(data)) return;
-      console.log('사용자 상태 업데이트');
+      console.log('사용자 상태 업데이트 :', data);
 
       const updatedUserId = data.user_id;
       this.updateUsers(prevUsers =>
@@ -218,7 +218,7 @@ export class CallConnection {
   private handleMessage = (event: MessageEvent) => {
     try {
       const message: CallServerMessage = JSON.parse(event.data);
-      console.log('Received message:', message);  // 디버깅을 위한 로그 추가
+      // console.log('Received message:', message);
 
       const handler = this.messageHandlers[message.op];
       if (handler) {
@@ -238,7 +238,9 @@ export class CallConnection {
     }
 
     const message = JSON.stringify({ op, data });
-    console.log('Sending message:', { op, data });  // 디버깅을 위한 로그 추가
+    // if (op !== OP_CODES.ICE_CANDIDATE) {
+    //   console.log('Sending message:', { op, data });
+    // }
     this.ws.send(message);
   }
 

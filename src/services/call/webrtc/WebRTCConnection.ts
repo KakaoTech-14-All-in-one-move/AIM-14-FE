@@ -58,7 +58,7 @@ export class WebRTCConnection {
 
       this.peerConnection.onicecandidate = (event) => {
         if (event.candidate && this.callConnection) {
-          console.log('Sending ICE candidate');
+          // console.log('Sending ICE candidate');
           this.callConnection.sendIceCandidate(event.candidate);
         }
       };

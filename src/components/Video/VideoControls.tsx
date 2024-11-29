@@ -41,145 +41,7 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
     };
   }, []);
 
-  // const handleToggleCamera = useCallback(async () => {
-  //   if (!connection || !currentUser) return;
-  //
-  //   try {
-  //     const videoEnabled = !videoChatStore.isCameraOn;
-  //
-  //     if (videoEnabled) {
-  //       // 화면 공유 중이면 먼저 중지
-  //       if (videoChatStore.isScreenSharing) {
-  //         if (screenStreamRef.current) {
-  //           screenStreamRef.current.getTracks().forEach(track => track.stop());
-  //           screenStreamRef.current = null;
-  //         }
-  //
-  //         const webrtc = WebRTCConnection.getInstance();
-  //         await webrtc.removeVideoTrack();
-  //
-  //         videoChatStore.removeUser(currentUser.user_id + '_screen');
-  //         videoChatStore.toggleScreenShare();
-  //
-  //         // 서버에 화면 공유 중지 상태 전송
-  //         connection.updateState({
-  //           screen_sharing: false,
-  //         });
-  //       }
-  //
-  //       // 카메라 시작
-  //       const stream = await navigator.mediaDevices.getUserMedia({
-  //         video: {
-  //           width: { ideal: 1280 },
-  //           height: { ideal: 720 },
-  //         },
-  //         audio: false,
-  //       });
-  //
-  //       // 기존 스트림 정리
-  //       if (localStreamRef.current) {
-  //         localStreamRef.current.getTracks().forEach(track => track.stop());
-  //       }
-  //
-  //       // 새 스트림 설정
-  //       localStreamRef.current = stream;
-  //
-  //       console.log('New stream details:', {
-  //         streamId: stream.id,
-  //         active: stream.active,
-  //         tracks: stream.getTracks().map(track => ({
-  //           kind: track.kind,
-  //           enabled: track.enabled,
-  //           id: track.id,
-  //           readyState: track.readyState,
-  //           constraints: track.getConstraints()
-  //         }))
-  //       });
-  //
-  //       // WebRTC 연결 설정
-  //       const webrtc = WebRTCConnection.getInstance();
-  //       await webrtc.replaceVideoTrack(stream.getVideoTracks()[0]);
-  //
-  //
-  //       // 서버 상태 업데이트 (순서 중요!)
-  //       connection.updateState({
-  //         camera_on: true,
-  //         screen_sharing: false,
-  //       });
-  //
-  //       console.log('Before store update:', {
-  //         currentUserId: currentUser.user_id,
-  //         foundUser: !!videoChatStore.users.find(u => u.user_id === currentUser.user_id)
-  //       });
-  //
-  //       // 스토어 상태 업데이트 - 새 MediaStream 객체 생성
-  //       const currentUserInStore = videoChatStore.users.find(u => u.user_id === currentUser.user_id);
-  //       if (currentUserInStore) {
-  //         const newStream = new MediaStream();
-  //         stream.getTracks().forEach(track => newStream.addTrack(track));
-  //
-  //         console.log('Before updating store:', {
-  //           originalStream: {
-  //             id: stream.id,
-  //             tracks: stream.getTracks().map(t => ({kind: t.kind, id: t.id}))
-  //           },
-  //           newStream: {
-  //             id: newStream.id,
-  //             tracks: newStream.getTracks().map(t => ({kind: t.kind, id: t.id}))
-  //           }
-  //         });
-  //
-  //         videoChatStore.updateUserStatus(currentUser.user_id, {
-  //           ...currentUserInStore,
-  //           camera_on: true,
-  //           screen_sharing: false,
-  //           stream: newStream,
-  //         });
-  //
-  //         const updatedUser = videoChatStore.users.find(u => u.user_id === currentUser.user_id);
-  //         console.log('After updating store:', {
-  //           updatedUserStream: updatedUser?.stream ? {
-  //             id: updatedUser.stream.id,
-  //             tracks: updatedUser.stream.getTracks().map(t => ({kind: t.kind, id: t.id}))
-  //           } : null
-  //         });
-  //       }
-  //       videoChatStore.toggleCamera();
-  //
-  //     } else {
-  //       // 카메라 중지
-  //       if (localStreamRef.current) {
-  //         localStreamRef.current.getTracks().forEach(track => track.stop());
-  //         localStreamRef.current = null;
-  //
-  //         const webrtc = WebRTCConnection.getInstance();
-  //         await webrtc.removeVideoTrack();
-  //       }
-  //
-  //       // 서버 상태 업데이트
-  //       connection.updateState({
-  //         camera_on: false,
-  //       });
-  //
-  //       // 스토어 상태 업데이트
-  //       videoChatStore.updateUserStatus(currentUser.user_id, {
-  //         camera_on: false,
-  //         stream: null,
-  //       });
-  //       videoChatStore.toggleCamera();
-  //     }
-  //   } catch (error) {
-  //     console.error('Failed to toggle camera:', error);
-  //     if ((error as Error).name === 'NotAllowedError') {
-  //       alert('카메라 접근 권한이 거부되었습니다.');
-  //     } else {
-  //       alert('카메라를 시작하는데 문제가 발생했습니다.');
-  //     }
-  //   }
-  // }, [connection, currentUser, videoChatStore]);
-
   const handleToggleCamera = useCallback(async () => {
-    console.log('Starting toggleCamera process');
     if (!connection || !currentUser) return;
 
     try {
@@ -187,8 +49,6 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
 
       if (videoEnabled) {
         // 화면 공유 중지 로직...
-
-        console.log('Starting camera');
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             width: { ideal: 1280 },
@@ -226,7 +86,7 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
             deafened: false,
             channel_id: currentUser.channel_id,
             channel_type: currentUser.channel_type,
-            profile_image: currentUser.profile_image
+            profile_image: currentUser.profile_image,
           };
 
           // 순서 중요: 먼저 사용자 정보를 업데이트
@@ -237,12 +97,7 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
 
           // 상태 업데이트 확인을 위한 timeout
           setTimeout(() => {
-            const finalState = {
-              isCameraOn: videoChatStore.isCameraOn,
-              users: videoChatStore.users,
-              currentUser: videoChatStore.users.find(u => u.user_id === currentUser.user_id)
-            };
-            console.log('Store update complete:', finalState);
+            videoChatStore.users.find(u => u.user_id === currentUser.user_id);
             resolve();
           }, 0);
         });
@@ -272,10 +127,6 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
             videoChatStore.toggleCamera();
 
             setTimeout(() => {
-              console.log('Store update complete:', {
-                isCameraOn: videoChatStore.isCameraOn,
-                users: videoChatStore.users
-              });
               resolve();
             }, 0);
           });

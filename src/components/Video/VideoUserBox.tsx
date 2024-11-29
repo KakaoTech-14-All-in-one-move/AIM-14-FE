@@ -45,7 +45,6 @@ export const VideoUserBox: React.FC<VideoUserBoxProps> = ({ user }) => {
             const attemptPlay = async (retries: number = 3): Promise<void> => {
               try {
                 await videoElement.play();
-                console.log('Video playback started successfully');
               } catch (error: unknown) {
                 if (retries > 0 && error instanceof DOMException && error.name === 'AbortError') {
                   console.log(`Retrying playback, attempts left: ${retries-1}`);
