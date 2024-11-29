@@ -131,7 +131,7 @@ export class WebRTCConnection {
         } : false,
       };
 
-      console.log(`Requesting media stream for ${isVideoChannel ? 'video' : 'voice'} channel`);
+      // console.log(`Requesting media stream for ${isVideoChannel ? 'video' : 'voice'} channel`);
       this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
 
       // 음성 감지 설정

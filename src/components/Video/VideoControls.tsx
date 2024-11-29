@@ -279,11 +279,7 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
       screenStreamRef.current = null;
     }
 
-    // 2. WebRTC 연결 정리
-    const webrtc = WebRTCConnection.getInstance();
-    webrtc.dispose();
-
-    // 3. 상태 초기화
+    // 2. 상태 초기화
     if (currentUser) {
       videoChatStore.updateUserStatus(currentUser.user_id, {
         camera_on: false,
@@ -292,10 +288,10 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
       });
     }
 
-    // 4. store 전체 초기화
+    // 3. store 전체 초기화
     videoChatStore.resetState();
 
-    // 5. 채널 나가기
+    // 4. 채널 나가기
     connection.leaveChannel();
     navigate('/home');
   }, [connection, navigate, currentUser, videoChatStore]);

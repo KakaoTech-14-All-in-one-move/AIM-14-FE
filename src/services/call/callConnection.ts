@@ -34,6 +34,7 @@ export class CallConnection {
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private reconnectTimeout: NodeJS.Timeout | null = null;
   private currentServerId: string = CALL_API.DEFAULT_SERVER_ID;
+  private currentChannelType: MediaChannelType = 'VOICE';
   currentChannelId: string | null = null;
   private onStateUpdate: (state: CallState) => void;
   private accessToken: string;
@@ -207,7 +208,7 @@ export class CallConnection {
     },
 
     [OP_CODES.ICE_CANDIDATE_ACK]: (data: any) => {
-      console.log('Received ICE candidate:', data);
+      // console.log('Received ICE candidate:', data);
       if (data?.candidate) {
         const webrtc = WebRTCConnection.getInstance();
         webrtc.addIceCandidate(data.candidate);
@@ -339,10 +340,10 @@ export class CallConnection {
     }
   }
 
-  // Public Methods
   joinChannel(channelId: string, channelType: MediaChannelType = 'VOICE') {
-    console.log('🎯 Joining channel:', channelId);
+    console.log('🎯 Joining channel:', channelId, '[',channelType,']');
     this.currentChannelId = channelId;
+    this.currentChannelType = channelType;
     this.sendOp(OP_CODES.JOIN_CHANNEL, {
       server_id: this.currentServerId,
       channel_id: channelId,
@@ -353,19 +354,23 @@ export class CallConnection {
   leaveChannel() {
     if (!this.currentChannelId) return;
 
-    console.log('👋 Leaving channel:', this.currentChannelId);
+    console.log('👋 Leaving channel:', this.currentChannelId, '[', this.currentChannelType, ']');
+
+    // STOP 메시지를 먼저 보냄
+    this.sendOp(OP_CODES.STOP);
+
+    // LEAVE_CHANNEL 메시지 보냄
+    this.sendOp(OP_CODES.LEAVE_CHANNEL, {
+      server_id: this.currentServerId,
+      channel_id: this.currentChannelId,
+      channel_type: this.currentChannelType,
+    });
 
     const webrtc = WebRTCConnection.getInstance();
     webrtc.dispose();
 
-    this.sendOp(OP_CODES.STOP);
-
-    this.sendOp(OP_CODES.LEAVE_CHANNEL, {
-      server_id: this.currentServerId,
-      channel_id: this.currentChannelId,
-      channel_type: 'VOICE',
-    });
     this.currentChannelId = null;
+    this.currentChannelType = 'VOICE';
   }
 
   updateState(state: VoiceStateUpdate) {
