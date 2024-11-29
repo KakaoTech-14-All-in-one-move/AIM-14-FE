@@ -293,6 +293,27 @@ export class WebRTCConnection {
     }
   }
 
+  async replaceAudioTrack(track: MediaStreamTrack | null) {
+    if (!this.peerConnection) return;
+
+    const sender = this.peerConnection.getSenders()
+      .find(s => s.track?.kind === 'audio');
+
+    if (sender) {
+      await sender.replaceTrack(track);
+    } else if (track) {
+      this.peerConnection.addTrack(track, new MediaStream([track]));
+    }
+
+    // Update audio stream reference
+    if (track) {
+      this.audioStream = new MediaStream([track]);
+    } else if (this.audioStream) {
+      this.audioStream.getTracks().forEach(t => t.stop());
+      this.audioStream = null;
+    }
+  }
+
   private setupVoiceDetection() {
     if (!this.localStream) return;
 
