@@ -35,9 +35,9 @@ export const VoiceContent = () => {
               user={{
                 id: user.user_id,
                 nickname: user.username,
-                isSpeaking: user.speaking,
-                isMuted: user.muted,
-                isDeafened: user.deafened,
+                isSpeaking: user.speaking || false,
+                isMuted: user.muted || false,
+                isDeafened: user.deafened || false,
                 imageUrl: user.profile_image
               }}
             />
