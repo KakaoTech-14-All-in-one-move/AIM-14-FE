@@ -123,7 +123,7 @@ export function CallProvider({ children }: CallProviderProps) {
             );
 
             if (!joinSuccess) {
-              console.error('Failed to join channel');
+              // console.error('Failed to join channel');
               return;
             }
 
