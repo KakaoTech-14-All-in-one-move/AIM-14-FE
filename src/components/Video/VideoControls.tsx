@@ -72,34 +72,26 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
           screen_sharing: false,
         });
 
-        // Store 업데이트를 Promise로 래핑
         const updateStore = () => new Promise<void>(resolve => {
+          const existingUser = videoChatStore.users.find(
+            u => u.user_id === currentUser.user_id
+          );
+
           const userData = {
-            user_id: currentUser.user_id,
-            username: currentUser.username,
-            server_id: currentUser.server_id,
+            ...currentUser,
+            profile_image: existingUser?.profile_image || currentUser.profile_image,
             camera_on: true,
             screen_sharing: false,
             stream: stream,
             speaking: false,
             muted: false,
             deafened: false,
-            channel_id: currentUser.channel_id,
-            channel_type: currentUser.channel_type,
-            profile_image: currentUser.profile_image,
           };
 
-          // 순서 중요: 먼저 사용자 정보를 업데이트
           videoChatStore.addUser(userData);
-
-          // 그 다음 카메라 상태 토글
           videoChatStore.toggleCamera();
 
-          // 상태 업데이트 확인을 위한 timeout
-          setTimeout(() => {
-            videoChatStore.users.find(u => u.user_id === currentUser.user_id);
-            resolve();
-          }, 0);
+          setTimeout(resolve, 0);
         });
 
         await updateStore();
@@ -118,17 +110,20 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
             camera_on: false,
           });
 
-          // Store 업데이트를 Promise로 래핑
           await new Promise<void>(resolve => {
+            const existingUser = videoChatStore.users.find(
+              u => u.user_id === currentUser.user_id
+            );
+
             videoChatStore.updateUserStatus(currentUser.user_id, {
+              ...currentUser,
+              profile_image: existingUser?.profile_image || currentUser.profile_image,
               camera_on: false,
               stream: null,
             });
             videoChatStore.toggleCamera();
 
-            setTimeout(() => {
-              resolve();
-            }, 0);
+            setTimeout(resolve, 0);
           });
         }
       }
@@ -239,11 +234,16 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
       return;
     }
 
+    // 기존 사용자의 프로필 이미지를 보존
+    const existingUser = videoChatStore.users.find(u => u.user_id === currentUser.user_id);
+
     connection.updateState({
       muted: !videoChatStore.isMuted,
     });
 
     videoChatStore.updateUserStatus(currentUser.user_id, {
+      ...currentUser,
+      profile_image: existingUser?.profile_image || currentUser.profile_image,
       muted: !videoChatStore.isMuted,
     });
     videoChatStore.toggleMute();
