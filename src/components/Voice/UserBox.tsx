@@ -20,10 +20,11 @@ export const UserBox: React.FC<UserBoxProps> = ({ user }) => {
 
   return (
     <div
-      className="relative w-full aspect-video bg-gray-900 rounded-xl overflow-hidden shadow-lg transition-all duration-200 hover:shadow-xl">
-      {/* 프로필 이미지 영역만 초록색 원 효과 적용 */}
+      className={`relative w-full aspect-video bg-gray-900 rounded-xl overflow-hidden shadow-lg transition-all duration-200 
+        ${isSpeaking ? 'ring-2 ring-green-500 animate-pulse' : ''}`}>
+      {/* 프로필 이미지 영역 */}
       <div className="absolute inset-0 flex items-center justify-center">
-        <div className={`relative ${isSpeaking ? 'ring-2 ring-green-500 rounded-full' : ''}`}>
+        <div>
           {user.imageUrl ? (
             <img
               src={import.meta.env.VITE_BE_SERVER_URL + user.imageUrl}
@@ -32,9 +33,6 @@ export const UserBox: React.FC<UserBoxProps> = ({ user }) => {
             />
           ) : (
             <DefaultProfileImage username={user.nickname} size={80} />
-          )}
-          {isSpeaking && (
-            <div className="absolute inset-0 rounded-full border-2 border-green-500 animate-pulse" />
           )}
         </div>
       </div>

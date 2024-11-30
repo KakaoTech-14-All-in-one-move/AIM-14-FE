@@ -1,6 +1,7 @@
 import { CallConnection } from '../callConnection';
 import { WebRTCConfig, WebRTCConnectionOptions } from './types';
 import { useVoiceChat } from '@/hooks/useVoiceChat.ts';
+import { useVideoChat } from '@/hooks/useVideoChat.ts';
 
 interface WebRTCEvents {
   onTrack?: (stream: MediaStream) => void;
@@ -26,6 +27,7 @@ export class WebRTCConnection {
   private pendingCandidates: RTCIceCandidate[] = [];
   private audioStream: MediaStream | null = null;
   private videoStream: MediaStream | null = null;
+  private audioContext: AudioContext | null = null;
 
   private constructor() {
   }
@@ -284,6 +286,8 @@ export class WebRTCConnection {
     }
   }
 
+
+
   async toggleDeafened(deafened: boolean) {
     if (this.peerConnection) {
       this.peerConnection.getReceivers().forEach(receiver => {
@@ -355,46 +359,68 @@ export class WebRTCConnection {
   }
 
   private setupVoiceDetection() {
-    if (!this.localStream) return;
+    console.log('Setting up voice detection...'); // 디버깅용 로그 추가
 
-    const audioContext = new AudioContext();
-    const audioSource = audioContext.createMediaStreamSource(this.localStream);
-    const analyser = audioContext.createAnalyser();
+    // 이미 존재하는 analyser context 정리
+    if (this.audioContext) {
+      this.audioContext.close();
+    }
+
+    // 오디오 스트림 확인
+    const audioStream = this.audioStream || this.localStream;
+    if (!audioStream) {
+      console.warn('No audio stream available for voice detection');
+      return;
+    }
+
+    const audioTracks = audioStream.getAudioTracks();
+    if (!audioTracks.length) {
+      console.warn('No audio tracks found in the stream');
+      return;
+    }
+
+    // 새로운 AudioContext 생성
+    this.audioContext = new AudioContext();
+    const audioSource = this.audioContext.createMediaStreamSource(audioStream);
+    const analyser = this.audioContext.createAnalyser();
     const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
     audioSource.connect(analyser);
     let animationFrameId: number;
 
     const checkAudioLevel = () => {
-      const state = useVoiceChat.getState();
+      const voiceChatState = useVoiceChat.getState();
+      const videoChatState = useVideoChat.getState();
 
       if (this.callConnection?.state.currentUser) {
         const userId = this.callConnection.state.currentUser.user_id;
 
-        if (state.isMuted) {
-          state.updateUserSpeaking(userId, false);
-          return;
+        // 현재 트랙 상태 확인
+        const isAudioEnabled = audioTracks.some(track => track.enabled);
+        const isMuted = voiceChatState.isMuted || videoChatState.isMuted;
+
+        if (!isAudioEnabled || isMuted) {
+          voiceChatState.updateUserSpeaking(userId, false);
+          videoChatState.updateUserSpeaking(userId, false);
+        } else {
+          analyser.getByteFrequencyData(dataArray);
+          const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+          const isSpeaking = average > 30;
+
+          voiceChatState.updateUserSpeaking(userId, isSpeaking);
+          videoChatState.updateUserSpeaking(userId, isSpeaking);
         }
 
-        analyser.getByteFrequencyData(dataArray);
-        const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-        const isSpeaking = average > 30;
-        state.updateUserSpeaking(userId, isSpeaking);
-
-        // mute 상태가 아닐 때만 다음 프레임 요청
         animationFrameId = requestAnimationFrame(checkAudioLevel);
       }
     };
 
-    // 초기 시작
     checkAudioLevel();
 
-    // cleanup 용도로 반환
     return () => {
       if (animationFrameId) {
         cancelAnimationFrame(animationFrameId);
       }
-      audioContext.close();
     };
   }
 
@@ -422,29 +448,73 @@ export class WebRTCConnection {
   async removeVideoTrack() {
     if (!this.peerConnection) return;
 
-    const sender = this.peerConnection.getSenders()
+    const videoSender = this.peerConnection.getSenders()
       .find(s => s.track?.kind === 'video');
 
-    if (sender) {
-      await sender.replaceTrack(null);
-
-      if (sender.track) {
-        sender.track.stop();
+    if (videoSender) {
+      await videoSender.replaceTrack(null);
+      if (videoSender.track) {
+        videoSender.track.stop();
       }
     }
 
+    // 비디오 스트림만 정리
     if (this.videoStream) {
       this.videoStream.getTracks().forEach(t => t.stop());
       this.videoStream = null;
     }
+
+    // 오디오 스트림은 유지
+    // 음성 감지 재설정
+    if (this.audioStream) {
+      this.setupVoiceDetection();
+    }
   }
 
   async toggleAudio(enabled: boolean) {
+    console.log('Toggling audio:', enabled); // 디버깅용 로그 추가
+
+    const voiceChatState = useVoiceChat.getState();
+    const videoChatState = useVideoChat.getState();
+    const userId = this.callConnection?.state.currentUser?.user_id;
+
+    if (!userId) {
+      console.warn('No current user found');
+      return;
+    }
+
     if (this.localStream) {
-      this.localStream.getAudioTracks().forEach(track => {
+      const audioTracks = this.localStream.getAudioTracks();
+      console.log('Audio tracks:', audioTracks.length); // 디버깅용 로그 추가
+
+      // 모든 오디오 트랙의 상태 변경
+      audioTracks.forEach(track => {
         track.enabled = enabled;
-        // console.log(`Audio ${enabled ? 'enabled' : 'disabled'}`);
+        console.log('Track enabled:', track.enabled); // 디버깅용 로그 추가
       });
+
+      if (enabled) {
+        console.log('Unmuting - Setting up voice detection'); // 디버깅용 로그 추가
+        // AudioContext 재생성 및 음성 감지 재설정
+        if (this.audioContext) {
+          this.audioContext.close();
+          this.audioContext = null;
+        }
+        this.setupVoiceDetection();
+      } else {
+        console.log('Muting - Cleaning up voice detection'); // 디버깅용 로그 추가
+        // speaking 상태 false로 설정
+        voiceChatState.updateUserSpeaking(userId, false);
+        videoChatState.updateUserSpeaking(userId, false);
+
+        // AudioContext 정리
+        if (this.audioContext) {
+          this.audioContext.close();
+          this.audioContext = null;
+        }
+      }
+    } else {
+      console.warn('No local stream available'); // 디버깅용 로그 추가
     }
   }
 

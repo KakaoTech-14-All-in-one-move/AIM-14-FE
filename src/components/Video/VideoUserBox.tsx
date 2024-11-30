@@ -1,12 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 import { CameraOff, HeadphoneOff, MicOff, MonitorUp } from 'lucide-react';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage.tsx';
+import { useVideoChat } from '@/hooks/useVideoChat';
 
 interface VideoUserBoxProps {
   user: {
     id: string;
     nickname: string;
-    isSpeaking: boolean;
     isMuted: boolean;
     isDeafened: boolean;
     isVideoOn: boolean;
@@ -18,8 +18,9 @@ interface VideoUserBoxProps {
 
 export const VideoUserBox: React.FC<VideoUserBoxProps> = ({ user }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const speakingUsers = useVideoChat(state => state.speakingUsers);
+  const isSpeaking = speakingUsers.has(user.id);
 
-  // VideoUserBox.tsx의 useEffect 부분 수정
   useEffect(() => {
     const videoElement = videoRef.current;
     if (!videoElement) return;
@@ -27,12 +28,10 @@ export const VideoUserBox: React.FC<VideoUserBoxProps> = ({ user }) => {
     const handleStreamChange = async () => {
       try {
         if (user.stream && (user.isVideoOn || user.isScreenSharing)) {
-          // 이전 스트림과 다를 때만 srcObject 업데이트
           if (videoElement.srcObject !== user.stream) {
             videoElement.srcObject = user.stream;
             videoElement.muted = true;
 
-            // loadedmetadata 이벤트를 기다린 후 재생 시도
             await new Promise((resolve) => {
               const handleLoaded = () => {
                 videoElement.removeEventListener('loadedmetadata', handleLoaded);
@@ -41,7 +40,6 @@ export const VideoUserBox: React.FC<VideoUserBoxProps> = ({ user }) => {
               videoElement.addEventListener('loadedmetadata', handleLoaded);
             });
 
-            // 재생 시도 및 재시도 로직
             const attemptPlay = async (retries: number = 3): Promise<void> => {
               try {
                 await videoElement.play();
@@ -60,7 +58,6 @@ export const VideoUserBox: React.FC<VideoUserBoxProps> = ({ user }) => {
             await attemptPlay();
           }
         } else {
-          // 비디오가 꺼져있을 때 srcObject 제거
           if (videoElement.srcObject) {
             videoElement.srcObject = null;
           }
@@ -72,7 +69,6 @@ export const VideoUserBox: React.FC<VideoUserBoxProps> = ({ user }) => {
 
     handleStreamChange();
 
-    // Cleanup
     return () => {
       if (videoElement.srcObject) {
         videoElement.srcObject = null;
@@ -83,7 +79,7 @@ export const VideoUserBox: React.FC<VideoUserBoxProps> = ({ user }) => {
   return (
     <div
       className={`relative w-full aspect-video bg-gray-900 rounded-xl overflow-hidden shadow-lg
-        ${user.isSpeaking ? 'ring-2 ring-green-500' : ''}
+        ${isSpeaking ? 'ring-2 ring-green-500 animate-pulse' : ''}
         transition-all duration-200 hover:shadow-xl`}
     >
       {/* 비디오 또는 프로필 이미지 표시 */}
