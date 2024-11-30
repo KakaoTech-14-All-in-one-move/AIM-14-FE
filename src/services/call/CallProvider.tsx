@@ -41,9 +41,10 @@ export function CallProvider({ children }: CallProviderProps) {
   const user = useAuthStore((state: { user: any; }) => state.user);
 
   const handleStateUpdate = useCallback((newState: CallState) => {
+
     setState(prevState => {
       const existingUserMap = new Map(
-        prevState.users.map(user => [user.user_id, user]),
+        prevState.users.map(user => [user.user_id, user])
       );
 
       const updatedUsers = newState.users.map(newUser => {
@@ -51,6 +52,7 @@ export function CallProvider({ children }: CallProviderProps) {
         return {
           ...newUser,
           profile_image: existingUser?.profile_image || newUser.profile_image,
+          screen_sharing: existingUser?.screen_sharing ?? false,  // Preserve screen sharing state
         };
       });
 
@@ -60,6 +62,7 @@ export function CallProvider({ children }: CallProviderProps) {
           profile_image:
             prevState.currentUser?.profile_image ||
             newState.currentUser.profile_image,
+          screen_sharing: prevState.currentUser?.screen_sharing ?? false,  // Preserve screen sharing state
         }
         : null;
 
@@ -78,7 +81,11 @@ export function CallProvider({ children }: CallProviderProps) {
       const updatedUsers = state.users.map(newUser => {
         const existingUser = currentStoreUsers.find(u => u.user_id === newUser.user_id);
         return existingUser?.stream
-          ? { ...newUser, stream: existingUser.stream }
+          ? {
+            ...newUser,
+            stream: existingUser.stream,
+            screen_sharing: existingUser.screen_sharing  // Preserve screen sharing state
+          }
           : newUser;
       });
       useVoiceChat.getState().setUsers(updatedUsers);
@@ -148,7 +155,6 @@ export function CallProvider({ children }: CallProviderProps) {
 
   useEffect(() => {
     return () => {
-      // CallProvider가 언마운트될 때 정리
       if (connectionRef.current) {
         connectionRef.current.leaveChannel();
         useVoiceChat.getState().resetState();

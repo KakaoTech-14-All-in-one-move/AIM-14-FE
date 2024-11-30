@@ -91,7 +91,6 @@ export class CallConnection {
   async sendPresenterOffer(sdpOffer: string) {
     console.log('Sending presenter offer');
     this.sendOp(OP_CODES.PRESENTER, {
-      // server_id: this.currentServerId,
       channel_id: this.currentChannelId,
       sdp_offer: sdpOffer,
     });
@@ -100,16 +99,13 @@ export class CallConnection {
   async sendViewerOffer(sdpOffer: string) {
     console.log('Sending viewer offer:', sdpOffer);
     this.sendOp(OP_CODES.VIEWER, {
-      // server_id: this.currentServerId,
       channel_id: this.currentChannelId,
       sdp_offer: sdpOffer,
     });
   }
 
   async sendIceCandidate(candidate: RTCIceCandidate) {
-    // console.log('Sending ICE candidate:', candidate);
     this.sendOp(OP_CODES.ICE_CANDIDATE, {
-      // server_id: this.currentServerId,
       channel_id: this.currentChannelId,
       candidate: candidate.toJSON(),
       sdp_mid: candidate.sdpMid,
@@ -140,7 +136,6 @@ export class CallConnection {
     [OP_CODES.LEAVE_CHANNEL_ACK]: (data: any) => {
       const leaveData = data as LeaveChannelData;
       if (!leaveData?.user_id) return;
-      // console.log('채널 퇴장 완료');
 
       this.updateUsers(prevUsers =>
         prevUsers.filter(user => user.user_id !== leaveData.user_id),
@@ -157,18 +152,29 @@ export class CallConnection {
 
       const updatedUserId = data.user_id;
       this.updateUsers(prevUsers =>
-        prevUsers.map(user =>
-          user.user_id === updatedUserId ? { ...user, ...data } : user,
-        ),
+        prevUsers.map(user => {
+          if (user.user_id === updatedUserId) {
+            // Preserve the existing screen_sharing state
+            return {
+              ...user,
+              ...data,
+              screen_sharing: user.screen_sharing
+            };
+          }
+          return user;
+        }),
       );
 
       if (this.state.currentUser?.user_id === updatedUserId) {
-        this.updateCurrentUser({ ...this.state.currentUser, ...data });
+        this.updateCurrentUser({
+          ...this.state.currentUser,
+          ...data,
+          screen_sharing: this.state.currentUser.screen_sharing
+        });
       }
     },
 
     [OP_CODES.INITIAL_ACK]: (data: any) => {
-      // console.log('초기 연결 완료');
       if (data?.heartbeat_interval) {
         this.setupHeartbeat(data.heartbeat_interval);
         this.sendServerIdentification();
@@ -176,7 +182,6 @@ export class CallConnection {
     },
 
     [OP_CODES.IDENTIFY_ACK]: (data: any) => {
-      // console.log('서버 식별 완료');
       if (data && this.isCallUserData(data)) {
         this.updateUsers(() => [data]);
         if (!this.state.currentUser) {
@@ -193,7 +198,7 @@ export class CallConnection {
 
     [OP_CODES.PRESENTER_ACK]: (data: any) => {
       console.log('Received presenter answer:', data);
-      if (data?.sdp_answer) {  // 서버 응답 형식에 맞게 수정
+      if (data?.sdp_answer) {
         const webrtc = WebRTCConnection.getInstance();
         webrtc.processSdpAnswer(data.sdp_answer);
       }
@@ -201,14 +206,13 @@ export class CallConnection {
 
     [OP_CODES.VIEWER_ACK]: (data: any) => {
       console.log('Received viewer answer:', data);
-      if (data?.sdp_answer) {  // 서버 응답 형식에 맞게 수정
+      if (data?.sdp_answer) {
         const webrtc = WebRTCConnection.getInstance();
         webrtc.processSdpAnswer(data.sdp_answer);
       }
     },
 
     [OP_CODES.ICE_CANDIDATE_ACK]: (data: any) => {
-      // console.log('Received ICE candidate:', data);
       if (data?.candidate) {
         const webrtc = WebRTCConnection.getInstance();
         webrtc.addIceCandidate(data.candidate);
@@ -219,7 +223,12 @@ export class CallConnection {
   private handleMessage = (event: MessageEvent) => {
     try {
       const message: CallServerMessage = JSON.parse(event.data);
-      // console.log('Received message:', message);
+
+      // Error message handling (-1 op code)
+      if (message.op === -1) {
+        console.error('Server Error:', message.data);
+        return;
+      }
 
       const handler = this.messageHandlers[message.op];
       if (handler) {
@@ -239,9 +248,6 @@ export class CallConnection {
     }
 
     const message = JSON.stringify({ op, data });
-    // if (op !== OP_CODES.ICE_CANDIDATE) {
-    //   console.log('Sending message:', { op, data });
-    // }
     this.ws.send(message);
   }
 
@@ -304,18 +310,12 @@ export class CallConnection {
     updater: (prev: CallUserData[]) => CallUserData[],
   ) => {
     const updatedUsers = updater(this.state.users);
-    // console.log('Updating users:', {
-    //   previous: this.state.users,
-    //   updated: updatedUsers,
-    // });
-
     this.state.users = updatedUsers;
     this.notifyStateUpdate();
   };
 
   private notifyStateUpdate = () => {
     const newState = { ...this.state };
-    // console.log('Notifying state update:', newState);
     this.onStateUpdate(newState);
   };
 
@@ -341,7 +341,7 @@ export class CallConnection {
   }
 
   joinChannel(channelId: string, channelType: MediaChannelType = 'VOICE') {
-    console.log('🎯 Joining channel:', channelId, '[',channelType,']');
+    console.log('🎯 Joining channel:', channelId, '[', channelType, ']');
     this.currentChannelId = channelId;
     this.currentChannelType = channelType;
     this.sendOp(OP_CODES.JOIN_CHANNEL, {
@@ -356,10 +356,7 @@ export class CallConnection {
 
     console.log('👋 Leaving channel:', this.currentChannelId, '[', this.currentChannelType, ']');
 
-    // STOP 메시지를 먼저 보냄
     this.sendOp(OP_CODES.STOP);
-
-    // LEAVE_CHANNEL 메시지 보냄
     this.sendOp(OP_CODES.LEAVE_CHANNEL, {
       server_id: this.currentServerId,
       channel_id: this.currentChannelId,
@@ -375,11 +372,6 @@ export class CallConnection {
 
   updateState(state: VoiceStateUpdate) {
     if (!this.isInChannel()) {
-      // console.warn('⚠️ Cannot update state:', {
-      //   hasChannel: !!this.currentChannelId,
-      //   hasUser: !!this.state.currentUser,
-      //   connectionState: this.ws?.readyState,
-      // });
       return;
     }
 
@@ -388,10 +380,11 @@ export class CallConnection {
       deafened: this.state.currentUser!.deafened,
       speaking: this.state.currentUser!.speaking,
       camera_on: this.state.currentUser!.camera_on,
-      screen_sharing: this.state.currentUser!.screen_sharing,
     };
 
-    const updatedState = { ...currentState, ...state };
+    // Exclude screen_sharing from the state update sent to server
+    const { screen_sharing, ...stateToUpdate } = state;
+    const updatedState = { ...currentState, ...stateToUpdate };
 
     this.sendOp(OP_CODES.STATE_UPDATE, {
       server_id: this.currentServerId,
