@@ -58,12 +58,18 @@ export interface LeaveChannelData {
   channel_type: string;
 }
 
+
+export interface ErrorData {
+  code: number;
+  message: string;
+}
+
 export interface CallServerMessage {
   op: number;
   data?: {
     heartbeat_interval?: number;
     users?: CallUserData[];
     user?: CallUserData;
-  } | CallUserData | LeaveChannelData;
+  } | CallUserData | LeaveChannelData | ErrorData;
   seq?: string;
 }

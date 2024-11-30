@@ -1,12 +1,12 @@
 import {
   CallServerMessage,
   CallState,
-  CallUserData,
+  CallUserData, ErrorData,
   LeaveChannelData,
   MediaChannelType,
   VoiceStateUpdate,
 } from '@/services/call/types';
-import { CALL_API, OP_CODES, RECONNECT_DELAY } from '@/services/call/constants';
+import { CALL_API, ERROR_CODES, OP_CODES, RECONNECT_DELAY } from '@/services/call/constants';
 import { apiClient } from '@/api/apiClient';
 import { isEqual } from 'lodash';
 import { WebRTCConnection } from '@/services/call/webrtc/WebRTCConnection.ts';
@@ -220,13 +220,30 @@ export class CallConnection {
     },
   };
 
+
+
   private handleMessage = (event: MessageEvent) => {
+    const getErrorName = (code: number): string => {
+      const errorEntries = Object.entries(ERROR_CODES);
+      const errorEntry = errorEntries.find(([_, value]) => value === code);
+      return errorEntry ? errorEntry[0] : `UNKNOWN_ERROR_${code}`;
+    };
+
+    function isErrorData(data: any): data is ErrorData {
+      return data && typeof data.code === 'number' && typeof data.message === 'string';
+    }
+
     try {
       const message: CallServerMessage = JSON.parse(event.data);
 
       // Error message handling (-1 op code)
-      if (message.op === -1) {
-        console.error('Server Error:', message.data);
+      if (message.op === -1 && message.data && isErrorData(message.data)) {
+        const errorName = getErrorName(message.data.code);
+        console.error('Error Message:', {
+          name: errorName,
+          code: message.data.code,
+          message: message.data.message
+        });
         return;
       }
 
