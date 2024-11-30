@@ -18,7 +18,6 @@ export const VideoContent = () => {
       : [...videoChatStore.users, currentUser];
   }, [videoChatStore.users, currentUser]);
 
-
   if (!allUsers?.length) return null;
 
   return (
@@ -39,19 +38,19 @@ export const VideoContent = () => {
                   : 'grid-cols-3'
           }`}
         >
-          {allUsers.map(user => (
+          {allUsers.filter(user => user != null).map(user => (
             <VideoUserBox
               key={user.user_id}
               user={{
                 id: user.user_id,
-                nickname: user.username,
-                isSpeaking: user.speaking,
-                isMuted: user.muted,
-                isDeafened: user.deafened,
-                isVideoOn: user.camera_on,
-                isScreenSharing: user.screen_sharing,
-                imageUrl: user.profile_image,
-                stream: user.stream,
+                nickname: user.username ?? '',
+                isSpeaking: Boolean(user?.speaking),
+                isMuted: Boolean(user?.muted),
+                isDeafened: Boolean(user?.deafened),
+                isVideoOn: Boolean(user?.camera_on),
+                isScreenSharing: Boolean(user?.screen_sharing),
+                imageUrl: user?.profile_image,
+                stream: user?.stream ?? null,
               }}
             />
           ))}
