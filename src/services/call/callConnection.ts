@@ -1,7 +1,8 @@
 import {
   CallServerMessage,
   CallState,
-  CallUserData, ErrorData,
+  CallUserData,
+  ErrorData,
   LeaveChannelData,
   MediaChannelType,
   VoiceStateUpdate,
@@ -36,17 +37,102 @@ export class CallConnection {
   private currentServerId: string = CALL_API.DEFAULT_SERVER_ID;
   private currentChannelType: MediaChannelType = 'VOICE';
   currentChannelId: string | null = null;
-  private onStateUpdate: (state: CallState) => void;
-  private accessToken: string;
-  state: CallState = {
-    users: [],
-    currentUser: null,
-    connectionStatus: 'DISCONNECTED',
-  };
+  private readonly onStateUpdate: (state: CallState) => void;
+  private readonly accessToken: string;
+  private lastKnownUser: CallUserData | null = null;
+  readonly state = new Proxy<CallState>(
+    {
+      users: [],
+      currentUser: null,
+      connectionStatus: 'DISCONNECTED',
+    },
+    {
+      set: (target, property: keyof CallState, value) => {
+        console.log(`[State Change] Property: ${String(property)}`);
+        console.log('[State Change] From:', target[property]);
+        console.log('[State Change] To:', value);
+
+        // 값이 동일한 경우 불필요한 업데이트 방지
+        if (isEqual(target[property], value)) {
+          return true;
+        }
+
+        // 깊은 복사를 통해 객체 참조 문제 방지
+        if (typeof value === 'object' && value !== null) {
+          (target[property] as any) = structuredClone(value);
+        } else {
+          (target[property] as any) = value;
+        }
+
+        return true;
+      },
+    },
+  );
+
+  private setupUsersProxy() {
+    this.state.users = new Proxy<CallUserData[]>([], {
+      set: (target: CallUserData[], property: string | symbol, value) => {
+        console.log('[Users Change] Index:', String(property));
+        console.log('[Users Change] Value:', value);
+        console.log('[Users Change] Stack:', new Error().stack);
+
+        // property가 숫자 인덱스인 경우만 처리
+        if (!isNaN(Number(property))) {
+          target[Number(property)] = value;
+        } else {
+          // 숫자가 아닌 property의 경우 (예: length)
+          (target as any)[property] = value;
+        }
+
+        return true;
+      },
+    });
+  }
 
   constructor(onStateUpdate: (state: CallState) => void, accessToken: string) {
     this.onStateUpdate = onStateUpdate;
     this.accessToken = accessToken;
+    this.setupUsersProxy();
+  }
+
+  private updateCurrentUser = (user: CallUserData | null) => {
+    if (user) {
+      this.lastKnownUser = user;
+    }
+
+    if (!isEqual(this.state.currentUser, user)) {
+      this.state.currentUser = user || this.lastKnownUser;
+      this.notifyStateUpdate();
+    }
+  };
+
+  private notifyStateUpdate = () => {
+    const clonedState = {
+      users: [...this.state.users],
+      currentUser: this.state.currentUser ? { ...this.state.currentUser } : null,
+      connectionStatus: this.state.connectionStatus,
+    };
+    this.onStateUpdate(clonedState);
+  };
+
+  async sendPresenterOffer(sdpOffer: string) {
+    const currentState = {
+      users: [...this.state.users],  // 깊은 복사로 변경
+      currentUser: this.state.currentUser ? { ...this.state.currentUser } : null,
+    };
+
+    this.sendOp(OP_CODES.PRESENTER, {
+      channel_id: this.currentChannelId,
+      sdp_offer: sdpOffer,
+    });
+
+    // 상태 복원이 필요한 경우에만 실행
+    if (this.state.users.length === 0 && currentState.users.length > 0) {
+      this.updateUsers(() => currentState.users);
+    }
+    if (!this.state.currentUser && currentState.currentUser) {
+      this.updateCurrentUser(currentState.currentUser);
+    }
   }
 
   async connect(serverId: string = CALL_API.DEFAULT_SERVER_ID) {
@@ -75,10 +161,21 @@ export class CallConnection {
     this.ws.onerror = this.handleError;
   }
 
-  public isInChannel(): boolean {
-    return !!this.currentChannelId &&
-      !!this.state.currentUser &&
-      this.ws?.readyState === WebSocket.OPEN;
+  isInChannel(): boolean {
+    const isChannelValid = !!this.currentChannelId;
+    const isUserValid = !!this.state.currentUser;
+    const isWebSocketOpen = this.ws?.readyState === WebSocket.OPEN;
+
+    console.log('Channel status check:', {
+      channelId: this.currentChannelId,
+      currentUser: this.state.currentUser,
+      wsState: this.ws?.readyState,
+      isChannelValid,
+      isUserValid,
+      isWebSocketOpen
+    });
+
+    return isChannelValid && isUserValid && isWebSocketOpen;
   }
 
   private handleConnectionError() {
@@ -86,14 +183,6 @@ export class CallConnection {
     this.updateConnectionStatus('ERROR');
     this.cleanup();
     this.scheduleReconnect();
-  }
-
-  async sendPresenterOffer(sdpOffer: string) {
-    console.log('Sending presenter offer');
-    this.sendOp(OP_CODES.PRESENTER, {
-      channel_id: this.currentChannelId,
-      sdp_offer: sdpOffer,
-    });
   }
 
   async sendViewerOffer(sdpOffer: string) {
@@ -109,27 +198,38 @@ export class CallConnection {
       channel_id: this.currentChannelId,
       candidate: candidate.toJSON(),
       sdp_mid: candidate.sdpMid,
-      sdp_m_line_index: candidate.sdpMLineIndex
+      sdp_m_line_index: candidate.sdpMLineIndex,
     });
   }
 
   private messageHandlers: MessageHandlerMap = {
     [OP_CODES.JOIN_CHANNEL_ACK]: (data: any) => {
-      if (!data) return;
+      console.log('JOIN_CHANNEL_ACK received:', data);
+
+      if (!data) {
+        console.warn('No data in JOIN_CHANNEL_ACK');
+        return;
+      }
 
       if (this.isCallUserData(data)) {
+        console.log('Valid CallUserData received:', data);
+
         this.updateUsers(prevUsers => {
+          console.log('Previous users:', prevUsers);
           const existingUserIndex = prevUsers.findIndex(u => u.user_id === data.user_id);
-          return existingUserIndex === -1
+          const updatedUsers = existingUserIndex === -1
             ? [...prevUsers, data]
             : prevUsers.map((u, i) => i === existingUserIndex ? data : u);
+          console.log('Updated users:', updatedUsers);
+          return updatedUsers;
         });
 
         if (!this.state.currentUser) {
+          console.log('Setting currentUser:', data);
           this.updateCurrentUser(data);
         }
-      } else if (Array.isArray(data)) {
-        this.updateUsers(() => data.filter(this.isCallUserData));
+      } else {
+        console.warn('Invalid CallUserData format:', data);
       }
     },
 
@@ -158,7 +258,7 @@ export class CallConnection {
             return {
               ...user,
               ...data,
-              screen_sharing: user.screen_sharing
+              screen_sharing: user.screen_sharing,
             };
           }
           return user;
@@ -169,7 +269,7 @@ export class CallConnection {
         this.updateCurrentUser({
           ...this.state.currentUser,
           ...data,
-          screen_sharing: this.state.currentUser.screen_sharing
+          screen_sharing: this.state.currentUser.screen_sharing,
         });
       }
     },
@@ -221,7 +321,6 @@ export class CallConnection {
   };
 
 
-
   private handleMessage = (event: MessageEvent) => {
     const getErrorName = (code: number): string => {
       const errorEntries = Object.entries(ERROR_CODES);
@@ -242,7 +341,7 @@ export class CallConnection {
         console.error('Error Message:', {
           name: errorName,
           code: message.data.code,
-          message: message.data.message
+          message: message.data.message,
         });
         return;
       }
@@ -309,12 +408,6 @@ export class CallConnection {
     console.log('💓 Heartbeat set:', interval, 'ms');
   }
 
-  private updateCurrentUser = (user: CallUserData | null) => {
-    if (!isEqual(this.state.currentUser, user)) {
-      this.state.currentUser = user;
-      this.notifyStateUpdate();
-    }
-  };
 
   private updateConnectionStatus = (status: string) => {
     if (this.state.connectionStatus !== status) {
@@ -323,18 +416,16 @@ export class CallConnection {
     }
   };
 
-  private updateUsers = (
-    updater: (prev: CallUserData[]) => CallUserData[],
-  ) => {
-    const updatedUsers = updater(this.state.users);
-    this.state.users = updatedUsers;
-    this.notifyStateUpdate();
+  private updateUsers = (updater: (prev: CallUserData[]) => CallUserData[]) => {
+    const prevUsers = [...this.state.users];
+    const updatedUsers = updater(prevUsers);
+
+    if (!isEqual(this.state.users, updatedUsers)) {
+      this.state.users = updatedUsers;
+      this.notifyStateUpdate();
+    }
   };
 
-  private notifyStateUpdate = () => {
-    const newState = { ...this.state };
-    this.onStateUpdate(newState);
-  };
 
   private scheduleReconnect() {
     if (this.reconnectTimeout) return;
@@ -357,14 +448,81 @@ export class CallConnection {
     }
   }
 
-  joinChannel(channelId: string, channelType: MediaChannelType = 'VOICE') {
+  private async waitForConnection(timeout = 5000): Promise<boolean> {
+    return new Promise((resolve) => {
+      const startTime = Date.now();
+
+      const checkConnection = () => {
+        if (this.isConnected()) {
+          resolve(true);
+        } else if (Date.now() - startTime > timeout) {
+          resolve(false);
+        } else {
+          setTimeout(checkConnection, 100);
+        }
+      };
+
+      checkConnection();
+    });
+  }
+
+  async joinChannel(channelId: string, channelType: MediaChannelType = 'VOICE'): Promise<boolean> {
     console.log('🎯 Joining channel:', channelId, '[', channelType, ']');
-    this.currentChannelId = channelId;
-    this.currentChannelType = channelType;
-    this.sendOp(OP_CODES.JOIN_CHANNEL, {
-      server_id: this.currentServerId,
-      channel_id: channelId,
-      channel_type: channelType,
+
+    // 연결 상태 확인
+    const isConnected = await this.waitForConnection();
+    if (!isConnected) {
+      console.error('Failed to join channel: Connection timeout');
+      return false;
+    }
+
+    // 이전 채널에서 나가기
+    if (this.currentChannelId) {
+      this.leaveChannel();
+    }
+
+    return new Promise((resolve) => {
+      // JOIN_CHANNEL_ACK 핸들러를 위한 일회성 리스너
+      const handleJoinAck = (data: any) => {
+        if (this.isCallUserData(data)) {
+          this.updateUsers(prevUsers => {
+            const existingUserIndex = prevUsers.findIndex(u => u.user_id === data.user_id);
+            return existingUserIndex === -1
+              ? [...prevUsers, data]
+              : prevUsers.map((u, i) => i === existingUserIndex ? data : u);
+          });
+
+          this.updateCurrentUser(data);
+          resolve(true);
+        }
+      };
+
+      // 기존 핸들러 임시 저장
+      const originalHandler = this.messageHandlers[OP_CODES.JOIN_CHANNEL_ACK];
+
+      // 임시 핸들러 설정
+      this.messageHandlers[OP_CODES.JOIN_CHANNEL_ACK] = (data: any) => {
+        handleJoinAck(data);
+        this.messageHandlers[OP_CODES.JOIN_CHANNEL_ACK] = originalHandler; // 원래 핸들러 복구
+      };
+
+      this.currentChannelId = channelId;
+      this.currentChannelType = channelType;
+
+      // 채널 입장 요청
+      this.sendOp(OP_CODES.JOIN_CHANNEL, {
+        server_id: this.currentServerId,
+        channel_id: channelId,
+        channel_type: channelType,
+      });
+
+      // 타임아웃 설정
+      setTimeout(() => {
+        if (!this.state.currentUser) {
+          this.messageHandlers[OP_CODES.JOIN_CHANNEL_ACK] = originalHandler;
+          resolve(false);
+        }
+      }, 5000);
     });
   }
 

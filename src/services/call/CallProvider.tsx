@@ -36,6 +36,11 @@ export function CallProvider({ children }: CallProviderProps) {
     currentUser: null,
     connectionStatus: 'DISCONNECTED',
   });
+
+  useEffect(() => {
+    console.log('CallProvider state updated:', state);
+  }, [state]);
+
   const connectionRef = useRef<CallConnection | null>(null);
   const accessToken = useAuthStore((state: { accessToken: any; }) => state.accessToken);
   const user = useAuthStore((state: { user: any; }) => state.user);
@@ -78,16 +83,20 @@ export function CallProvider({ children }: CallProviderProps) {
   useEffect(() => {
     if (state.users.length >= 0) {
       const currentStoreUsers = useVoiceChat.getState().users;
+      console.log('Syncing users with VoiceChat store:', {
+        callUsers: state.users,
+        voiceChatUsers: currentStoreUsers
+      });
+
       const updatedUsers = state.users.map(newUser => {
         const existingUser = currentStoreUsers.find(u => u.user_id === newUser.user_id);
-        return existingUser?.stream
-          ? {
-            ...newUser,
-            stream: existingUser.stream,
-            screen_sharing: existingUser.screen_sharing  // Preserve screen sharing state
-          }
-          : newUser;
+        return {
+          ...newUser,
+          stream: existingUser?.stream,
+          screen_sharing: existingUser?.screen_sharing ?? false
+        };
       });
+
       useVoiceChat.getState().setUsers(updatedUsers);
     }
   }, [state.users]);
@@ -100,44 +109,39 @@ export function CallProvider({ children }: CallProviderProps) {
 
     try {
       const connectAndJoinChannel = async () => {
-        await connection.connect();
+        try {
+          await connection.connect();
 
-        // 현재 URL에서 채널 정보 파싱
-        const pathSegments = window.location.pathname.split('/');
-        const channelType = pathSegments[1] as 'voice' | 'video';
-        const channelId = pathSegments[2];
+          const pathSegments = window.location.pathname.split('/');
+          const channelType = pathSegments[1] as 'voice' | 'video';
+          const channelId = pathSegments[2];
 
-        // 유효한 채널 경로인 경우에만 재연결
-        if (channelType && channelId && ['voice', 'video'].includes(channelType)) {
-          // 연결 상태 확인
-          await new Promise<void>((resolve) => {
-            const checkConnection = () => {
-              if (connection.isConnected()) {
-                resolve();
-              } else {
-                setTimeout(checkConnection, 100);
-              }
-            };
-            checkConnection();
-          });
+          if (channelType && channelId && ['voice', 'video'].includes(channelType)) {
+            const joinSuccess = await connection.joinChannel(
+              channelId,
+              channelType.toUpperCase() as MediaChannelType
+            );
 
-          // 채널 입장
-          connection.joinChannel(channelId, channelType.toUpperCase() as MediaChannelType);
+            if (!joinSuccess) {
+              console.error('Failed to join channel');
+              return;
+            }
 
-          // 현재 채널 사용자 수 확인하여 presenter/viewer 결정
-          const currentUsers = useVoiceChat.getState().users;
-          const channelUsers = currentUsers.filter(user =>
-            user.channel_id === channelId &&
-            user.channel_type === channelType.toUpperCase(),
-          );
+            const currentUsers = useVoiceChat.getState().users;
+            const channelUsers = currentUsers.filter(user =>
+              user.channel_id === channelId &&
+              user.channel_type === channelType.toUpperCase()
+            );
 
-          // WebRTC 연결 설정
-          const webrtc = WebRTCConnection.getInstance();
-          if (channelUsers.length === 0) {
-            await webrtc.initializePresenter(null);
-          } else {
-            await webrtc.initializeViewer(null);
+            const webrtc = WebRTCConnection.getInstance();
+            if (channelUsers.length === 0) {
+              await webrtc.initializePresenter(null);
+            } else {
+              await webrtc.initializeViewer(null);
+            }
           }
+        } catch (error) {
+          console.error('Connection failed:', error);
         }
       };
 
@@ -161,6 +165,13 @@ export function CallProvider({ children }: CallProviderProps) {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (connectionRef.current && state.currentUser) {
+      // connection 내부 상태도 업데이트
+      connectionRef.current.state.currentUser = state.currentUser;
+    }
+  }, [state.currentUser]);
 
   const joinChannel = useCallback((channelId: string, type: MediaChannelType) => {
     connectionRef.current?.joinChannel(channelId, type);

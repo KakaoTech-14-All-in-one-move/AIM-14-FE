@@ -229,12 +229,7 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
 
   const handleToggleMute = useCallback(() => {
     if (!connection || !currentUser) return;
-    if (!connection.isInChannel()) {
-      console.log('Not in a channel yet');
-      return;
-    }
 
-    // 기존 사용자의 프로필 이미지를 보존
     const existingUser = videoChatStore.users.find(u => u.user_id === currentUser.user_id);
 
     connection.updateState({
@@ -251,10 +246,6 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
 
   const handleToggleDeafen = useCallback(() => {
     if (!connection || !currentUser) return;
-    if (!connection.isInChannel()) {
-      console.log('Not in a channel yet');
-      return;
-    }
 
     connection.updateState({
       deafened: !videoChatStore.isDeafened,

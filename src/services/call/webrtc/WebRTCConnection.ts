@@ -49,12 +49,36 @@ export class WebRTCConnection {
     }
   }
 
+  private async sendPresenterOfferSafely(sdp: string) {
+    const currentState = {
+      users: this.callConnection?.state.users || [],
+      currentUser: this.callConnection?.state.currentUser,
+    };
+
+    await this.callConnection?.sendPresenterOffer(sdp);
+
+    // 상태가 초기화되었는지 확인하고 복원
+    if (this.callConnection) {
+      const newState = this.callConnection.state;
+      if (!newState.currentUser && currentState.currentUser) {
+        this.callConnection['updateCurrentUser'](currentState.currentUser);
+      }
+      if (newState.users.length === 0 && currentState.users.length > 0) {
+        this.callConnection['updateUsers'](() => currentState.users);
+      }
+    }
+  }
+
   private async initializePeerConnection(options?: WebRTCConnectionOptions) {
     this.validateState();
 
     try {
       const config = options?.configuration || DEFAULT_CONFIG;
       this.peerConnection = new RTCPeerConnection(config);
+
+      if (!this.peerConnection) {
+        throw new Error('Failed to create RTCPeerConnection');
+      }
 
       this.peerConnection.onicecandidate = (event) => {
         if (event.candidate && this.callConnection) {
@@ -120,6 +144,10 @@ export class WebRTCConnection {
       this.isPresenter = true;
       await this.initializePeerConnection(options);
 
+      if (!this.peerConnection) {
+        throw new Error('PeerConnection initialization failed');
+      }
+
       // 채널 타입에 따른 미디어 스트림 요청
       const isVideoChannel = !!videoElement;
       const constraints = {
@@ -156,12 +184,24 @@ export class WebRTCConnection {
       });
 
       await this.peerConnection!.setLocalDescription(offer);
-      this.callConnection!.sendPresenterOffer(offer.sdp!);
+      this.sendPresenterOfferSafely(offer.sdp!);
 
     } catch (error) {
       console.error('Failed to initialize presenter:', error);
       this.events?.onError?.(error as Error);
+      // dispose 호출 시 CallConnection의 상태를 보존
+      const currentState = {
+        users: this.callConnection?.state.users || [],
+        currentUser: this.callConnection?.state.currentUser,
+      };
       this.dispose();
+      // 상태 복원
+      if (this.callConnection) {
+        this.callConnection['updateUsers'](() => currentState.users);
+        if (currentState.currentUser) {
+          this.callConnection['updateCurrentUser'](currentState.currentUser);
+        }
+      }
     }
   }
 
