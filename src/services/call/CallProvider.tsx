@@ -37,37 +37,30 @@ export function CallProvider({ children }: CallProviderProps) {
     connectionStatus: 'DISCONNECTED',
   });
 
-  useEffect(() => {
-    console.log('CallProvider state updated:', state);
-  }, [state]);
-
   const connectionRef = useRef<CallConnection | null>(null);
   const accessToken = useAuthStore((state: { accessToken: any; }) => state.accessToken);
   const user = useAuthStore((state: { user: any; }) => state.user);
 
+  useEffect(() => {
+    useVoiceChat.getState().setUsers(state.users);
+  }, [state.users]);
+
   const handleStateUpdate = useCallback((newState: CallState) => {
-
     setState(prevState => {
-      const existingUserMap = new Map(
-        prevState.users.map(user => [user.user_id, user])
-      );
-
       const updatedUsers = newState.users.map(newUser => {
-        const existingUser = existingUserMap.get(newUser.user_id);
+        const existingUser = prevState.users.find(u => u.user_id === newUser.user_id);
         return {
           ...newUser,
           profile_image: existingUser?.profile_image || newUser.profile_image,
-          screen_sharing: existingUser?.screen_sharing ?? false,  // Preserve screen sharing state
+          screen_sharing: existingUser?.screen_sharing ?? false,
         };
       });
 
       const updatedCurrentUser = newState.currentUser
         ? {
           ...newState.currentUser,
-          profile_image:
-            prevState.currentUser?.profile_image ||
-            newState.currentUser.profile_image,
-          screen_sharing: prevState.currentUser?.screen_sharing ?? false,  // Preserve screen sharing state
+          profile_image: prevState.currentUser?.profile_image || newState.currentUser.profile_image,
+          screen_sharing: prevState.currentUser?.screen_sharing ?? false,
         }
         : null;
 

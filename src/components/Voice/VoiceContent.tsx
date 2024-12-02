@@ -1,20 +1,27 @@
 import { UserBox } from '@/components/Voice/UserBox.tsx';
 import { VoiceControls } from '@/components/Voice/VoiceControls.tsx';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useCall } from '@/services/call/CallProvider.tsx';
 import { useVoiceChat } from '@/hooks/useVoiceChat';
 
 export const VoiceContent = () => {
   const [showControls, setShowControls] = useState(false);
   const { currentUser } = useCall();
-  const voiceChatStore = useVoiceChat();  // VoiceChat store 사용
+  const users = useVoiceChat(state => state.users);
 
-  // VoiceChat store의 users 사용
-  const allUsers = currentUser
-    ? [...voiceChatStore.users.filter(u => u.user_id !== currentUser.user_id), currentUser]
-    : voiceChatStore.users;
+  // users 배열에서 중복 제거 및 정렬
+  const sortedUsers = useMemo(() => {
+    const uniqueUsers = Array.from(new Map(users.map(user => [user.user_id, user])).values());
+    if (!currentUser) return uniqueUsers;
 
-  if (!allUsers?.length) return null;
+    // 현재 사용자를 마지막으로 정렬
+    return [
+      ...uniqueUsers.filter(u => u.user_id !== currentUser.user_id),
+      ...uniqueUsers.filter(u => u.user_id === currentUser.user_id)
+    ];
+  }, [users, currentUser]);
+
+  if (!sortedUsers.length) return null;
 
   return (
     <div
@@ -23,24 +30,16 @@ export const VoiceContent = () => {
       onMouseLeave={() => setShowControls(false)}
     >
       <div className="flex-1 w-full flex items-center justify-center">
-        <div className={`grid gap-8 w-full max-w-[1200px] mx-auto
-          ${allUsers.length === 1 ? 'grid-cols-1' :
-          allUsers.length === 2 ? 'grid-cols-2' :
-            allUsers.length === 3 || allUsers.length === 4 ? 'grid-cols-2' :
-              'grid-cols-3'}`}
+        <div
+          className={`grid gap-8 w-full max-w-[1200px] mx-auto ${
+            sortedUsers.length === 1 ? 'grid-cols-1' :
+              sortedUsers.length === 2 ? 'grid-cols-2' :
+                sortedUsers.length <= 4 ? 'grid-cols-2' :
+                  'grid-cols-3'
+          }`}
         >
-          {allUsers.map((user) => (
-            <UserBox
-              key={user.user_id}
-              user={{
-                id: user.user_id,
-                nickname: user.username,
-                isSpeaking: user.speaking || false,
-                isMuted: user.muted || false,
-                isDeafened: user.deafened || false,
-                imageUrl: user.profile_image
-              }}
-            />
+          {sortedUsers.map(user => (
+            <UserBox key={user.user_id} user={user} />
           ))}
         </div>
       </div>

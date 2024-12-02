@@ -11,6 +11,8 @@ import { CALL_API, ERROR_CODES, OP_CODES, RECONNECT_DELAY } from '@/services/cal
 import { apiClient } from '@/api/apiClient';
 import { isEqual } from 'lodash';
 import { WebRTCConnection } from '@/services/call/webrtc/WebRTCConnection.ts';
+import { useVoiceChat } from '@/hooks/useVoiceChat.ts';
+import { useVideoChat } from '@/hooks/useVideoChat.ts';
 
 interface CallServerResponse {
   url: string;
@@ -48,10 +50,6 @@ export class CallConnection {
     },
     {
       set: (target, property: keyof CallState, value) => {
-        console.log(`[State Change] Property: ${String(property)}`);
-        console.log('[State Change] From:', target[property]);
-        console.log('[State Change] To:', value);
-
         // 값이 동일한 경우 불필요한 업데이트 방지
         if (isEqual(target[property], value)) {
           return true;
@@ -72,10 +70,6 @@ export class CallConnection {
   private setupUsersProxy() {
     this.state.users = new Proxy<CallUserData[]>([], {
       set: (target: CallUserData[], property: string | symbol, value) => {
-        console.log('[Users Change] Index:', String(property));
-        console.log('[Users Change] Value:', value);
-        console.log('[Users Change] Stack:', new Error().stack);
-
         // property가 숫자 인덱스인 경우만 처리
         if (!isNaN(Number(property))) {
           target[Number(property)] = value;
@@ -204,32 +198,31 @@ export class CallConnection {
 
   private messageHandlers: MessageHandlerMap = {
     [OP_CODES.JOIN_CHANNEL_ACK]: (data: any) => {
-      console.log('JOIN_CHANNEL_ACK received:', data);
-
-      if (!data) {
-        console.warn('No data in JOIN_CHANNEL_ACK');
+      if (!data || !this.isCallUserData(data)) {
+        console.warn('Invalid JOIN_CHANNEL_ACK data:', data);
         return;
       }
 
-      if (this.isCallUserData(data)) {
-        console.log('Valid CallUserData received:', data);
+      // 현재 유저인 경우 currentUser 즉시 업데이트
+      if (!this.state.currentUser) {
+        this.updateCurrentUser(data);  // 첫 입장 시에는 바로 설정
+      } else if (data.user_id === this.state.currentUser?.user_id) {
+        this.updateCurrentUser(data);  // 기존 유저의 업데이트인 경우
+      }
 
-        this.updateUsers(prevUsers => {
-          console.log('Previous users:', prevUsers);
-          const existingUserIndex = prevUsers.findIndex(u => u.user_id === data.user_id);
-          const updatedUsers = existingUserIndex === -1
-            ? [...prevUsers, data]
-            : prevUsers.map((u, i) => i === existingUserIndex ? data : u);
-          console.log('Updated users:', updatedUsers);
-          return updatedUsers;
-        });
-
-        if (!this.state.currentUser) {
-          console.log('Setting currentUser:', data);
-          this.updateCurrentUser(data);
+      // 기존 사용자 목록에 추가/업데이트
+      this.updateUsers(prevUsers => {
+        const existingUserIndex = prevUsers.findIndex(u => u.user_id === data.user_id);
+        if (existingUserIndex === -1) {
+          return [...prevUsers, data];
         }
-      } else {
-        console.warn('Invalid CallUserData format:', data);
+        return prevUsers.map((u, i) => i === existingUserIndex ? data : u);
+      });
+
+      if (this.currentChannelType === 'VOICE') {
+        useVoiceChat.getState().addUser(data);
+      } else if (this.currentChannelType === 'VIDEO') {
+        useVideoChat.getState().addUser(data);
       }
     },
 
@@ -238,40 +231,52 @@ export class CallConnection {
       if (!leaveData?.user_id) return;
 
       this.updateUsers(prevUsers =>
-        prevUsers.filter(user => user.user_id !== leaveData.user_id),
+        prevUsers.filter(user => user.user_id !== leaveData.user_id)
       );
 
+      // 현재 유저가 나간 경우에만 currentUser 초기화
       if (this.state.currentUser?.user_id === leaveData.user_id) {
         this.updateCurrentUser(null);
+      }
+
+      if (this.currentChannelType === 'VOICE') {
+        useVoiceChat.getState().removeUser(leaveData.user_id);
+      } else if (this.currentChannelType === 'VIDEO') {
+        useVideoChat.getState().removeUser(leaveData.user_id);
       }
     },
 
     [OP_CODES.STATE_UPDATE_ACK]: (data: any) => {
       if (!this.isCallUserData(data)) return;
-      console.log('사용자 상태 업데이트 :', data);
 
       const updatedUserId = data.user_id;
+      const { muted, deafened, speaking } = data;
+
+      // CallConnection의 users 배열 업데이트
       this.updateUsers(prevUsers =>
         prevUsers.map(user => {
           if (user.user_id === updatedUserId) {
-            // Preserve the existing screen_sharing state
-            return {
-              ...user,
-              ...data,
-              screen_sharing: user.screen_sharing,
-            };
+            return { ...user, muted, deafened, speaking };
           }
           return user;
-        }),
+        })
       );
 
+      // 현재 유저의 상태인 경우에만 currentUser 업데이트
       if (this.state.currentUser?.user_id === updatedUserId) {
         this.updateCurrentUser({
           ...this.state.currentUser,
-          ...data,
-          screen_sharing: this.state.currentUser.screen_sharing,
+          muted,
+          deafened,
+          speaking
         });
       }
+
+      useVoiceChat.getState().updateUserState(updatedUserId, {
+        muted,
+        deafened,
+        speaking
+      });
     },
 
     [OP_CODES.INITIAL_ACK]: (data: any) => {

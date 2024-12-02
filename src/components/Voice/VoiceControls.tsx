@@ -1,10 +1,11 @@
 import { ControlButton } from '@/components/Voice/ControlButton.tsx';
 import { HeadphoneOff, Headphones, Mic, MicOff, PhoneOff } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useCall } from '@/services/call/CallProvider.tsx';
 import { useVoiceChat } from '@/hooks/useVoiceChat';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect } from 'react';
 import { WebRTCConnection } from '@/services/call/webrtc/WebRTCConnection.ts';
+import { UserState } from '@/components/Voice/types/voice.ts';
 
 interface VoiceControlsProps {
   show: boolean;
@@ -12,133 +13,77 @@ interface VoiceControlsProps {
 
 export const VoiceControls: React.FC<VoiceControlsProps> = ({ show }) => {
   const navigate = useNavigate();
-  const location = useLocation();
   const { connection, currentUser } = useCall();
   const voiceChatStore = useVoiceChat();
 
-  // 각 유저별 상태를 추적하기 위한 ref
-  const userStatesRef = useRef(new Map<string, { muted: boolean; deafened: boolean }>());
-
-  // 채널 입장 시 초기 상태 설정
   useEffect(() => {
     if (currentUser) {
-      // 채널 입장 시 항상 false로 초기화
-      userStatesRef.current.set(currentUser.user_id, {
+      const initialState: UserState = {
         muted: false,
         deafened: false,
-      });
-
-      // VoiceChat 스토어도 동일하게 초기화
-      voiceChatStore.updateUserStatus(currentUser.user_id, {
-        ...currentUser,
-        muted: false,
-        deafened: false,
-      });
+        speaking: false,
+        stream: null,
+      };
+      voiceChatStore.updateUserState(currentUser.user_id, initialState);
     }
-  }, [currentUser?.user_id]); // currentUser가 변경될 때만 실행
+  }, [currentUser?.user_id]);
 
   const handleDisconnect = useCallback(() => {
     if (connection) {
       connection.leaveChannel();
-      // 채널 떠날 때 상태 초기화
-      userStatesRef.current.clear();
+      voiceChatStore.resetState();
     }
     navigate('/home');
   }, [connection, navigate]);
 
   const handleToggleMute = useCallback(() => {
-    if (connection && currentUser) {
-      const currentState = userStatesRef.current.get(currentUser.user_id) || {
-        muted: false,
-        deafened: false,
-      };
+    if (!connection || !currentUser) return;
 
-      // 새로운 상태 계산
-      const newState = {
-        ...currentState,
-        muted: !currentState.muted,
-      };
+    const newState = {
+      muted: !voiceChatStore.userStates.get(currentUser.user_id)?.muted,
+    };
 
-      // WebRTC 오디오 트랙 상태 변경
-      const webrtc = WebRTCConnection.getInstance();
-      webrtc.toggleAudio(!newState.muted);  // muted가 true면 audio를 false로
-
-      // 상태 업데이트
-      userStatesRef.current.set(currentUser.user_id, newState);
-      connection.updateState(newState);
-      voiceChatStore.updateUserStatus(currentUser.user_id, {
-        ...currentUser,
-        muted: newState.muted,
-      });
-    }
-  }, [connection, currentUser, voiceChatStore]);
+    const webrtc = WebRTCConnection.getInstance();
+    webrtc.toggleAudio(!newState.muted);
+    connection.updateState(newState);
+  }, [connection, currentUser]);
 
   const handleToggleDeafen = useCallback(() => {
-    if (connection && currentUser) {
-      if (!connection.isInChannel()) {
-        console.log('Not in a channel yet');
-        return;
-      }
+    if (!connection || !currentUser || !connection.isInChannel()) return;
 
-      const currentState = userStatesRef.current.get(currentUser.user_id) || {
-        muted: false,
-        deafened: false,
-      };
-
-      const newState = {
-        ...currentState,
-        deafened: !currentState.deafened,
-      };
-
-      // 상태 업데이트
-      userStatesRef.current.set(currentUser.user_id, newState);
-      connection.updateState(newState);
-      voiceChatStore.updateUserStatus(currentUser.user_id, {
-        ...currentUser,
-        deafened: newState.deafened,
-      });
-
-      // WebRTC 연결에 deafened 상태 전달
-      const webrtc = WebRTCConnection.getInstance();
-      webrtc.toggleDeafened(newState.deafened);
-    }
-  }, [connection, currentUser, voiceChatStore]);
-
-  // 현재 유저의 상태만 참조하도록 수정
-  const currentUserState = useMemo(() => {
-    if (!currentUser) return null;
-
-    const userState = userStatesRef.current.get(currentUser.user_id) || {
-      muted: false,
-      deafened: false,
+    const newState = {
+      deafened: !voiceChatStore.userStates.get(currentUser.user_id)?.deafened,
     };
 
-    return {
-      ...currentUser,
-      ...userState,
-    };
-  }, [currentUser, voiceChatStore.users]);
+    const webrtc = WebRTCConnection.getInstance();
+    webrtc.toggleDeafened(newState.deafened);
+    connection.updateState(newState);
+  }, [connection, currentUser]);
+
+  const currentUserState = currentUser
+    ? voiceChatStore.userStates.get(currentUser.user_id)
+    : null;
+
+  if (!currentUser || !currentUserState) return null;
 
   return (
-    <div className={`absolute bottom-6 left-1/2 transform -translate-x-1/2 flex items-center space-x-2 
-     transition-opacity duration-200 ${show ? 'opacity-100' : 'opacity-0'}`}>
+    <div
+      className={`absolute bottom-6 left-1/2 transform -translate-x-1/2 flex items-center space-x-2 
+        transition-all duration-300 ${show ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
+        z-20`}
+    >
       <ControlButton
-        icon={currentUserState?.muted ? MicOff : Mic}
+        icon={currentUserState.muted ? MicOff : Mic}
         onClick={handleToggleMute}
-        tooltip={currentUserState?.muted ? 'Unmute' : 'Mute'}
-        active={currentUserState?.muted}
+        tooltip={currentUserState.muted ? 'Unmute' : 'Mute'}
+        active={currentUserState.muted}
       />
       <ControlButton
-        icon={currentUserState?.deafened ? HeadphoneOff : Headphones}
+        icon={currentUserState.deafened ? HeadphoneOff : Headphones}
         onClick={handleToggleDeafen}
-        tooltip={currentUserState?.deafened ? 'Undeafen' : 'Deafen'}
-        active={currentUserState?.deafened}
+        tooltip={currentUserState.deafened ? 'Undeafen' : 'Deafen'}
+        active={currentUserState.deafened}
       />
-      {location.pathname.includes('/video/') && (
-        <>
-          {/* 비디오 관련 컨트롤 */}
-        </>
-      )}
       <ControlButton
         icon={PhoneOff}
         onClick={handleDisconnect}
