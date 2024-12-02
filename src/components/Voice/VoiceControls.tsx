@@ -14,9 +14,12 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ show }) => {
   const navigate = useNavigate();
   const { connection, currentUser } = useCall();
   const voiceChatStore = useVoiceChat();
-  const currentUserState = useVoiceChat(state =>
-    currentUser ? state.userStates.get(currentUser.user_id) : null
-  );
+
+  // 현재 사용자의 상태만 가져오기
+  const currentUserState = useVoiceChat(state => {
+    if (!currentUser?.user_id) return null;
+    return state.userStates.get(currentUser.user_id) || null;
+  });
 
   // 컴포넌트 마운트 시 현재 사용자 ID 설정
   useEffect(() => {
@@ -43,29 +46,28 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ show }) => {
   }, [connection, navigate]);
 
   const handleToggleMute = useCallback(() => {
-    if (!connection || !currentUser) return;
+    if (!connection || !currentUser || !currentUserState) return;
 
-    const newMutedState = !currentUserState?.muted;
-
+    const newMutedState = !currentUserState.muted;
     const webrtc = WebRTCConnection.getInstance();
     webrtc.toggleAudio(!newMutedState);
 
     connection.updateState({ muted: newMutedState });
     voiceChatStore.updateUserState(currentUser.user_id, { muted: newMutedState });
-  }, [connection, currentUser, currentUserState?.muted]);
+  }, [connection, currentUser, currentUserState]);
 
   const handleToggleDeafen = useCallback(() => {
-    if (!connection || !currentUser || !connection.isInChannel()) return;
+    if (!connection || !currentUser || !currentUserState || !connection.isInChannel()) return;
 
-    const newDeafenedState = !currentUserState?.deafened;
-
+    const newDeafenedState = !currentUserState.deafened;
     const webrtc = WebRTCConnection.getInstance();
     webrtc.toggleDeafened(newDeafenedState);
 
     connection.updateState({ deafened: newDeafenedState });
     voiceChatStore.updateUserState(currentUser.user_id, { deafened: newDeafenedState });
-  }, [connection, currentUser, currentUserState?.deafened]);
+  }, [connection, currentUser, currentUserState]);
 
+  // 현재 사용자가 없거나 상태가 없으면 렌더링하지 않음
   if (!currentUser || !currentUserState) return null;
 
   return (
