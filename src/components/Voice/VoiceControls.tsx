@@ -1,11 +1,10 @@
-import { ControlButton } from '@/components/Voice/ControlButton.tsx';
+import { ControlButton } from '@/components/Voice/ControlButton';
 import { HeadphoneOff, Headphones, Mic, MicOff, PhoneOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useCall } from '@/services/call/CallProvider.tsx';
+import { useCall } from '@/services/call/CallProvider';
 import { useVoiceChat } from '@/hooks/useVoiceChat';
 import { useCallback, useEffect } from 'react';
-import { WebRTCConnection } from '@/services/call/webrtc/WebRTCConnection.ts';
-import { UserState } from '@/components/Voice/types/voice.ts';
+import { WebRTCConnection } from '@/services/call/webrtc/WebRTCConnection';
 
 interface VoiceControlsProps {
   show: boolean;
@@ -15,16 +14,23 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ show }) => {
   const navigate = useNavigate();
   const { connection, currentUser } = useCall();
   const voiceChatStore = useVoiceChat();
+  const currentUserState = useVoiceChat(state =>
+    currentUser ? state.userStates.get(currentUser.user_id) : null
+  );
 
+  // 컴포넌트 마운트 시 현재 사용자 ID 설정
   useEffect(() => {
     if (currentUser) {
-      const initialState: UserState = {
-        muted: false,
-        deafened: false,
-        speaking: false,
-        stream: null,
-      };
-      voiceChatStore.updateUserState(currentUser.user_id, initialState);
+      voiceChatStore.setCurrentUserId(currentUser.user_id);
+      // 초기 상태 설정
+      if (!voiceChatStore.userStates.has(currentUser.user_id)) {
+        voiceChatStore.updateUserState(currentUser.user_id, {
+          muted: false,
+          deafened: false,
+          speaking: false,
+          stream: null,
+        });
+      }
     }
   }, [currentUser?.user_id]);
 
@@ -39,30 +45,26 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ show }) => {
   const handleToggleMute = useCallback(() => {
     if (!connection || !currentUser) return;
 
-    const newState = {
-      muted: !voiceChatStore.userStates.get(currentUser.user_id)?.muted,
-    };
+    const newMutedState = !currentUserState?.muted;
 
     const webrtc = WebRTCConnection.getInstance();
-    webrtc.toggleAudio(!newState.muted);
-    connection.updateState(newState);
-  }, [connection, currentUser]);
+    webrtc.toggleAudio(!newMutedState);
+
+    connection.updateState({ muted: newMutedState });
+    voiceChatStore.updateUserState(currentUser.user_id, { muted: newMutedState });
+  }, [connection, currentUser, currentUserState?.muted]);
 
   const handleToggleDeafen = useCallback(() => {
     if (!connection || !currentUser || !connection.isInChannel()) return;
 
-    const newState = {
-      deafened: !voiceChatStore.userStates.get(currentUser.user_id)?.deafened,
-    };
+    const newDeafenedState = !currentUserState?.deafened;
 
     const webrtc = WebRTCConnection.getInstance();
-    webrtc.toggleDeafened(newState.deafened);
-    connection.updateState(newState);
-  }, [connection, currentUser]);
+    webrtc.toggleDeafened(newDeafenedState);
 
-  const currentUserState = currentUser
-    ? voiceChatStore.userStates.get(currentUser.user_id)
-    : null;
+    connection.updateState({ deafened: newDeafenedState });
+    voiceChatStore.updateUserState(currentUser.user_id, { deafened: newDeafenedState });
+  }, [connection, currentUser, currentUserState?.deafened]);
 
   if (!currentUser || !currentUserState) return null;
 
