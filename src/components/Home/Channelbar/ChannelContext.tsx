@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { ChannelContextType, Channels, ChannelStateType, ChannelType } from './types';
+import { ChannelContextType, ChannelStateType, ChannelType } from './types';
 import { useAuthStore } from '@/stores/authStore';
 import { useServerStore } from '@/stores/serverStore';
 import { Channel } from '@/types/server';
@@ -139,29 +139,6 @@ export const ChannelProvider: React.FC<ChannelProviderProps> = ({ children }) =>
     }
   }, []);
 
-  const renameChannel = useCallback((channelId: string, newName: string) => {
-    setChannels(prev =>
-      prev.map(channel =>
-        channel.id === channelId
-          ? { ...channel, name: newName }
-          : channel,
-      ),
-    );
-  }, []);
-
-  const deleteChannel = useCallback((channelId: string) => {
-    setChannels(prev => prev.filter(channel => channel.id !== channelId));
-
-    const channel = channels.find(ch => ch.id === channelId);
-    if (channel && channel.type !== 'text') {
-      setChannelStates(prev => {
-        const newStates = { ...prev };
-        delete newStates[channelId];
-        return newStates;
-      });
-    }
-  }, [channels]);
-
   const toggleSection = useCallback((type: ChannelType) => {
     setOpenSections(prev => ({
       ...prev,
@@ -179,7 +156,7 @@ export const ChannelProvider: React.FC<ChannelProviderProps> = ({ children }) =>
     }));
   }, []);
 
-  const deactivateChannel = useCallback((channelId: string) => {
+  const deactivateChannel = useCallback((type: Exclude<ChannelType, 'text'>, channelName: string) => {
     setChannelStates(prev => ({
       ...prev,
       [type]: {
@@ -189,7 +166,7 @@ export const ChannelProvider: React.FC<ChannelProviderProps> = ({ children }) =>
     }));
   }, []);
 
-  const joinChannel = useCallback((channelId: string) => {
+  const joinChannel = useCallback((type: Exclude<ChannelType, 'text'>, channelName: string) => {
     setChannelStates(prev => ({
       ...prev,
       [type]: {
@@ -199,7 +176,7 @@ export const ChannelProvider: React.FC<ChannelProviderProps> = ({ children }) =>
     }));
   }, []);
 
-  const leaveChannel = useCallback((channelId: string) => {
+  const leaveChannel = useCallback((type: Exclude<ChannelType, 'text'>, channelName: string) => {
     setChannelStates(prev => ({
       ...prev,
       [type]: {
@@ -221,7 +198,7 @@ export const ChannelProvider: React.FC<ChannelProviderProps> = ({ children }) =>
     deactivateChannel,
     joinChannel,
     leaveChannel,
-    currentUser: user,
+    currentUser: user
   }), [
     channels,
     addChannel,
@@ -234,7 +211,7 @@ export const ChannelProvider: React.FC<ChannelProviderProps> = ({ children }) =>
     deactivateChannel,
     joinChannel,
     leaveChannel,
-    user,
+    user
   ]);
 
   return (

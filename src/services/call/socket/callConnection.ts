@@ -20,7 +20,7 @@ export class CallConnection {
   private ws: WebSocket | null = null;
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private reconnectTimeout: NodeJS.Timeout | null = null;
-  private currentServerId: string = CALL_API.DEFAULT_SERVER_ID;
+  private currentServerId: string | null = null;
   private accessToken: string;
 
   private constructor(accessToken: string) {
@@ -34,17 +34,27 @@ export class CallConnection {
     return CallConnection.instance!;
   }
 
+  setServerId(serverId: string | number | null) {
+    this.currentServerId = serverId?.toString() || null;
+  }
+
+  updateServerConnection() {
+    if (this.isConnected() && this.currentServerId) {
+      this.sendOp(OP_CODES.SERVER, { server_id: this.currentServerId });
+    }
+  }
+
   private messageHandlers: MessageHandlerMap = {
     [OP_CODES.INIT_ACK]: (data: any) => {
       if (data?.heartbeat_interval) {
         this.setupHeartbeat(data.heartbeat_interval);
-        this.sendOp(OP_CODES.SERVER, { server_id: this.currentServerId });
       }
     },
 
     [OP_CODES.SERVER_ACK]: (data: any) => {
       if (this.isCallUserData(data)) {
         const userStore = useUserStore.getState();
+        this.currentServerId = data.server_id;
         userStore.setCurrentUser(data);
       }
     },
@@ -318,7 +328,7 @@ export class CallConnection {
     }
   }
 
-  private sendOp(op: number, data?: any) {
+  sendOp(op: number, data?: any) {
     if (!this.isConnected()) return;
     this.ws!.send(JSON.stringify({ op, data }));
   }

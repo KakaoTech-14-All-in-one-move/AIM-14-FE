@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useMediaStore } from '@/stores/mediaStore';
 import { useUserStore } from '@/stores/userStore';
 import { WebRTCProvider } from './webrtc/WebRTCProvider';
+import { useServerStore } from '@/stores/serverStore';
 
 interface CallContextType {
   connection: CallConnection | null;
@@ -37,6 +38,7 @@ export function CallProvider({ children }: CallProviderProps) {
   const user = useAuthStore((state) => state.user);
   const mediaStore = useMediaStore();
   const userStore = useUserStore();
+  const { selectedServerId } = useServerStore();
 
   useEffect(() => {
     if (!accessToken || !user) return;
@@ -44,30 +46,17 @@ export function CallProvider({ children }: CallProviderProps) {
     const callConnection = CallConnection.getInstance(accessToken);
     setConnection(callConnection);
 
-    const connectAndJoinChannel = async () => {
+    const connectAndInitialize = async () => {
       try {
         const connected = await callConnection.connect();
         setIsConnected(connected);
-
-        if (connected) {
-          const pathSegments = window.location.pathname.split('/');
-          const channelType = pathSegments[1] as 'voice' | 'video';
-          const channelId = pathSegments[2];
-
-          if (channelType && channelId && ['voice', 'video'].includes(channelType)) {
-            await callConnection.joinChannel(
-              channelId,
-              channelType.toUpperCase() as MediaChannelType
-            );
-          }
-        }
       } catch (error) {
         console.error('Connection failed:', error);
         setIsConnected(false);
       }
     };
 
-    connectAndJoinChannel();
+    connectAndInitialize();
 
     return () => {
       callConnection.disconnect();
@@ -76,7 +65,17 @@ export function CallProvider({ children }: CallProviderProps) {
       mediaStore.resetState();
       userStore.resetState();
     };
-  }, [accessToken, user]);
+  }, [accessToken, user]); // 기본 연결은 accessToken과 user에만 의존
+
+  // 서버 ID 변경 처리
+  useEffect(() => {
+    if (!connection || !isConnected) return;
+
+    if (selectedServerId) {
+      connection.setServerId(selectedServerId);
+      connection.updateServerConnection();
+    }
+  }, [selectedServerId, connection, isConnected]);
 
   const joinChannel = async (channelId: string, type: MediaChannelType) => {
     if (!connection) return false;

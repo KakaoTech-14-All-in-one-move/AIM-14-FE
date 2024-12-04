@@ -1,15 +1,16 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { CameraOff, ChevronDown, HeadphoneOff, MicOff, MonitorUp, Plus } from 'lucide-react';
-import { Channel, ChannelType } from '@/components/Home/Channelbar/types';
+import { ChannelType } from '@/components/Home/Channelbar/types';
 import { useChannels } from '@/components/Home/Channelbar/ChannelContext';
-import { useCall } from '@/services/call/CallProvider';
-import { useMediaStore } from '@/stores/mediaStore';
-import { useUserStore } from '@/stores/userStore';
+import { useMediaConnection } from '@/hooks/useMediaConnection';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage';
 import { useServerStore } from '@/stores/serverStore';
 import { useChannelStore } from '@/stores/channelStore';
+import { useUserStore } from '@/stores/userStore';
+import { useMediaChatStore } from '@/stores/useMediaChatStore';
 import { Channel } from '@/types/server';
+import ContextMenu from './ContextMenu';
 
 interface Props {
   type: ChannelType;
@@ -18,63 +19,55 @@ interface Props {
 
 const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
   const navigate = useNavigate();
-  const { channelId } = useParams();
-  const voiceChatStore = useVoiceChat();
-  const { connection } = useCall();
   const { selectedServerId } = useServerStore();
   const channelStore = useChannelStore();
-
-  const mediaStore = useMediaStore();
   const userStore = useUserStore();
+  const mediaChatStore = useMediaChatStore();
 
+  const { joinChannel, leaveChannel, currentChannelId } = useMediaConnection();
   const {
     channels,
-    channelStates,
     openSections,
     toggleSection,
-    activateChannel,
-    deactivateChannel,
-    joinChannel,
-    leaveChannel
   } = useChannels();
+
+  // MediaChat 관련 상태들을 직접 store에서 가져오기
+  const userStates = mediaChatStore.userStates;
+  const speakingUsers = mediaChatStore.speakingUsers;
+  const currentUserId = mediaChatStore.currentUserId;
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; channel: Channel } | null>(null);
   const [expandedChannels, setExpandedChannels] = useState<Set<string>>(new Set());
 
-  // 현재 타입의 채널들 메모이제이션
+  // 현재 타입의 채널들
   const currentChannels = useMemo(() => channels[type] || [], [channels, type]);
 
-  const toggleChannelExpand = useCallback((channelId: string) => {
+  const toggleChannelExpand = useCallback((channelName: string) => {
     setExpandedChannels(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(channelId)) {
-        newSet.delete(channelId);
+      if (newSet.has(channelName)) {
+        newSet.delete(channelName);
       } else {
-        newSet.add(channelId);
+        newSet.add(channelName);
       }
       return newSet;
     });
   }, []);
 
+  // 채널 관리 함수들
   const handleAddChannel = async () => {
     if (!selectedServerId) return;
 
     const name = prompt('채널 이름을 입력하세요:');
     if (!name) return;
 
-    // 이미 해당 채널에 입장한 상태인지 확인
-    if (connection.isInChannel() && connection.currentChannelId === channelId) {
-      return;
-    }
-
     try {
       await channelStore.addChannel(selectedServerId, {
         channelName: name,
-        channelCategory: type === 'text' ? 'CHAT' : type === 'voice' ? 'VOICE' : 'VIDEO'
+        channelCategory: type === 'text' ? 'CHAT' : type === 'voice' ? 'VOICE' : 'VIDEO',
       });
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || '채널 생성에 실패했습니다.';
-      alert(errorMessage);
+      alert(error.response?.data?.message || '채널 생성에 실패했습니다.');
     }
   };
 
@@ -85,8 +78,7 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
     try {
       await channelStore.updateChannelName(channel.serverId, channel.channelId, newName);
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || '채널 이름 변경에 실패했습니다.';
-      alert(errorMessage);
+      alert(error.response?.data?.message || '채널 이름 변경에 실패했습니다.');
     }
   };
 
@@ -96,87 +88,93 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
     try {
       await channelStore.deleteChannel(channel.serverId, channel.channelId);
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || '채널 삭제에 실패했습니다.';
-      alert(errorMessage);
+      alert(error.response?.data?.message || '채널 삭제에 실패했습니다.');
     }
   };
 
-  const handleChannelClick = useCallback((channel: Channel) => {
+  const handleChannelClick = useCallback(async (channel: Channel, isMemberClick: boolean = false) => {
     if (type === 'text') {
       navigate(`/channels/${channel.serverId}/${channel.channelId}`);
       return;
     }
 
-    const mediaType = type as 'voice' | 'video';
-    const isJoined = channelStates[mediaType]?.joined[channel.channelName] || false;
+    const mediaType = type.toUpperCase() as 'VOICE' | 'VIDEO';
 
-    if (isJoined) {
-      toggleChannelExpand(channel.channelName);
+    // 멤버를 클릭한 경우는 채널 전환을 하지 않음
+    if (isMemberClick) {
       return;
     }
 
-    const hasActiveChannel = Object.entries(channelStates[mediaType]?.joined || {})
-      .some(([name, joined]) => joined);
-
-    if (hasActiveChannel) {
+    // 다른 채널에 이미 접속해 있는 경우
+    if (currentChannelId) {
       const confirmSwitch = window.confirm(
-        `현재 ${mediaType === 'voice' ? '음성' : '화상'} 채널에 접속 중입니다.\n통화를 종료하고 이동하시겠습니까?`
+        `현재 ${type === 'voice' ? '음성' : '화상'} 채널에 접속 중입니다.\n통화를 종료하고 이동하시겠습니까?`,
       );
-
       if (!confirmSwitch) return;
 
-      Object.entries(channelStates[mediaType]?.joined || {}).forEach(([name, joined]) => {
-        if (joined) {
-          leaveChannel(mediaType, name);
-          connection?.leaveChannel();
-        }
-        return newSet;
-      });
-      return;
+      await leaveChannel();
     }
 
-    joinChannel(mediaType, channel.channelName);
-    connection?.joinChannel(channel.channelId.toString(), mediaType.toUpperCase());
-    navigate(`/${mediaType}/${channel.channelId}`);
-    toggleChannelExpand(channel.channelName);
-  }, [type, channelStates, connection, navigate, joinChannel, leaveChannel, toggleChannelExpand]);
+    // 새 채널 입장
+    const success = await joinChannel(channel.channelId.toString(), mediaType);
+    if (success) {
+      navigate(`/${type}/${channel.channelId}`);
+      toggleChannelExpand(channel.channelName);
+    }
+  }, [type, currentChannelId, joinChannel, leaveChannel, navigate, toggleChannelExpand]);
 
   const renderChannelMembers = useCallback((channel: Channel) => {
     if (!['voice', 'video'].includes(type)) return null;
 
-    const channelMembers = voiceChatStore.users.filter(member =>
+    const channelMembers = userStore.users.filter(member =>
       member.channel_id === channel.channelId.toString() &&
-      member.channel_type === type.toUpperCase()
+      member.channel_type === type.toUpperCase(),
     );
 
     return (
       <>
-        {channelMembers.map(member => (
-          <div
-            key={member.user_id}
-            className="ml-6 mt-2 mb-2 flex items-center text-gray-400"
-          >
-            {member.profile_image ? (
-              <img
-                src={`${import.meta.env.VITE_BE_SERVER_URL}${member.profile_image}`}
-                alt={member.username}
-                className="w-5 h-5 rounded-full mr-2"
-              />
-            ) : (
-              <DefaultProfileImage username={member.username} size={20} margin="mr-1" />
-            )}
-            <span className="text-sm font-semibold">{member.username}</span>
-            <div className="ml-auto mr-4 flex items-center gap-2">
-              {member.muted && <MicOff size={16} className="text-red-500" />}
-              {member.deafened && <HeadphoneOff size={16} className="text-red-500" />}
-              {type === 'video' && !member.camera_on && <CameraOff size={16} className="text-red-500" />}
-              {type === 'video' && member.screen_sharing && <MonitorUp size={16} className="text-green-500" />}
+        {channelMembers.map(member => {
+          const memberState = userStates.get(member.user_id);
+
+          return (
+            <div
+              key={member.user_id}
+              className={`ml-6 mt-2 mb-2 flex items-center text-gray-400 cursor-pointer
+              ${member.user_id === currentUserId ? 'bg-gray-700/30 rounded px-2' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleChannelClick(channel, true);
+              }}
+            >
+              {member.profile_image ? (
+                <img
+                  src={`${import.meta.env.VITE_BE_SERVER_URL}${member.profile_image}`}
+                  alt={member.username}
+                  className="w-5 h-5 rounded-full mr-2"
+                />
+              ) : (
+                <DefaultProfileImage username={member.username} size={20} margin="mr-1" />
+              )}
+              <span className="text-sm font-semibold">{member.username}</span>
+              <div className="ml-auto mr-4 flex items-center gap-2">
+                {memberState?.muted && <MicOff size={16} className="text-red-500" />}
+                {memberState?.deafened && <HeadphoneOff size={16} className="text-red-500" />}
+                {type === 'video' && !memberState?.cameraOn && (
+                  <CameraOff size={16} className="text-red-500" />
+                )}
+                {type === 'video' && memberState?.screenSharing && (
+                  <MonitorUp size={16} className="text-green-500" />
+                )}
+                {speakingUsers.has(member.user_id) && (
+                  <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </>
     );
-  }, [type, voiceChatStore.users]);
+  }, [type, userStore.users, userStates, currentUserId, speakingUsers, handleChannelClick]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, channel: Channel) => {
     e.preventDefault();
@@ -187,43 +185,37 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
   useEffect(() => {
     if (!['voice', 'video'].includes(type)) return;
 
-    const activeChannelUsers = new Map<string, string[]>();
+    const activeChannels = new Set(
+      userStore.users
+        .filter(user => user.channel_type === type.toUpperCase())
+        .map(user => user.channel_id),
+    );
 
-    // 각 채널별 활성 사용자 수집
-    voiceChatStore.users.forEach(user => {
-      if (user.channel_type === type.toUpperCase()) {
-        const channelId = user.channel_id.toString();
-        const currentUsers = activeChannelUsers.get(channelId) || [];
-        activeChannelUsers.set(channelId, [...currentUsers, user.user_id]);
-      }
-    });
-
-    // 현재 채널들의 상태 업데이트
-    currentChannels.forEach(channel => {
-      const hasUsers = activeChannelUsers.has(channel.channelId.toString());
-      if (hasUsers) {
-        activateChannel(type, channel.channelName);
-        setExpandedChannels(prev => {
-          const newSet = new Set(prev);
+    // 활성 채널 자동 확장
+    setExpandedChannels(prev => {
+      const newSet = new Set(prev);
+      currentChannels.forEach(channel => {
+        if (activeChannels.has(channel.channelId.toString())) {
           newSet.add(channel.channelName);
-          return newSet;
-        });
-      } else {
-        deactivateChannel(type, channel.channelName);
-      }
+        }
+      });
+      return newSet;
     });
-  }, [type, voiceChatStore.users, currentChannels, activateChannel, deactivateChannel]);
+  }, [type, userStore.users, currentChannels]);
 
   return (
     <div className="mt-5">
       <div className="flex items-center justify-between text-gray-400 mb-1 ml-2">
-        <div className="flex items-center">
+        <div
+          className="flex items-center cursor-pointer group"
+          onClick={() => toggleSection(type)}
+        >
           <ChevronDown
             size={12}
-            className={`transform transition-transform ${openSections[type] ? '' : '-rotate-90'} cursor-pointer`}
-            onClick={() => toggleSection(type)}
+            className={`transform transition-transform ${openSections[type] ? '' : '-rotate-90'} 
+              group-hover:text-gray-200`}
           />
-          <span className="uppercase text-xs font-semibold ml-[0.9rem]">
+          <span className="uppercase text-xs font-semibold ml-[0.9rem] group-hover:text-gray-200">
             {type === 'text' ? '채팅' : type === 'voice' ? '음성' : '화상'} 채널
           </span>
         </div>
@@ -237,41 +229,52 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
         )}
       </div>
 
-      {openSections[type] && currentChannels.map((channel) => (
-        <div key={channel.channelId} className="mb-1 ml-3">
-          <div
-            className={`flex items-center text-gray-400 hover:bg-gray-700 hover:text-gray-200 px-2 py-1 rounded cursor-pointer ${channelStates[type as 'voice' | 'video']?.active?.[channel.channelName] ? 'bg-gray-700' : ''
-              } ${channelStates[type as 'voice' | 'video']?.joined?.[channel.channelName] ? 'text-white font-semibold' : ''
-              }`}
-            onClick={() => handleChannelClick(channel)}
-            onContextMenu={(e) => handleContextMenu(e, channel)}
-          >
-            <Icon size={18} className="mr-1" />
-            <span className="flex-grow">{channel.channelName}</span>
-            {(type === 'voice' || type === 'video') && (
-              channelStates[type]?.active?.[channel.channelName] ||
-              channelStates[type]?.joined?.[channel.channelName]
-            ) && (
-                <>
-                  <div className="mr-3">
-                    <div className="w-2 h-2 rounded-full bg-green-400" />
-                  </div>
-                  <ChevronDown
-                    size={12}
-                    className={`mr-3 transform transition-transform ${expandedChannels.has(channel.channelName) ? '' : '-rotate-90'
-                      }`}
-                  />
-                </>
-              )}
-          </div>
+      {openSections[type] && (
+        <div className="space-y-1">
+          {currentChannels.map((channel) => {
+            const isCurrentChannel = channel.channelId.toString() === currentChannelId;
+            const hasActiveUsers = userStore.users.some(
+              user => user.channel_id === channel.channelId.toString() &&
+                user.channel_type === type.toUpperCase(),
+            );
 
-          {(type === 'voice' || type === 'video') &&
-            (channelStates[type]?.active?.[channel.channelName] ||
-              channelStates[type]?.joined?.[channel.channelName]) &&
-            expandedChannels.has(channel.channelName) &&
-            renderChannelMembers(channel)}
+            return (
+              <div key={channel.channelId} className="ml-3">
+                <div
+                  className={`
+                    flex items-center text-gray-400 hover:bg-gray-700 hover:text-gray-200 
+                    px-2 py-1 rounded cursor-pointer
+                    ${isCurrentChannel ? 'bg-gray-700 text-white font-semibold' : ''}
+                    ${hasActiveUsers && !isCurrentChannel ? 'bg-gray-700/50' : ''}
+                  `}
+                  onClick={() => handleChannelClick(channel)}
+                  onContextMenu={(e) => handleContextMenu(e, channel)}
+                >
+                  <Icon size={18} className="mr-1" />
+                  <span className="flex-grow">{channel.channelName}</span>
+                  {(type === 'voice' || type === 'video') && (hasActiveUsers || isCurrentChannel) && (
+                    <>
+                      <div className="mr-3">
+                        <div className="w-2 h-2 rounded-full bg-green-400" />
+                      </div>
+                      <ChevronDown
+                        size={12}
+                        className={`mr-3 transform transition-transform
+                          ${expandedChannels.has(channel.channelName) ? '' : '-rotate-90'}`}
+                      />
+                    </>
+                  )}
+                </div>
+
+                {(type === 'voice' || type === 'video') &&
+                  (hasActiveUsers || isCurrentChannel) &&
+                  expandedChannels.has(channel.channelName) &&
+                  renderChannelMembers(channel)}
+              </div>
+            );
+          })}
         </div>
-      ))}
+      )}
 
       {contextMenu && (
         <ContextMenu
