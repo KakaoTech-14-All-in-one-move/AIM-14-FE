@@ -324,6 +324,7 @@ export class WebRTCConnection {
   }
 
   closeAllConnections() {
+    console.log("CLOSE : ", this.peerConnections, this.localStream, this.audioContext);
     this.peerConnections.forEach((pc, userId) => {
       pc.close();
       useUserStore.getState().removePeerConnection(userId);

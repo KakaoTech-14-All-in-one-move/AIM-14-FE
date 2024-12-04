@@ -1,8 +1,19 @@
-import { Camera, CameraOff, HeadphoneOff, Headphones, Mic, MicOff, MonitorOff, MonitorUp, PhoneOff } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import {
+  Camera,
+  CameraOff,
+  HeadphoneOff,
+  Headphones,
+  Mic,
+  MicOff,
+  MonitorOff,
+  MonitorUp,
+  PhoneOff,
+} from 'lucide-react';
 import { useCall } from '@/services/call/CallProvider';
 import { useMediaChat } from '@/hooks/useMediaChat';
 import { ControlButton } from './ControlButton';
+import { useUserStore } from '@/stores/userStore.ts';
+import { useMediaConnection } from '@/hooks/useMediaConnection.ts';
 
 interface VoiceControlsProps {
   show: boolean;
@@ -10,12 +21,13 @@ interface VoiceControlsProps {
 }
 
 export const VoiceControls: React.FC<VoiceControlsProps> = ({ show, isVideo = false }) => {
-  const navigate = useNavigate();
-  const { connection, currentUser } = useCall();
+  const { connection } = useCall();
   const mediaChat = useMediaChat();
+  const currentUser = useUserStore().currentUser!;
+  const { leaveChannel } = useMediaConnection();
 
   // 현재 사용자의 상태 가져오기
-  const currentUserState = mediaChat.userStates.get(currentUser?.user_id || '');
+  const currentUserState = mediaChat.userStates.get(currentUser.user_id || '');
 
   const handleDisconnect = () => {
     if (connection) {
@@ -25,7 +37,7 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ show, isVideo = fa
       connection.leaveChannel();
       mediaChat.resetState();
     }
-    navigate('/home');
+    leaveChannel();
   };
 
   // 현재 사용자 상태가 없으면 렌더링하지 않음

@@ -8,7 +8,7 @@ import { useMediaChatStore } from '@/stores/useMediaChatStore';
 export function useMediaChat() {
   const mediaStore = useMediaStore();
   const mediaChatStore = useMediaChatStore();
-  const { updateState } = useMediaConnection();
+  const { updateState } = useMediaConnection(); // TODO : 뭐지?
   const webrtc = WebRTCConnection.getInstance();
 
   const toggleMute = useCallback(async () => {

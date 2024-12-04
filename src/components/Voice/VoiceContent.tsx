@@ -1,4 +1,3 @@
-// VoiceContent.tsx
 import { useMemo, useState } from 'react';
 import { UserBox } from '@/components/Voice/UserBox';
 import { VoiceControls } from '@/components/Voice/VoiceControls';

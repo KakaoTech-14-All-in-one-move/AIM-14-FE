@@ -105,11 +105,11 @@ export class MediaConnectionManager {
   // 채널 퇴장 로직
   async leaveChannel(): Promise<void> {
     try {
-      const currentUserId = useMediaChatStore.getState().currentUserId;
+      const currentUserId = useUserStore.getState().currentUser?.user_id;
       if (!currentUserId || !this.state.currentChannelId) return;
 
       // 1. 서버에 퇴장 알림
-      this.callConnection?.leaveChannel();
+      // this.callConnection?.leaveChannel();
 
       // 2. 미디어 정리
       await this.cleanupChannel(currentUserId);
@@ -192,6 +192,7 @@ export class MediaConnectionManager {
   private async cleanupChannel(userId: string) {
     // 1. 미디어 스트림 정리
     const userState = useMediaChatStore.getState().userStates.get(userId);
+    console.log("CLEAN_UP_CHANNEL : ", userState); // TODO : NULL !!
     if (userState) {
       [userState.stream, userState.screenStream].forEach(stream => {
         if (stream) {

@@ -192,6 +192,7 @@ export class CallConnection {
         WebRTCConnection.getInstance().closePeerConnection(data.user_id);
         userStore.removeUser(data.user_id);
       }
+      console.log('Leaved channel [', data.channel_id, '] :', useAuthStore.getState().user?.email);
     },
 
     [OP_CODES.UPDATE_STATE_EVENT]: (data: any) => {
@@ -427,8 +428,8 @@ export class CallConnection {
       channel_type: currentUser.channel_type,
     });
 
-    WebRTCConnection.getInstance().closeAllConnections();
-    userStore.resetState();
+    // WebRTCConnection.getInstance().closeAllConnections();
+    // userStore.resetState();
   }
 
   updateState(update: VoiceStateUpdate) {

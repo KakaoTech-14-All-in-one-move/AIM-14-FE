@@ -1,6 +1,6 @@
-import { HeadphoneOff, MicOff, CameraOff, MonitorUp } from 'lucide-react';
+import { HeadphoneOff, MicOff } from 'lucide-react';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage';
-import React, { useRef, useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useMediaChat } from '@/hooks/useMediaChat';
 import { MediaUser } from '@/types/media';
 
@@ -69,30 +69,30 @@ export const UserBox: React.FC<UserBoxProps> = React.memo(({ user, isScreenShare
       {/* 상태 아이콘 */}
       <div className="absolute top-4 right-4 flex gap-2">
         {userState.muted && (
-          <div className="bg-red-500/90 rounded-full p-2">
-            <MicOff className="w-4 h-4 text-white" />
+          <div className="bg-red-500/90 rounded-full p-3">
+            <MicOff className="w-7 h-7 text-white" />
           </div>
         )}
-        {!userState.muted && isSpeaking && !isScreenShare && (
-          <div className="bg-green-500/90 rounded-full p-2">
-            <MicOff className="w-4 h-4 text-white" />
-          </div>
-        )}
+        {/*{!userState.muted && isSpeaking && !isScreenShare && (*/}
+        {/*  <div className="bg-green-500/90 rounded-full p-2">*/}
+        {/*    <MicOff className="w-7 h-7 text-white" />*/}
+        {/*  </div>*/}
+        {/*)}*/}
         {userState.deafened && (
-          <div className="bg-red-500/90 rounded-full p-2">
-            <HeadphoneOff className="w-4 h-4 text-white" />
+          <div className="bg-red-500/90 rounded-full p-3">
+            <HeadphoneOff className="w-7 h-7 text-white" />
           </div>
         )}
-        {!userState.cameraOn && !isScreenShare && (
-          <div className="bg-red-500/90 rounded-full p-2">
-            <CameraOff className="w-4 h-4 text-white" />
-          </div>
-        )}
-        {userState.screenSharing && !isScreenShare && (
-          <div className="bg-green-500/90 rounded-full p-2">
-            <MonitorUp className="w-4 h-4 text-white" />
-          </div>
-        )}
+        {/*{!userState.cameraOn && !isScreenShare && (*/}
+        {/*  <div className="bg-red-500/90 rounded-full p-3">*/}
+        {/*    <CameraOff className="w-7 h-7 text-white" />*/}
+        {/*  </div>*/}
+        {/*)}*/}
+        {/*{userState.screenSharing && !isScreenShare && (*/}
+        {/*  <div className="bg-green-500/90 rounded-full p-2">*/}
+        {/*    <MonitorUp className="w-4 h-4 text-white" />*/}
+        {/*  </div>*/}
+        {/*)}*/}
       </div>
 
       {/* 유저 정보 */}
@@ -100,7 +100,7 @@ export const UserBox: React.FC<UserBoxProps> = React.memo(({ user, isScreenShare
         <div className="flex items-center justify-between">
           <span className="text-white text-lg font-medium">
             {user.username}
-            {isScreenShare && "'s Screen"}
+            {isScreenShare && '\'s Screen'}
           </span>
         </div>
       </div>

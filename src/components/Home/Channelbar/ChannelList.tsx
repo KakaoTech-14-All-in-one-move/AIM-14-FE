@@ -117,7 +117,7 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
     // 새 채널 입장
     const success = await joinChannel(channel.channelId.toString(), mediaType);
     if (success) {
-      navigate(`/${type}/${channel.channelId}`);
+      // navigate(`/${type}/${channel.channelId}`);
       toggleChannelExpand(channel.channelName);
     }
   }, [type, currentChannelId, joinChannel, leaveChannel, navigate, toggleChannelExpand]);
