@@ -4,8 +4,8 @@ import { CameraOff, ChevronDown, HeadphoneOff, MicOff, MonitorUp, Plus } from 'l
 import { Channel, ChannelType } from '@/components/Home/Channelbar/types';
 import { useChannels } from '@/components/Home/Channelbar/ChannelContext';
 import { useCall } from '@/services/call/CallProvider';
-import ContextMenu from '@/components/Home/Channelbar/ContextMenu';
-import { useVoiceChat } from '@/hooks/useVoiceChat';
+import { useMediaStore } from '@/stores/mediaStore';
+import { useUserStore } from '@/stores/userStore';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage';
 import { useServerStore } from '@/stores/serverStore';
 import { useChannelStore } from '@/stores/channelStore';
@@ -23,6 +23,9 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
   const { connection } = useCall();
   const { selectedServerId } = useServerStore();
   const channelStore = useChannelStore();
+
+  const mediaStore = useMediaStore();
+  const userStore = useUserStore();
 
   const {
     channels,
@@ -127,7 +130,9 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
           leaveChannel(mediaType, name);
           connection?.leaveChannel();
         }
+        return newSet;
       });
+      return;
     }
 
     joinChannel(mediaType, channel.channelName);

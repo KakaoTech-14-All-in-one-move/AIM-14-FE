@@ -1,28 +1,19 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef } from 'react';
 import { WebRTCConnection } from './WebRTCConnection';
-import { useCall } from '../CallProvider';
-import { MediaDevices } from './MediaDevices';
-import { WebRTCState } from './types';
-import { useVoiceChat } from '@/hooks/useVoiceChat.ts';
+import { MediaDevicesManager } from './MediaDevicesManager.ts';
+import { useMediaStore } from '@/stores/mediaStore';
+import { useUserStore } from '@/stores/userStore';
 
 interface WebRTCContextType {
   localVideoRef: React.RefObject<HTMLVideoElement>;
-  remoteVideoRef: React.RefObject<HTMLVideoElement>;
-  webrtcState: WebRTCState;
-  mediaState: {
-    isMuted: boolean;
-    isVideoOff: boolean;
-    isScreenSharing: boolean;
-  };
+  remoteVideos: Map<string, React.RefObject<HTMLVideoElement>>;
   actions: {
-    startPresenting: () => Promise<void>;
-    startViewing: () => Promise<void>;
     toggleAudio: (enabled: boolean) => Promise<void>;
     toggleVideo: (enabled: boolean) => Promise<void>;
     startScreenShare: () => Promise<void>;
     stopScreenShare: () => Promise<void>;
-    switchAudioDevice: (deviceId: string) => Promise<void>;
-    switchVideoDevice: (deviceId: string) => Promise<void>;
+    changeAudioDevice: (deviceId: string) => Promise<void>;
+    changeVideoDevice: (deviceId: string) => Promise<void>;
   };
 }
 
@@ -37,182 +28,117 @@ export function useWebRTC() {
 }
 
 export function WebRTCProvider({ children }: { children: React.ReactNode }) {
-  const { connection } = useCall();
-  const voiceChatStore = useVoiceChat();
+  const mediaStore = useMediaStore();
+  const userStore = useUserStore();
 
-  const [mediaState, setMediaState] = useState({
-    isVideoOff: false,
-    isScreenSharing: false
-  });
-  const [webrtcState, setWebrtcState] = useState<WebRTCState>({
-    isConnected: false,
-    isPresenter: false,
-    hasMicPermission: false,
-    hasCameraPermission: false,
-    currentAudioInputId: null,
-    currentAudioOutputId: null,
-    currentVideoInputId: null
-  });
-
-  const webrtcRef = useRef<WebRTCConnection | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
-  const remoteVideoRef = useRef<HTMLVideoElement>(null);
-  const mediaDevices = MediaDevices.getInstance();
+  const remoteVideos = useRef<Map<string, React.RefObject<HTMLVideoElement>>>(
+    new Map()
+  );
+
+  const mediaDevices = MediaDevicesManager.getInstance();
+  const webrtc = WebRTCConnection.getInstance();
 
   useEffect(() => {
+    // Initialize media devices
     mediaDevices.initialize().then(() => {
-      setWebrtcState(prev => ({
-        ...prev,
-        hasMicPermission: mediaDevices.getAudioInputDevices().length > 0,
-        hasCameraPermission: mediaDevices.getVideoInputDevices().length > 0
-      }));
+      const audioDevices = mediaDevices.getAudioInputDevices();
+      const videoDevices = mediaDevices.getVideoInputDevices();
+
+      if (audioDevices.length > 0) {
+        mediaStore.setAudioInput(audioDevices[0].deviceId);
+      }
+      if (videoDevices.length > 0) {
+        mediaStore.setVideoInput(videoDevices[0].deviceId);
+      }
     });
 
-    mediaDevices.setOnDeviceChange(() => {
-      setWebrtcState(prev => ({
-        ...prev,
-        hasMicPermission: mediaDevices.getAudioInputDevices().length > 0,
-        hasCameraPermission: mediaDevices.getVideoInputDevices().length > 0
-      }));
-    });
-
-    return () => {
-      stopConnection();
-    };
-  }, []);
-
-  const startScreenShare = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: false
-      });
-
-      if (webrtcRef.current && stream.getVideoTracks().length > 0) {
-        await webrtcRef.current.replaceVideoTrack(stream.getVideoTracks()[0]);
-        setMediaState(prev => ({ ...prev, isScreenSharing: true }));
-      }
-    } catch (error) {
-      console.error('Failed to start screen sharing:', error);
-    }
-  };
-
-  const stopScreenShare = async () => {
-    try {
-      if (webrtcRef.current) {
-        const stream = await mediaDevices.changeVideoInput(webrtcState.currentVideoInputId || '');
-        await webrtcRef.current.replaceVideoTrack(stream.getVideoTracks()[0]);
-        setMediaState(prev => ({ ...prev, isScreenSharing: false }));
-      }
-    } catch (error) {
-      console.error('Failed to stop screen sharing:', error);
-    }
-  };
-
-  const createWebRTCConnection = () => {
-    if (!connection) return;
-
-    const webrtcInstance = WebRTCConnection.getInstance();
-    webrtcInstance.initialize(connection, {
-      onTrack: (stream) => {
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = stream;
+    // Initialize WebRTC connection
+    webrtc.initialize({
+      onTrack: (stream, userId) => {
+        const videoRef = remoteVideos.current.get(userId);
+        if (videoRef?.current) {
+          videoRef.current.srcObject = stream;
         }
       },
       onConnectionStateChange: (state) => {
-        setWebrtcState(prev => ({
-          ...prev,
-          isConnected: state === 'connected'
-        }));
+        console.log('Connection state changed:', state);
       },
       onError: (error) => {
-        console.error('WebRTC Error:', error);
-        stopConnection();
+        console.error('WebRTC error:', error);
       }
     });
 
-    webrtcRef.current = webrtcInstance;
-  };
+    return () => {
+      webrtc.dispose();
+    };
+  }, []);
 
-  const startPresenting = async () => {
-    createWebRTCConnection();
-    setWebrtcState(prev => ({ ...prev, isPresenter: true }));
-    await webrtcRef.current?.initializePresenter(localVideoRef.current);
-  };
+  // Handle user changes
+  useEffect(() => {
+    const users = userStore.users;
+    const currentRefs = new Set(remoteVideos.current.keys());
 
-  const startViewing = async () => {
-    createWebRTCConnection();
-    setWebrtcState(prev => ({ ...prev, isPresenter: false }));
-    await webrtcRef.current?.initializeViewer(remoteVideoRef.current);
-  };
+    // Remove refs for users who left
+    currentRefs.forEach(userId => {
+      if (!users.find(u => u.user_id === userId)) {
+        remoteVideos.current.delete(userId);
+      }
+    });
 
-  const stopConnection = () => {
-    webrtcRef.current?.dispose();
-    webrtcRef.current = null;
-    setWebrtcState(prev => ({
-      ...prev,
-      isConnected: false,
-      isPresenter: false
-    }));
-  };
+    // Add refs for new users
+    users.forEach(user => {
+      if (!remoteVideos.current.has(user.user_id)) {
+        remoteVideos.current.set(
+          user.user_id,
+          React.createRef<HTMLVideoElement>()
+        );
+      }
+    });
+  }, [userStore.users]);
 
+  // Audio/Video control functions
   const toggleAudio = async (enabled: boolean) => {
-    await webrtcRef.current?.toggleAudio(enabled);
+    await webrtc.toggleAudio(enabled);
   };
 
   const toggleVideo = async (enabled: boolean) => {
-    await webrtcRef.current?.toggleVideo(enabled);
+    await webrtc.toggleVideo(enabled);
   };
 
-  const switchAudioDevice = async (deviceId: string) => {
-    try {
-      const stream = await mediaDevices.changeAudioInput(deviceId);
-      if (webrtcRef.current) {
-        await webrtcRef.current.replaceAudioTrack(stream.getAudioTracks()[0]);
-      }
-      setWebrtcState(prev => ({
-        ...prev,
-        currentAudioInputId: deviceId
-      }));
-    } catch (error) {
-      console.error('Failed to switch audio device:', error);
-    }
+  const startScreenShare = async () => {
+    if (mediaStore.isScreenSharing) return;
+    await webrtc.startScreenShare();
   };
 
-  const switchVideoDevice = async (deviceId: string) => {
-    try {
-      const stream = await mediaDevices.changeVideoInput(deviceId);
-      if (webrtcRef.current) {
-        await webrtcRef.current.replaceVideoTrack(stream.getVideoTracks()[0]);
-      }
-      setWebrtcState(prev => ({
-        ...prev,
-        currentVideoInputId: deviceId
-      }));
-    } catch (error) {
-      console.error('Failed to switch video device:', error);
+  const stopScreenShare = async () => {
+    if (!mediaStore.isScreenSharing) return;
+    await webrtc.stopScreenShare();
+  };
+
+  const changeAudioDevice = async (deviceId: string) => {
+    await webrtc.changeAudioDevice(deviceId);
+  };
+
+  const changeVideoDevice = async (deviceId: string) => {
+    const stream = await mediaDevices.changeVideoInput(deviceId);
+    if (stream && localVideoRef.current) {
+      localVideoRef.current.srcObject = stream;
     }
+    mediaStore.setVideoInput(deviceId);
   };
 
   const contextValue: WebRTCContextType = {
     localVideoRef,
-    remoteVideoRef,
-    webrtcState,
-    mediaState: {
-      isMuted: voiceChatStore.isMuted,
-      isVideoOff: mediaState.isVideoOff,
-      isScreenSharing: mediaState.isScreenSharing
-    },
+    remoteVideos: remoteVideos.current,
     actions: {
-      startPresenting,
-      startViewing,
       toggleAudio,
       toggleVideo,
       startScreenShare,
       stopScreenShare,
-      switchAudioDevice,
-      switchVideoDevice
-    }
+      changeAudioDevice,
+      changeVideoDevice,
+    },
   };
 
   return (

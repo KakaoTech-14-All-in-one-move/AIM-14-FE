@@ -1,11 +1,17 @@
 export interface WebRTCState {
   isConnected: boolean;
-  isPresenter: boolean;
+  isInChannel: boolean;
   hasMicPermission: boolean;
   hasCameraPermission: boolean;
   currentAudioInputId: string | null;
   currentAudioOutputId: string | null;
   currentVideoInputId: string | null;
+}
+
+export interface WebRTCEvents {
+  onTrack?: (stream: MediaStream, userId: string) => void;
+  onConnectionStateChange?: (state: RTCPeerConnectionState) => void;
+  onError?: (error: Error) => void;
 }
 
 export interface IceServerConfig {
@@ -24,14 +30,17 @@ export interface WebRTCConnectionOptions {
   configuration?: WebRTCConfig;
 }
 
-export interface MediaDeviceInfo {
+export interface MediaDevice {
   deviceId: string;
-  groupId: string;
-  kind: MediaDeviceKind;
   label: string;
 }
 
-export type MediaStreamConstraints = {
+export interface MediaStreamConstraints {
   audio?: boolean | MediaTrackConstraints;
   video?: boolean | MediaTrackConstraints;
-};
+}
+
+export interface PeerConnection {
+  connection: RTCPeerConnection;
+  userId: string;
+}

@@ -6,26 +6,26 @@ export const CALL_API = {
 };
 
 export const OP_CODES = {
-  INITIAL: 0,
-  INITIAL_ACK: 10,
+  // Client -> Server
+  INIT: 0,
   HEARTBEAT: 1,
-  HEARTBEAT_ACK: 11,
-  IDENTIFY: 2,
-  IDENTIFY_ACK: 12,
-  JOIN_CHANNEL: 3,
-  JOIN_CHANNEL_ACK: 13,
+  SERVER: 2,
+  ENTER_CHANNEL: 3,
   LEAVE_CHANNEL: 4,
-  LEAVE_CHANNEL_ACK: 14,
-  STATE_UPDATE: 5,
-  STATE_UPDATE_ACK: 15,
-  PRESENTER: 6,
-  PRESENTER_ACK: 16,
-  VIEWER: 7,
-  VIEWER_ACK: 17,
-  ICE_CANDIDATE: 8,
-  ICE_CANDIDATE_ACK: 18,
-  STOP: 9,
-  STOP_ACK: 19,
+  UPDATE_STATE: 5,
+  ON_ICE_CANDIDATE: 6,
+  RECEIVE_VIDEO: 7,
+
+  // Server -> Client
+  ERROR: -1,
+  INIT_ACK: 10,
+  HEARTBEAT_ACK: 11,
+  SERVER_ACK: 12,
+  ENTER_CHANNEL_EVENT: 13,
+  LEAVE_CHANNEL_EVENT: 14,
+  UPDATE_STATE_EVENT: 15,
+  ICE_CANDIDATE: 16,
+  VIDEO_ANSWER: 17,
 } as const;
 
 export const ERROR_CODES = {
@@ -44,3 +44,9 @@ export const ERROR_CODES = {
 } as const;
 
 export const RECONNECT_DELAY = 5000;
+
+export const ICE_SERVER_CONFIG = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+  ],
+};

@@ -1,22 +1,20 @@
-interface MediaDevice {
-  deviceId: string;
-  label: string;
-}
+import { MediaDevice } from './types';
 
-export class MediaDevices {
-  private static instance: MediaDevices;
+export class MediaDevicesManager {
+  private static instance: MediaDevicesManager | null = null;
   private audioInputDevices: MediaDevice[] = [];
   private audioOutputDevices: MediaDevice[] = [];
   private videoInputDevices: MediaDevice[] = [];
   private onDeviceChange?: () => void;
 
-  private constructor() {}
+  private constructor() {
+  }
 
-  static getInstance(): MediaDevices {
-    if (!MediaDevices.instance) {
-      MediaDevices.instance = new MediaDevices();
+  static getInstance(): MediaDevicesManager {
+    if (!MediaDevicesManager.instance) {
+      MediaDevicesManager.instance = new MediaDevicesManager();
     }
-    return MediaDevices.instance;
+    return MediaDevicesManager.instance;
   }
 
   async initialize() {
@@ -38,7 +36,7 @@ export class MediaDevices {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: true,
-        video: true
+        video: true,
       });
       stream.getTracks().forEach(track => track.stop());
     } catch (error) {
@@ -55,21 +53,21 @@ export class MediaDevices {
         .filter(device => device.kind === 'audioinput')
         .map(device => ({
           deviceId: device.deviceId,
-          label: device.label || `Microphone ${this.audioInputDevices.length + 1}`
+          label: device.label || `Microphone ${this.audioInputDevices.length + 1}`,
         }));
 
       this.audioOutputDevices = devices
         .filter(device => device.kind === 'audiooutput')
         .map(device => ({
           deviceId: device.deviceId,
-          label: device.label || `Speaker ${this.audioOutputDevices.length + 1}`
+          label: device.label || `Speaker ${this.audioOutputDevices.length + 1}`,
         }));
 
       this.videoInputDevices = devices
         .filter(device => device.kind === 'videoinput')
         .map(device => ({
           deviceId: device.deviceId,
-          label: device.label || `Camera ${this.videoInputDevices.length + 1}`
+          label: device.label || `Camera ${this.videoInputDevices.length + 1}`,
         }));
     } catch (error) {
       console.error('Failed to enumerate devices:', error);
@@ -96,7 +94,7 @@ export class MediaDevices {
   async changeAudioInput(deviceId: string): Promise<MediaStream> {
     return navigator.mediaDevices.getUserMedia({
       audio: { deviceId: { exact: deviceId } },
-      video: false
+      video: false,
     });
   }
 
@@ -105,10 +103,10 @@ export class MediaDevices {
       audio: false,
       video: {
         deviceId: { exact: deviceId },
-        width: 640,
-        height: 480,
-        frameRate: 30
-      }
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        frameRate: { ideal: 30 },
+      },
     });
   }
 

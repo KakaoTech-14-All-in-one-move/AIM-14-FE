@@ -1,102 +1,60 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, memo } from 'react';
 import { CameraOff, HeadphoneOff, MicOff, MonitorUp } from 'lucide-react';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage';
-import { useVideoChat } from '@/hooks/useVideoChat';
+import { useMediaChat } from '@/hooks/useMediaChat';
+import { MediaUser } from '@/services/call/types';
 
 interface VideoUserBoxProps {
-  userId: string;
-  username: string;
-  profileImage?: string;
+  user: MediaUser;
   isScreenShare?: boolean;
 }
 
-export const VideoUserBox: React.FC<VideoUserBoxProps> = ({
-                                                            userId,
-                                                            username,
-                                                            profileImage,
-                                                            isScreenShare = false
-                                                          }) => {
+export const VideoUserBox: React.FC<VideoUserBoxProps> = memo(({
+                                                                 user,
+                                                                 isScreenShare = false
+                                                               }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const baseUserId = isScreenShare ? userId.replace('_screen', '') : userId;
-
-  const userState = useVideoChat(state => state.userStates.get(baseUserId));
-  const speakingUsers = useVideoChat(state => state.speakingUsers);
-  const isSpeaking = speakingUsers.has(baseUserId);
+  const mediaChat = useMediaChat();
+  const userState = mediaChat.userStates.get(user.userId);
+  const isSpeaking = mediaChat.speakingUsers.has(user.userId);
 
   useEffect(() => {
     const videoElement = videoRef.current;
-    if (!videoElement) return;
+    if (!videoElement || !userState) return;
 
-    const handleStreamChange = async () => {
-      try {
-        let streamToUse = null;
+    const stream = isScreenShare ? userState.screenStream : userState.stream;
 
-        if (isScreenShare) {
-          // 화면 공유 박스인 경우 화면 공유 스트림 사용
-          if (userState?.screenSharing && userState.stream) {
-            streamToUse = userState.stream;
+    if (stream) {
+      if (videoElement.srcObject !== stream) {
+        videoElement.srcObject = stream;
+        videoElement.muted = userState.muted || userState.deafened;
+
+        const playVideo = async () => {
+          try {
+            await videoElement.play();
+          } catch (error) {
+            console.error('Failed to play video:', error);
           }
+        };
+
+        if (videoElement.readyState >= 2) {
+          playVideo();
         } else {
-          // 일반 사용자 박스인 경우 카메라 스트림 사용
-          if (userState?.stream && userState.cameraOn) {
-            streamToUse = userState.stream;
-          }
+          videoElement.addEventListener('loadedmetadata', playVideo, { once: true });
         }
-
-        if (streamToUse) {
-          if (videoElement.srcObject !== streamToUse) {
-            videoElement.srcObject = streamToUse;
-            videoElement.muted = true;
-
-            await new Promise((resolve) => {
-              const handleLoaded = () => {
-                videoElement.removeEventListener('loadedmetadata', handleLoaded);
-                resolve(null);
-              };
-              videoElement.addEventListener('loadedmetadata', handleLoaded);
-            });
-
-            const attemptPlay = async (retries = 3): Promise<void> => {
-              try {
-                await videoElement.play();
-              } catch (error) {
-                if (retries > 0 && error instanceof DOMException && error.name === 'AbortError') {
-                  console.log(`Retrying playback, attempts left: ${retries-1}`);
-                  await new Promise(resolve => setTimeout(resolve, 200));
-                  await attemptPlay(retries - 1);
-                } else {
-                  console.error('Failed to start video playback:', error);
-                  throw error;
-                }
-              }
-            };
-
-            await attemptPlay();
-          }
-        } else {
-          if (videoElement.srcObject) {
-            videoElement.srcObject = null;
-          }
-        }
-      } catch (error) {
-        console.error('Error in handleStreamChange:', error);
       }
-    };
-
-    handleStreamChange();
+    } else {
+      videoElement.srcObject = null;
+    }
 
     return () => {
-      if (videoElement.srcObject) {
-        videoElement.srcObject = null;
-      }
+      videoElement.srcObject = null;
     };
-  }, [userState?.stream, userState?.cameraOn, userState?.screenSharing, isScreenShare]);
+  }, [userState?.stream, userState?.screenStream, userState?.muted, userState?.deafened, isScreenShare]);
 
   if (!userState) return null;
 
-  const showVideo = isScreenShare
-    ? userState.screenSharing && userState.stream
-    : userState.cameraOn && userState.stream;
+  const showVideo = isScreenShare ? userState.screenStream : (userState.cameraOn && userState.stream);
 
   return (
     <div
@@ -113,58 +71,54 @@ export const VideoUserBox: React.FC<VideoUserBoxProps> = ({
         />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center">
-          {!isScreenShare && (
-            profileImage ? (
-              <img
-                src={import.meta.env.VITE_BE_SERVER_URL + profileImage}
-                alt={username}
-                className="w-28 h-28 rounded-full"
-              />
-            ) : (
-              <DefaultProfileImage username={username} size={80} margin="mr-1" />
-            )
+          {!isScreenShare && user.profileImage ? (
+            <img
+              src={import.meta.env.VITE_BE_SERVER_URL + user.profileImage}
+              alt={user.username}
+              className="w-28 h-28 rounded-full"
+            />
+          ) : (
+            <DefaultProfileImage username={user.username} size={80} margin="mr-1" />
           )}
         </div>
       )}
 
-      {/* 상태 아이콘 (화면 공유 박스에는 표시하지 않음) */}
-      {!isScreenShare && (
-        <div className="absolute top-6 right-6 flex gap-3">
-          {userState.muted && (
-            <div className="bg-red-500 rounded-full p-3">
-              <MicOff className="w-6 h-6 text-white" />
-            </div>
-          )}
-          {userState.deafened && (
-            <div className="bg-red-500 rounded-full p-3">
-              <HeadphoneOff className="w-6 h-6 text-white" />
-            </div>
-          )}
-          {!userState.cameraOn && !isScreenShare && (
-            <div className="bg-red-500 rounded-full p-3">
-              <CameraOff className="w-6 h-6 text-white" />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 화면 공유 표시 */}
-      {isScreenShare && (
-        <div className="absolute top-6 right-6">
-          <div className="bg-green-500 rounded-full p-3">
-            <MonitorUp className="w-6 h-6 text-white" />
+      {/* 상태 아이콘 */}
+      <div className="absolute top-4 right-4 flex gap-2">
+        {!isScreenShare && (
+          <>
+            {userState.muted && (
+              <div className="bg-red-500/90 rounded-full p-2">
+                <MicOff className="w-4 h-4 text-white" />
+              </div>
+            )}
+            {userState.deafened && (
+              <div className="bg-red-500/90 rounded-full p-2">
+                <HeadphoneOff className="w-4 h-4 text-white" />
+              </div>
+            )}
+            {!userState.cameraOn && (
+              <div className="bg-red-500/90 rounded-full p-2">
+                <CameraOff className="w-4 h-4 text-white" />
+              </div>
+            )}
+          </>
+        )}
+        {isScreenShare && (
+          <div className="bg-green-500/90 rounded-full p-2">
+            <MonitorUp className="w-4 h-4 text-white" />
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* 유저 정보 */}
-      <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent">
+      <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
         <div className="flex items-center justify-between">
-          <span className="text-white text-xl font-medium">
-            {username}
+          <span className="text-white text-lg font-medium">
+            {isScreenShare ? `${user.username}'s Screen` : user.username}
           </span>
         </div>
       </div>
     </div>
   );
-};
+});

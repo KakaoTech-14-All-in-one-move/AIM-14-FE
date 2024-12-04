@@ -2,56 +2,49 @@ import { useMemo, useState } from 'react';
 import { VideoUserBox } from '@/components/Video/VideoUserBox';
 import { VideoControls } from '@/components/Video/VideoControls';
 import { useCall } from '@/services/call/CallProvider';
-import { useVideoChat } from '@/hooks/useVideoChat';
+import { useMediaChat } from '@/hooks/useMediaChat';
+import { useUserStore } from '@/stores/userStore';
+import { MediaUser, convertCallUserToMediaUser } from '@/types/media';
 
 export const VideoContent = () => {
   const [showControls, setShowControls] = useState(false);
   const { currentUser } = useCall();
-  const users = useVideoChat(state => state.users);
-  const userStates = useVideoChat(state => state.userStates);
+  const users = useUserStore(state => state.users);
+  const mediaChat = useMediaChat();
 
-  const displayUsers = useMemo(() => {
-    if (!currentUser) return users;
+  const displayUsers = useMemo<MediaUser[]>(() => {
+    // 기본 사용자 목록 (현재 사용자가 없으면 추가)
+    const baseUsers = currentUser
+      ? (users.some(u => u.user_id === currentUser.user_id)
+        ? users
+        : [...users, currentUser])
+      : users;
 
-    // 기본 사용자 목록
-    let allUsers = users.slice();
+    // MediaUser 타입으로 변환
+    const mediaUsers = baseUsers.map(convertCallUserToMediaUser);
 
-    // 현재 사용자가 목록에 없으면 추가
-    const currentUserExists = users.some(u => u.user_id === currentUser.user_id);
-    if (!currentUserExists) {
-      allUsers.push({
-        ...currentUser,
-        stream: null,
-        connectionStatus: 'connected',
-        camera_on: false,
-        screen_sharing: false
-      });
-    }
+    // 화면 공유 중인 사용자들의 추가 엔트리 생성
+    const screenShareEntries = mediaUsers
+      .filter(user => mediaChat.userStates.get(user.userId)?.screenSharing)
+      .map(user => ({
+        ...user,
+        userId: `${user.userId}_screen`,
+        username: `${user.username} (Screen)`,
+        stream: mediaChat.userStates.get(user.userId)?.screenStream ?? null
+      }));
 
-    // 화면 공유 중인 사용자들에 대해 화면 공유 박스 추가
-    const screenShareUsers = allUsers.filter(user => {
-      const userState = userStates.get(user.user_id);
-      return userState?.screenSharing;
-    });
+    return [...mediaUsers, ...screenShareEntries];
+  }, [users, currentUser, mediaChat.userStates]);
 
-    // 화면 공유 사용자에 대한 별도의 박스 추가
-    screenShareUsers.forEach(user => {
-      const userState = userStates.get(user.user_id);
-      if (userState?.screenSharing && userState.stream) {
-        allUsers.push({
-          ...user,
-          user_id: `${user.user_id}_screen`,
-          username: `${user.username} (화면 공유)`,
-          camera_on: false,
-          screen_sharing: true,
-        });
-      }
-    });
+  const gridLayout = useMemo(() => {
+    const totalBoxes = displayUsers.length;
+    if (totalBoxes <= 1) return 'grid-cols-1';
+    if (totalBoxes === 2) return 'grid-cols-2';
+    if (totalBoxes <= 4) return 'grid-cols-2';
+    return 'grid-cols-3';
+  }, [displayUsers.length]);
 
-    return allUsers;
-  }, [users, currentUser, userStates]);
-
-  if (!displayUsers?.length) return null;
+  if (!displayUsers.length) return null;
 
   return (
     <div
@@ -60,30 +53,21 @@ export const VideoContent = () => {
       onMouseLeave={() => setShowControls(false)}
     >
       <div className="flex-1 w-full flex items-center justify-center">
-        <div
-          className={`grid gap-8 w-full max-w-[1200px] mx-auto ${
-            displayUsers.length === 1
-              ? 'grid-cols-1'
-              : displayUsers.length === 2
-                ? 'grid-cols-2'
-                : displayUsers.length === 3 || displayUsers.length === 4
-                  ? 'grid-cols-2'
-                  : 'grid-cols-3'
-          }`}
-        >
-          {displayUsers
-            .filter(user => user != null)
-            .map(user => (
+        <div className={`grid gap-4 w-full max-w-[1400px] mx-auto ${gridLayout}`}>
+          {displayUsers.map(user => (
+            <div
+              key={user.userId}
+              className={user.userId.includes('_screen') ? 'col-span-2' : ''}
+            >
               <VideoUserBox
-                key={user.user_id}
-                userId={user.user_id}
-                username={user.username}
-                profileImage={user.profile_image}
-                isScreenShare={user.user_id.endsWith('_screen')}
+                user={user}
+                isScreenShare={user.userId.includes('_screen')}
               />
-            ))}
+            </div>
+          ))}
         </div>
       </div>
+
       <VideoControls show={showControls} />
     </div>
   );
