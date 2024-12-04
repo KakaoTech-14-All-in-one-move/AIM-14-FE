@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { CallUserData } from '@/services/call/socket/types';
 
-interface UserState {
+export interface UserState {
   // Users in current channel
   users: CallUserData[];
   currentUser: CallUserData | null;

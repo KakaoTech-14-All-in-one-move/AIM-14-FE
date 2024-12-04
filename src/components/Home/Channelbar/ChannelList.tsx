@@ -23,7 +23,6 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
   const channelStore = useChannelStore();
   const userStore = useUserStore();
   const mediaChatStore = useMediaChatStore();
-
   const { joinChannel, leaveChannel, currentChannelId } = useMediaConnection();
   const {
     channels,
