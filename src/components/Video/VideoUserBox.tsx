@@ -17,8 +17,15 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare
     if (!videoElement) return;
 
     const stream = isScreenShare ? user.mediaState.screenStream : user.mediaState.stream;
+    console.log('Stream update:', {
+      userId: user.userId,
+      isScreenShare,
+      hasStream: !!stream,
+      isCameraOn: user.mediaState.isCameraOn,
+      tracks: stream?.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled }))
+    });
 
-    if (stream) {
+    if (stream && (isScreenShare || user.mediaState.isCameraOn)) {
       if (videoElement.srcObject !== stream) {
         videoElement.srcObject = stream;
         videoElement.muted = user.mediaState.isMuted || user.mediaState.isDeafened;
@@ -42,12 +49,23 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare
     }
 
     return () => {
-      videoElement.srcObject = null;
+      if (videoElement.srcObject) {
+        videoElement.srcObject = null;
+      }
     };
-  }, [user.mediaState.stream, user.mediaState.screenStream, user.mediaState.isMuted, user.mediaState.isDeafened, isScreenShare]);
+  }, [
+    user.mediaState.stream,
+    user.mediaState.screenStream,
+    user.mediaState.isCameraOn,
+    user.mediaState.isMuted,
+    user.mediaState.isDeafened,
+    isScreenShare
+  ]);
 
-  const showVideo = isScreenShare ? user.mediaState.screenStream :
-    (user.mediaState.isCameraOn && user.mediaState.stream);
+  // 비디오를 보여줄지 결정하는 조건을 더 명확하게 수정
+  const showVideo = isScreenShare
+    ? !!user.mediaState.screenStream
+    : !!user.mediaState.stream && user.mediaState.isCameraOn;
 
   return (
     <div

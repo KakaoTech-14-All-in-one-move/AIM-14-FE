@@ -40,22 +40,37 @@ export function useMediaChat() {
 
     try {
       const newCameraState = !currentState.mediaState.isCameraOn;
+      const currentStream = currentState.mediaState.stream;
 
       if (newCameraState) {
-        const stream = await navigator.mediaDevices.getUserMedia({
+        // 카메라 켤 때
+        const videoStream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 1280 }, height: { ideal: 720 } },
           audio: false,
         });
 
-        updateMediaState({
-          isCameraOn: true,
-          stream,
-        });
+        if (currentStream) {
+          // 기존 스트림이 있다면 비디오 트랙만 추가
+          const videoTrack = videoStream.getVideoTracks()[0];
+          currentStream.addTrack(videoTrack);
+          updateMediaState({ isCameraOn: true });
+        } else {
+          // 기존 스트림이 없다면 새로운 스트림 생성
+          updateMediaState({
+            isCameraOn: true,
+            stream: videoStream
+          });
+        }
       } else {
-        updateMediaState({
-          isCameraOn: false,
-          stream: null,
-        });
+        // 카메라 끌 때
+        if (currentStream) {
+          // 비디오 트랙만 제거
+          currentStream.getVideoTracks().forEach(track => {
+            track.stop();
+            currentStream.removeTrack(track);
+          });
+        }
+        updateMediaState({ isCameraOn: false });
       }
     } catch (error) {
       console.error('Failed to toggle camera:', error);

@@ -132,12 +132,12 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
   const renderChannelMembers = useCallback((channel: Channel) => {
     if (!['voice', 'video'].includes(type)) return null;
 
-    console.log('Debug channel expansion:', {
-      activeChannelIds: Array.from(channelUsers.keys()),
-      currentChannelId: currentUserChannel.channelId,
-      currentChannels: currentChannels,
-      currentExpanded: Array.from(expandedChannels)
-    });
+    // console.log('Debug channel expansion:', {
+    //   activeChannelIds: Array.from(channelUsers.keys()),
+    //   currentChannelId: currentUserChannel.channelId,
+    //   currentChannels: currentChannels,
+    //   currentExpanded: Array.from(expandedChannels)
+    // });
 
     const currentChannelUsers = channelUsers.get(channel.channelId.toString()) || [];
 
