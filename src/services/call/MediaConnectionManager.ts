@@ -40,36 +40,29 @@ export class MediaConnectionManager {
 
   async joinChannel(channelId: string, type: MediaType): Promise<boolean> {
     try {
-      // 연결 상태 체크 추가
       if (!MediaConnectionManager.getCallConnection()) {
         console.error('No CallConnection available : ', MediaConnectionManager.getCallConnection());
         return false;
       }
 
-      // 1. 현재 채널이 있다면 먼저 나가기
       const currentChannel = useUserChannelStore.getState().currentUserChannel;
       if (currentChannel.channelId) {
         await this.leaveChannel();
       }
 
-      // 2. 소켓으로 채널 입장
       const success = await MediaConnectionManager.getCallConnection()!.joinChannel(channelId, type);
       if (!success) {
         console.error('Failed to join channel via CallConnection');
         return false;
       }
 
-      // 3. 로컬 미디어 스트림 설정
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: false
-      });
+      // MediaServerConnection을 통해 로컬 스트림 설정
+      const stream = await this.mediaServer.updateLocalStream(type);
       if (!stream) {
         console.error('Failed to get local media stream');
         return false;
       }
 
-      // 4. WebRTC 연결 준비
       try {
         await this.mediaServer.prepareConnection(channelId);
       } catch (error) {
@@ -77,7 +70,6 @@ export class MediaConnectionManager {
         return false;
       }
 
-      // 5. WebRTC 연결 시작
       try {
         await this.mediaServer.connect();
       } catch (error) {
@@ -85,7 +77,6 @@ export class MediaConnectionManager {
         return false;
       }
 
-      // 6. 스토어 상태 업데이트
       const currentUser = useAuthStore.getState().user;
       if (!currentUser) {
         console.error('No current user found');

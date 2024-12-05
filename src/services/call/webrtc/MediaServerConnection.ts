@@ -275,12 +275,14 @@ export class MediaServerConnection {
       const source = audioContext.createMediaStreamSource(stream);
       const analyser = audioContext.createAnalyser();
 
-      // FFT 크기를 더 작게 설정하여 반응성 향상
-      analyser.fftSize = 128;
-      // smoothingTimeConstant를 낮춰서 더 빠른 반응
-      analyser.smoothingTimeConstant = 0.2;
-
+      // 오디오 처리 파이프라인 설정
       source.connect(analyser);
+      // destination에 연결하여 오디오가 실제로 흐르도록 함
+      source.connect(audioContext.destination);
+
+      // FFT 크기와 평활화 상수 설정
+      analyser.fftSize = 256; // 더 세밀한 주파수 분석을 위해 증가
+      analyser.smoothingTimeConstant = 0.3; // 약간 더 부드러운 전환을 위해 조정
 
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
       this.audioContextMap.set(userId, { context: audioContext, analyser, dataArray });
@@ -291,9 +293,10 @@ export class MediaServerConnection {
             const { analyser, dataArray } = audio;
             analyser.getByteFrequencyData(dataArray);
 
-            // 더 낮은 임계값 설정 (원래 20)
-            const threshold = 10;
-            const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+            // 음성 감지를 위한 주파수 분석
+            const sum = dataArray.reduce((a, b) => a + b, 0);
+            const average = sum / dataArray.length;
+            const threshold = 15; // 임계값 조정
             const isSpeaking = average > threshold;
 
             const currentChannelId = useUserChannelStore.getState().currentUserChannel.channelId;
@@ -307,11 +310,11 @@ export class MediaServerConnection {
               useUserChannelStore.getState().updateUserMediaState(
                 currentChannelId,
                 uid,
-                { isSpeaking }
+                { isSpeaking },
               );
             }
           });
-        }, 50); // 간격을 100ms에서 50ms로 줄임
+        }, 50);
       }
     } catch (error) {
       console.error('Failed to setup audio detection:', error);
