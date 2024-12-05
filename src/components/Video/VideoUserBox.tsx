@@ -10,6 +10,7 @@ interface VideoUserBoxProps {
 
 export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare = false }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const BASE_URL = import.meta.env.VITE_BE_SERVER_URL;
 
   useEffect(() => {
     const videoElement = videoRef.current;
@@ -51,7 +52,7 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare
   return (
     <div
       className={`relative w-full aspect-video bg-gray-900 rounded-xl overflow-hidden shadow-lg
-        ${user.mediaState.isSpeaking && !user.mediaState.isMuted && !isScreenShare ? 'ring-2 ring-green-500 animate-pulse' : ''}
+        ${user.mediaState.isSpeaking && !user.mediaState.isMuted && !isScreenShare ? 'ring-2 ring-green-500' : ''}
         transition-all duration-200 hover:shadow-xl`}
     >
       {showVideo ? (
@@ -63,7 +64,15 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare
         />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center">
-          <DefaultProfileImage username={user.username} size={80} margin="mr-1" />
+          {user.profileImage ? (
+            <img
+              src={BASE_URL + user.profileImage}
+              alt={user.username}
+              className="w-20 h-20 rounded-full"
+            />
+          ) : (
+            <DefaultProfileImage username={user.username} size={80} />
+          )}
         </div>
       )}
 
