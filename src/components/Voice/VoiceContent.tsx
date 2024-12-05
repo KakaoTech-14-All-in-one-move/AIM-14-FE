@@ -11,23 +11,22 @@ export const VoiceContent = () => {
 
   const currentChannelUsers = useMemo(() => {
     if (!currentUserChannel.channelId) return [];
-    const users = channelUsers.get(currentUserChannel.channelId) || [];
-    // 현재 사용자는 항상 표시하고, 다른 사용자는 스트림이 있을 때만
-    return users.filter(user => {
-      if (user.userId === currentUser?.email) return true;
-      return user.mediaState.stream?.active || user.mediaState.screenStream?.active;
-    });
-  }, [channelUsers, currentUserChannel.channelId, currentUser]);
+    // 채널에 있는 모든 유저를 가져옵니다
+    return channelUsers.get(currentUserChannel.channelId) || [];
+  }, [channelUsers, currentUserChannel.channelId]);
 
   const { screenShareUser, sortedUsers } = useMemo(() => {
+    // 화면 공유 중인 유저 찾기
     const screenShareUser = currentChannelUsers.find(
-      user => user.mediaState.isScreenSharing && user.mediaState.screenStream?.active,
+      user => user.mediaState.isScreenSharing && user.mediaState.screenStream?.active
     );
 
+    // 나머지 유저들 (화면 공유 안하는 유저들)
     const nonScreenShareUsers = currentChannelUsers.filter(user =>
-      !user.mediaState.isScreenSharing || !user.mediaState.screenStream?.active,
+      !user.mediaState.isScreenSharing || !user.mediaState.screenStream?.active
     );
 
+    // 현재 유저를 마지막으로 정렬
     const sortedUsers = currentUser ? [
       ...nonScreenShareUsers.filter(user => user.userId !== currentUser.email),
       ...nonScreenShareUsers.filter(user => user.userId === currentUser.email),
