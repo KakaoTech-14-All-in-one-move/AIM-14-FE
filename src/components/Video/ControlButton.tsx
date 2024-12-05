@@ -9,6 +9,7 @@ interface ControlButtonProps {
   disabled?: boolean;
   className?: string;
 }
+
 export const ControlButton: React.FC<ControlButtonProps> = ({
                                                               icon: Icon,
                                                               onClick,
@@ -17,7 +18,7 @@ export const ControlButton: React.FC<ControlButtonProps> = ({
                                                               disabled = false,
                                                               className = ''
                                                             }) => {
-  const isCameraButton = tooltip.includes('Camera');
+  const isCameraButton = tooltip.includes('카메라');
 
   const defaultClass = isCameraButton
     ? (active ? 'bg-gray-700 hover:bg-gray-600' : 'bg-red-500 hover:bg-red-600')
@@ -30,6 +31,7 @@ export const ControlButton: React.FC<ControlButtonProps> = ({
       className={`w-12 h-12 rounded-full flex items-center justify-center group relative transition-colors duration-200
         ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
         ${className || defaultClass}`}
+      title={tooltip}
     >
       <Icon className="w-5 h-5 text-white" />
       <span
