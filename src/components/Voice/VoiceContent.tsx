@@ -12,9 +12,10 @@ export const VoiceContent = () => {
   const currentChannelUsers = useMemo(() => {
     if (!currentUserChannel.channelId) return [];
     const users = channelUsers.get(currentUserChannel.channelId) || [];
+    // 현재 사용자는 항상 표시하고, 다른 사용자는 스트림이 있을 때만
     return users.filter(user => {
-      const hasValidStream = user.mediaState.stream?.active || user.mediaState.screenStream?.active;
-      return hasValidStream || user.userId === currentUser?.email;
+      if (user.userId === currentUser?.email) return true;
+      return user.mediaState.stream?.active || user.mediaState.screenStream?.active;
     });
   }, [channelUsers, currentUserChannel.channelId, currentUser]);
 

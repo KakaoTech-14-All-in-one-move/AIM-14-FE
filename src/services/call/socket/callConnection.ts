@@ -45,39 +45,68 @@ export class CallConnection {
     [OP_CODES.SERVER_ACK]: (data: any) => {
       if (!this.currentServerId) return;
 
-      // 기존 상태 초기화 및 서버 데이터 처리
-      this.userStateManager.handleServerState(data);
+      // data가 배열인지 확인하고 처리
+      const users = Array.isArray(data) ? data : [];
+
+      // 서버에서 온 데이터를 UserData 형식으로 매핑
+      const channelUsers = users.map(user => ({
+        user_id: user.user_id,
+        username: user.username,
+        profile_image: user.profile_image,
+        channel_id: user.channel_id.toString(),
+        muted: user.muted,
+        deafened: user.deafened,
+        camera_on: user.camera_on,
+        screen_sharing: false,  // 초기값
+      }));
+
+      // UserStateManager를 통해 상태 업데이트
+      this.userStateManager.handleServerState(channelUsers);
     },
 
     [OP_CODES.ENTER_CHANNEL_EVENT]: (data: any) => {
       if (!data?.channel_id || !data?.user_id) return;
+      console.log('Socket ENTER_CHANNEL_EVENT received:', data);
 
-      this.userStateManager.handleUserJoin(data.channel_id, {
+      const userData = {
         user_id: data.user_id,
         username: data.username,
         profile_image: data.profile_image,
-        channel_id: data.channel_id,
-        muted: data.muted,
-        deafened: data.deafened,
-        camera_on: data.camera_on,
-        screen_sharing: data.screen_sharing,
-      });
+        channel_id: data.channel_id.toString(),
+        channel_type: data.channel_type,
+        muted: data.muted ?? false,
+        deafened: data.deafened ?? false,
+        camera_on: data.camera_on ?? (data.channel_type === 'VIDEO'),
+        screen_sharing: data.screen_sharing ?? false,
+      };
+
+      console.log('Processed userData for channel join:', userData);
+      this.userStateManager.handleUserJoin(data.channel_id.toString(), userData);
+    },
+
+    [OP_CODES.LEAVE_CHANNEL_EVENT]: (data: any) => {
+      if (!data?.channel_id || !data?.user_id) return;
+
+      console.log('Leave channel event received:', data);
+      const channelId = data.channel_id.toString();
+
+      this.userStateManager.handleUserLeave(channelId, data.user_id);
     },
 
     [OP_CODES.UPDATE_STATE_EVENT]: (data: any) => {
       if (!data?.channel_id || !data?.user_id) return;
 
-      this.userStateManager.handleUserStateUpdate(data.channel_id, data.user_id, {
+      // channelId를 string으로 변환
+      const channelId = data.channel_id.toString();
+
+      // 빈 객체가 아닌 실제 상태 값 전달
+      this.userStateManager.handleUserStateUpdate(channelId, data.user_id, {
         muted: data.muted,
         deafened: data.deafened,
         camera_on: data.camera_on,
         screen_sharing: data.screen_sharing,
+        // 다른 필요한 상태들도 추가
       });
-    },
-
-    [OP_CODES.LEAVE_CHANNEL_EVENT]: (data: any) => {
-      if (!data?.channel_id || !data?.user_id) return;
-      this.userStateManager.handleUserLeave(data.channel_id, data.user_id);
     },
 
     [OP_CODES.VIDEO_ANSWER]: (data: any) => {

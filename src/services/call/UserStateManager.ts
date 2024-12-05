@@ -1,4 +1,4 @@
-import { ChannelUser, MediaState, useUserChannelStore } from '@/stores/userChannelStore';
+import { ChannelUser, useUserChannelStore } from '@/stores/userChannelStore';
 
 interface UserData {
   user_id: string;
@@ -38,7 +38,17 @@ export class UserStateManager {
       const channelId = userData.channel_id;
       const users = channelUsersMap.get(channelId) || [];
 
-      users.push(this.convertUserData(userData));
+      // 이미 존재하는 유저의 스트림 정보 보존
+      const existingUser = useUserChannelStore.getState().channelUsers
+        .get(channelId)?.find(u => u.userId === userData.user_id);
+
+      const convertedUser = this.convertUserData(userData);
+      if (existingUser) {
+        convertedUser.mediaState.stream = existingUser.mediaState.stream;
+        convertedUser.mediaState.screenStream = existingUser.mediaState.screenStream;
+      }
+
+      users.push(convertedUser);
       channelUsersMap.set(channelId, users);
     });
 
@@ -50,10 +60,14 @@ export class UserStateManager {
 
   // 채널 입장 이벤트 처리
   handleUserJoin(channelId: string, userData: UserData) {
+    console.log('UserStateManager handling user join:', { channelId, userData });
+
     const channelUser = this.convertUserData({
       ...userData,
       channel_id: channelId,
     });
+
+    console.log('Converted channel user:', channelUser);
     useUserChannelStore.getState().addChannelUser(channelId, channelUser);
     this.notifyStateUpdate(channelId, userData.user_id);
   }
@@ -65,23 +79,20 @@ export class UserStateManager {
   }
 
   // 유저 상태 업데이트 처리
-  handleUserStateUpdate(channelId: string, userId: string, updates: {
-    muted?: boolean;
-    deafened?: boolean;
-    camera_on?: boolean;
-    screen_sharing?: boolean;
-    speaking?: boolean;
-  }) {
-    const mediaState: Partial<MediaState> = {
-      isMuted: updates.muted,
-      isDeafened: updates.deafened,
-      isCameraOn: updates.camera_on,
-      isScreenSharing: updates.screen_sharing,
-      isSpeaking: updates.speaking,
-    };
+  handleUserStateUpdate(channelId: string, userId: string, updates: any) {
+    // 상태 업데이트 전에 현재 상태 확인
+    const currentUsers = useUserChannelStore.getState().channelUsers.get(channelId);
+    if (!currentUsers) {
+      console.error('No users found for channel:', channelId);
+      return;
+    }
 
-    useUserChannelStore.getState().updateUserMediaState(channelId, userId, mediaState);
-    this.notifyStateUpdate(channelId, userId);
+    useUserChannelStore.getState().updateUserMediaState(channelId, userId, {
+      isMuted: updates.muted !== undefined ? updates.muted : false,
+      isDeafened: updates.deafened !== undefined ? updates.deafened : false,
+      isCameraOn: updates.camera_on !== undefined ? updates.camera_on : false,
+      isScreenSharing: updates.screen_sharing !== undefined ? updates.screen_sharing : false,
+    });
   }
 
   // 스트림 업데이트 처리

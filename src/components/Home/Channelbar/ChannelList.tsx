@@ -26,6 +26,7 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
   const { currentUserChannel, channelUsers } = useUserChannelStore();
   const BASE_URL = import.meta.env.VITE_BE_SERVER_URL;
 
+
   const {
     channels,
     openSections,
@@ -127,8 +128,16 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
     toggleChannelExpand(channel.channelName);
   }, [type, currentUserChannel.channelId, currentChannels, toggleChannelExpand, navigate]);
 
+
   const renderChannelMembers = useCallback((channel: Channel) => {
     if (!['voice', 'video'].includes(type)) return null;
+
+    console.log('Debug channel expansion:', {
+      activeChannelIds: Array.from(channelUsers.keys()),
+      currentChannelId: currentUserChannel.channelId,
+      currentChannels: currentChannels,
+      currentExpanded: Array.from(expandedChannels)
+    });
 
     const currentChannelUsers = channelUsers.get(channel.channelId.toString()) || [];
 
@@ -197,7 +206,6 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
         const isActiveChannel = activeChannelIds.includes(channelId);
         const isCurrentUserChannel = channelId === currentUserChannel.channelId;
 
-        // 채널에 활성 사용자가 있거나 현재 사용자가 해당 채널에 있는 경우만 확장
         if (isActiveChannel || (isCurrentUserChannel && currentlyInChannel)) {
           newSet.add(channel.channelName);
         } else {
