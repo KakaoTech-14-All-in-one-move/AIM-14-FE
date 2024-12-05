@@ -10,20 +10,24 @@ interface UserBoxProps {
 
 export const UserBox: React.FC<UserBoxProps> = React.memo(({ user, isScreenShare = false }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const BASE_URL = import.meta.env.VITE_BE_SERVER_URL
+  const BASE_URL = import.meta.env.VITE_BE_SERVER_URL;
 
   useEffect(() => {
-    if (!videoRef.current) return;
+    const videoElement = videoRef.current;
+    if (!videoElement) return;
 
     const stream = isScreenShare ? user.mediaState.screenStream : user.mediaState.stream;
-    if (stream) {
-      videoRef.current.srcObject = stream;
-      videoRef.current.muted = user.mediaState.isMuted || user.mediaState.isDeafened;
+
+    if (stream && stream.active) {
+      videoElement.srcObject = stream;
+      videoElement.muted = user.mediaState.isMuted || user.mediaState.isDeafened;
+    } else {
+      videoElement.srcObject = null;
     }
 
     return () => {
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
+      if (videoElement) {
+        videoElement.srcObject = null;
       }
     };
   }, [
@@ -34,14 +38,15 @@ export const UserBox: React.FC<UserBoxProps> = React.memo(({ user, isScreenShare
     user.mediaState.isDeafened,
   ]);
 
-  const showVideo = isScreenShare ? Boolean(user.mediaState.screenStream) : user.mediaState.isCameraOn;
+  const showVideo = isScreenShare
+    ? Boolean(user.mediaState.screenStream?.active)
+    : user.mediaState.isCameraOn && Boolean(user.mediaState.stream?.active);
 
   return (
     <div
       className={`relative w-full aspect-video bg-gray-900 rounded-xl overflow-hidden shadow-lg transition-all duration-200 
         ${user.mediaState.isSpeaking && !user.mediaState.isMuted ? 'ring-2 ring-green-500' : ''}`}
     >
-      {/* 비디오 스트림 */}
       {showVideo && (
         <video
           ref={videoRef}
@@ -51,8 +56,7 @@ export const UserBox: React.FC<UserBoxProps> = React.memo(({ user, isScreenShare
         />
       )}
 
-      {/* 프로필 이미지 영역 */}
-      {!showVideo && !isScreenShare && (
+      {(!showVideo && !isScreenShare) && (
         <div className="absolute inset-0 flex items-center justify-center">
           {user.profileImage ? (
             <img
@@ -66,7 +70,6 @@ export const UserBox: React.FC<UserBoxProps> = React.memo(({ user, isScreenShare
         </div>
       )}
 
-      {/* 상태 아이콘 */}
       <div className="absolute top-4 right-4 flex gap-2">
         {user.mediaState.isMuted && (
           <div className="bg-red-500/90 rounded-full p-3">
@@ -80,7 +83,6 @@ export const UserBox: React.FC<UserBoxProps> = React.memo(({ user, isScreenShare
         )}
       </div>
 
-      {/* 유저 정보 */}
       <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
         <div className="flex items-center justify-between">
           <span className="text-white text-lg font-medium">

@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
-import { MediaConnectionManager } from '@/services/call/MediaConnectionManager.ts';
-import { MediaType } from '@/services/call/types.ts';
+import { MediaConnectionManager } from '@/services/call/MediaConnectionManager';
+import { MediaType } from '@/services/call/types';
 
 export class ChannelNavigator {
   private static instance: ChannelNavigator | null = null;
@@ -28,20 +28,49 @@ export class ChannelNavigator {
       return false;
     }
 
-    // 1. 채널 타입에 따라 적절한 경로로 이동
-    const path = type === 'VIDEO' ? `/video/${channelId}` : `/voice/${channelId}`;
-    this.navigate(path);
+    try {
+      // 1. 먼저 WebRTC 연결 시도
+      const connected = await this.mediaManager.joinChannel(channelId, type);
 
-    // 2. WebRTC 연결 시도
-    const connected = await this.mediaManager.joinChannel(channelId, type);
+      if (!connected) {
+        console.error('Failed to connect to channel');
+        return false;
+      }
 
-    // TODO : 3. 연결 실패 시 Channel Leave
-    if (!connected) {
-      // alert('채널 연결에 실패했습니다.');
+      // 2. 연결 성공 시에만 페이지 이동
+      const path = type === 'VIDEO' ? `/video/${channelId}` : `/voice/${channelId}`;
+      this.navigate(path);
+
+      return true;
+
+    } catch (error) {
+      console.error('Channel enter failed:', error);
+
+      // 3. 에러 발생 시 채널 나가기 시도
+      try {
+        await this.mediaManager.leaveChannel();
+      } catch (cleanupError) {
+        console.error('Failed to cleanup after failed channel enter:', cleanupError);
+      }
+
       return false;
     }
+  }
 
-    return true;
+  async handleChannelLeave(): Promise<void> {
+    if (!this.navigate) {
+      console.error('Navigation function not set');
+      return;
+    }
+
+    try {
+      await this.mediaManager.leaveChannel();
+      this.navigate('/channels');
+    } catch (error) {
+      console.error('Channel leave failed:', error);
+      // 실패하더라도 채널 목록으로 이동
+      this.navigate('/channels');
+    }
   }
 
   dispose() {

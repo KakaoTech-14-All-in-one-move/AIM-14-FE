@@ -3,6 +3,7 @@ import { CallConnection } from './socket/callConnection';
 import { useAuthStore } from '@/stores/authStore';
 import { MediaConnectionManager } from './MediaConnectionManager';
 import { useMediaDeviceStore } from '@/stores/mediaDeviceStore';
+import { UserStateManager } from '@/services/call/UserStateManager.ts';
 
 interface CallContextType {
   connection: CallConnection | null;
@@ -16,16 +17,18 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
   const accessToken = useAuthStore((state) => state.accessToken);
   const mediaManager = MediaConnectionManager.getInstance();
+  const userStateManager = UserStateManager.getInstance();
 
   useEffect(() => {
     if (!accessToken) return;
 
     const callConnection = CallConnection.getInstance(accessToken);
-    setConnection(callConnection);
-    mediaManager.setCallConnection(callConnection);
 
     const connect = async () => {
       try {
+        console.log('CON : ', callConnection);
+        setConnection(callConnection);
+        mediaManager.setCallConnection(callConnection);
         const connected = await callConnection.connect();
         setIsConnected(connected);
       } catch (error) {
@@ -38,6 +41,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       callConnection.disconnect();
+      mediaManager.dispose();
+      userStateManager.dispose();
       setConnection(null);
       setIsConnected(false);
     };

@@ -3,15 +3,18 @@ import { MediaServerConnection } from './webrtc/MediaServerConnection';
 import { CallConnection } from './socket/callConnection';
 import { useUserChannelStore } from '@/stores/userChannelStore';
 import { useAuthStore } from '@/stores/authStore';
+import { UserStateManager } from '@/services/call/UserStateManager.ts';
 
 export class MediaConnectionManager {
   private static instance: MediaConnectionManager | null = null;
+  private static callConnection: CallConnection | null = null;
   private mediaServer: MediaServerConnection;
-  private callConnection: CallConnection | null = null;
   private stateUpdateCallbacks: Set<(channelId: string | null) => void>;
+  private userStateManager: UserStateManager;
 
   private constructor() {
     this.mediaServer = MediaServerConnection.getInstance();
+    this.userStateManager = UserStateManager.getInstance();
     this.stateUpdateCallbacks = new Set();
   }
 
@@ -23,13 +26,13 @@ export class MediaConnectionManager {
   }
 
   setCallConnection(connection: CallConnection) {
-    this.callConnection = connection;
+    MediaConnectionManager.callConnection = connection;
+    console.log('THIS : ', connection);
     this.mediaServer.setCallConnection(connection);
   }
 
-  onStateUpdate(callback: (channelId: string | null) => void) {
-    this.stateUpdateCallbacks.add(callback);
-    return () => this.stateUpdateCallbacks.delete(callback);
+  static getCallConnection(): CallConnection | null {
+    return MediaConnectionManager.callConnection;
   }
 
   private notifyStateUpdate(channelId: string | null) {
@@ -38,6 +41,12 @@ export class MediaConnectionManager {
 
   async joinChannel(channelId: string, type: MediaType): Promise<boolean> {
     try {
+      // 연결 상태 체크 추가
+      if (!MediaConnectionManager.getCallConnection()) {
+        console.error('No CallConnection available : ', MediaConnectionManager.getCallConnection());
+        return false;
+      }
+
       // 1. 현재 채널이 있다면 먼저 나가기
       const currentChannel = useUserChannelStore.getState().currentUserChannel;
       if (currentChannel.channelId) {
@@ -45,43 +54,56 @@ export class MediaConnectionManager {
       }
 
       // 2. 소켓으로 채널 입장
-      const success = await this.callConnection?.joinChannel(channelId, type);
+      const success = await MediaConnectionManager.getCallConnection()!.joinChannel(channelId, type);
       if (!success) {
-        throw new Error('Failed to join channel');
+        console.error('Failed to join channel via CallConnection');
+        return false;
       }
 
       // 3. 로컬 미디어 스트림 설정
       const stream = await this.mediaServer.updateLocalStream(type);
       if (!stream) {
-        throw new Error('Failed to get local stream');
+        console.error('Failed to get local media stream');
+        return false;
       }
 
       // 4. WebRTC 연결 준비
-      await this.mediaServer.prepareConnection(channelId);
+      try {
+        await this.mediaServer.prepareConnection(channelId);
+      } catch (error) {
+        console.error('Failed to prepare WebRTC connection:', error);
+        return false;
+      }
 
       // 5. WebRTC 연결 시작
-      await this.mediaServer.connect();
+      try {
+        await this.mediaServer.connect();
+      } catch (error) {
+        console.error('Failed to establish WebRTC connection:', error);
+        return false;
+      }
 
       // 6. 스토어 상태 업데이트
       const currentUser = useAuthStore.getState().user;
-      if (!currentUser) return false;
+      if (!currentUser) {
+        console.error('No current user found');
+        return false;
+      }
 
       useUserChannelStore.getState().setCurrentUserChannel(channelId, type);
-      useUserChannelStore.getState().addChannelUser(channelId, {
-        userId: currentUser.email,
+      this.userStateManager.handleUserJoin(channelId, {
+        user_id: currentUser.email,
         username: currentUser.username,
-        profileImage: currentUser.profile_image,
-        channelId: channelId,
-        mediaState: {
-          isMuted: false,
-          isDeafened: false,
-          isCameraOn: type === 'VIDEO',
-          isScreenSharing: false,
-          isSpeaking: false,
-          stream,
-          screenStream: null,
-        },
+        profile_image: currentUser.profile_image,
+        channel_id: channelId,
+        muted: false,
+        deafened: false,
+        camera_on: type === 'VIDEO',
+        screen_sharing: false,
       });
+
+      // 스트림 업데이트
+      this.userStateManager.updateUserStream(channelId, currentUser.email, stream);
 
       this.notifyStateUpdate(channelId);
       return true;
@@ -99,19 +121,37 @@ export class MediaConnectionManager {
       if (!currentChannel.channelId) return;
 
       // 1. 소켓으로 채널 퇴장
-      this.callConnection?.leaveChannel();
+      MediaConnectionManager.getCallConnection()?.leaveChannel();
 
       // 2. 미디어 연결 정리
       this.mediaServer.disconnect();
 
       // 3. 스토어 상태 초기화
-      useUserChannelStore.getState().resetChannel(currentChannel.channelId);
-      useUserChannelStore.getState().setCurrentUserChannel(null, null);
+      this.userStateManager.handleUserLeave(
+        currentChannel.channelId,
+        useAuthStore.getState().user?.email || '',
+      );
 
+      // 4. 채널에 남은 사용자가 없으면 채널 자체를 Map에서 제거
+      const channelUsers = useUserChannelStore.getState().channelUsers;
+      const remainingUsers = channelUsers.get(currentChannel.channelId) || [];
+      if (remainingUsers.length === 0) {
+        useUserChannelStore.getState().resetChannel(currentChannel.channelId);
+      }
+
+      useUserChannelStore.getState().setCurrentUserChannel(null, null);
       this.notifyStateUpdate(null);
     } catch (error) {
       console.error('Error leaving channel:', error);
     }
+  }
+
+  handleUserLeave(channelId: string, userId: string) {
+    this.userStateManager.handleUserLeave(channelId, userId);
+  }
+
+  handleUserStateUpdate(channelId: string, userId: string, updates: any) {
+    this.userStateManager.handleUserStateUpdate(channelId, userId, updates);
   }
 
   async updateMediaState(updates: Partial<MediaState>) {
@@ -121,7 +161,23 @@ export class MediaConnectionManager {
 
       if (!currentUserChannel.channelId || !currentUser) return;
 
-      // 1. 미디어 상태 업데이트
+      // 1. 현재 상태 가져오기
+      const channelUsers = useUserChannelStore.getState().channelUsers;
+      const currentUserState = channelUsers.get(currentUserChannel.channelId)?.find(
+        user => user.userId === currentUser.email
+      );
+
+      if (!currentUserState) return;
+
+      // 2. 현재 상태와 업데이트를 병합
+      const serverUpdates = {
+        muted: 'isMuted' in updates ? updates.isMuted : currentUserState.mediaState.isMuted,
+        deafened: 'isDeafened' in updates ? updates.isDeafened : currentUserState.mediaState.isDeafened,
+        camera_on: 'isCameraOn' in updates ? updates.isCameraOn : currentUserState.mediaState.isCameraOn,
+        screen_sharing: 'isScreenSharing' in updates ? updates.isScreenSharing : currentUserState.mediaState.isScreenSharing,
+      };
+
+      // 3. 미디어 상태 업데이트 로직
       if ('isMuted' in updates) {
         await this.mediaServer.toggleAudio(!updates.isMuted);
       }
@@ -133,81 +189,38 @@ export class MediaConnectionManager {
           const stream = await this.mediaServer.startScreenShare();
           if (stream) {
             updates.screenStream = stream;
+            this.userStateManager.updateUserStream(
+              currentUserChannel.channelId,
+              currentUser.email,
+              stream,
+              true,
+            );
           }
         } else {
           await this.mediaServer.stopScreenShare();
           updates.screenStream = null;
+          this.userStateManager.updateUserStream(
+            currentUserChannel.channelId,
+            currentUser.email,
+            null,
+            true,
+          );
         }
       }
 
-      // 2. 스토어 상태 업데이트
-      useUserChannelStore.getState().updateUserMediaState(
+      // 4. 서버에 상태 업데이트 전송
+      MediaConnectionManager.getCallConnection()?.updateState(serverUpdates);
+
+      // 5. 로컬 상태 업데이트
+      this.userStateManager.handleUserStateUpdate(
         currentUserChannel.channelId,
         currentUser.email,
-        updates,
+        serverUpdates
       );
-
-      // 3. 서버에 상태 업데이트 전송
-      const serverUpdates = {
-        muted: updates.isMuted,
-        deafened: updates.isDeafened,
-        camera_on: updates.isCameraOn,
-        screen_sharing: updates.isScreenSharing,
-      } as Record<string, boolean | undefined>;
-
-      // undefined인 속성 제거
-      const filteredUpdates = Object.fromEntries(
-        Object.entries(serverUpdates).filter(([_, value]) => value !== undefined)
-      );
-
-      this.callConnection?.updateState(filteredUpdates);
 
     } catch (error) {
       console.error('Error updating media state:', error);
     }
-  }
-
-  handleUserJoin(channelId: string, userData: any) {
-    if (!this.isValidUserData(userData)) return;
-
-    useUserChannelStore.getState().addChannelUser(channelId, {
-      userId: userData.user_id,
-      username: userData.username,
-      profileImage: userData.profile_image,
-      channelId,
-      mediaState: {
-        isMuted: userData.muted || false,
-        isDeafened: userData.deafened || false,
-        isCameraOn: userData.camera_on || false,
-        isScreenSharing: userData.screen_sharing || false,
-        isSpeaking: false,
-        stream: null,
-        screenStream: null,
-      },
-    });
-  }
-
-  async handleUserLeave(channelId: string, userId: string) {
-    // 사용자 퇴장 처리
-    useUserChannelStore.getState().removeChannelUser(channelId, userId);
-  }
-
-  handleUserStateUpdate(channelId: string, userId: string, updates: any) {
-    useUserChannelStore.getState().updateUserMediaState(channelId, userId, {
-      isMuted: updates.muted,
-      isDeafened: updates.deafened,
-      isCameraOn: updates.camera_on,
-      isScreenSharing: updates.screen_sharing,
-      isSpeaking: updates.speaking
-    });
-  }
-
-  private isValidUserData(data: any): boolean {
-    return (
-      data &&
-      typeof data.user_id === 'string' &&
-      typeof data.username === 'string'
-    );
   }
 
   dispose() {

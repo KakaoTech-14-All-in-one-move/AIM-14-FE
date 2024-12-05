@@ -11,31 +11,33 @@ export const VoiceContent = () => {
 
   const currentChannelUsers = useMemo(() => {
     if (!currentUserChannel.channelId) return [];
-    return channelUsers.get(currentUserChannel.channelId) || [];
-  }, [channelUsers, currentUserChannel.channelId]);
+    const users = channelUsers.get(currentUserChannel.channelId) || [];
+    return users.filter(user => {
+      const hasValidStream = user.mediaState.stream?.active || user.mediaState.screenStream?.active;
+      return hasValidStream || user.userId === currentUser?.email;
+    });
+  }, [channelUsers, currentUserChannel.channelId, currentUser]);
 
-  // 화면 공유 중인 사용자 찾기
-  const screenShareUser = useMemo(() => {
-    return currentChannelUsers.find(user => user.mediaState.isScreenSharing);
-  }, [currentChannelUsers]);
+  const { screenShareUser, sortedUsers } = useMemo(() => {
+    const screenShareUser = currentChannelUsers.find(
+      user => user.mediaState.isScreenSharing && user.mediaState.screenStream?.active,
+    );
 
-  // 일반 사용자 목록 (화면 공유 중인 사용자 제외)
-  const sortedUsers = useMemo(() => {
-    const nonScreenShareUsers = currentChannelUsers.filter(user => !user.mediaState.isScreenSharing);
+    const nonScreenShareUsers = currentChannelUsers.filter(user =>
+      !user.mediaState.isScreenSharing || !user.mediaState.screenStream?.active,
+    );
 
-    if (!currentUser) return nonScreenShareUsers;
-
-    return [
+    const sortedUsers = currentUser ? [
       ...nonScreenShareUsers.filter(user => user.userId !== currentUser.email),
       ...nonScreenShareUsers.filter(user => user.userId === currentUser.email),
-    ];
+    ] : nonScreenShareUsers;
+
+    return { screenShareUser, sortedUsers };
   }, [currentChannelUsers, currentUser]);
 
-  // 그리드 레이아웃 계산
   const gridLayout = useMemo(() => {
     const totalBoxes = sortedUsers.length + (screenShareUser ? 1 : 0);
     if (totalBoxes <= 1) return 'grid-cols-1';
-    if (totalBoxes === 2) return 'grid-cols-2';
     if (totalBoxes <= 4) return 'grid-cols-2';
     return 'grid-cols-3';
   }, [sortedUsers.length, screenShareUser]);
@@ -50,7 +52,6 @@ export const VoiceContent = () => {
     >
       <div className="flex-1 w-full flex items-center justify-center">
         <div className={`grid gap-4 w-full max-w-[1400px] mx-auto ${gridLayout}`}>
-          {/* 화면 공유 박스 */}
           {screenShareUser && (
             <UserBox
               key={`${screenShareUser.userId}-screen`}
@@ -59,7 +60,6 @@ export const VoiceContent = () => {
             />
           )}
 
-          {/* 일반 사용자 박스 */}
           {sortedUsers.map(user => (
             <UserBox
               key={user.userId}

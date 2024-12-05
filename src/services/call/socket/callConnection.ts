@@ -1,10 +1,9 @@
 import { CALL_API, ERROR_CODES, OP_CODES, RECONNECT_DELAY } from '../constants';
 import { MediaServerConnection } from '../webrtc/MediaServerConnection';
-import { MediaConnectionManager } from '../MediaConnectionManager';
 import { useUserChannelStore } from '@/stores/userChannelStore';
 import { apiClient } from '@/api/apiClient';
-import { MediaType } from '@/services/call/types.ts';
-import { useAuthStore } from '@/stores/authStore.ts';
+import { MediaType } from '../types';
+import { UserStateManager } from '@/services/call/UserStateManager';
 
 type MessageHandler = (data: any) => void;
 type MessageHandlerMap = Record<number, MessageHandler>;
@@ -22,11 +21,11 @@ export class CallConnection {
   private currentServerId: string | null = null;
   private readonly accessToken: string;
   private connectionPromise: Promise<boolean> | null = null;
-  private mediaManager: MediaConnectionManager;
+  private userStateManager: UserStateManager;
 
   private constructor(accessToken: string) {
     this.accessToken = accessToken;
-    this.mediaManager = MediaConnectionManager.getInstance();
+    this.userStateManager = UserStateManager.getInstance();
   }
 
   static getInstance(accessToken?: string): CallConnection {
@@ -44,57 +43,41 @@ export class CallConnection {
     },
 
     [OP_CODES.SERVER_ACK]: (data: any) => {
-      if (Array.isArray(data)) {
-        // 서버 입장 시 기존 사용자 목록 초기화
-        useUserChannelStore.getState().resetAllState();
+      if (!this.currentServerId) return;
 
-        // 각 사용자 정보 처리
-        data.forEach(userData => {
-          if (userData.channel_id) {
-            this.mediaManager.handleUserJoin(userData.channel_id, {
-              user_id: userData.user_id,
-              username: userData.username,
-              profile_image: userData.profile_image,
-              muted: userData.muted,
-              deafened: userData.deafened,
-              camera_on: userData.camera_on,
-              screen_sharing: userData.screen_sharing,
-              channel_id: userData.channel_id,
-            });
-          }
-        });
-      }
+      // 기존 상태 초기화 및 서버 데이터 처리
+      this.userStateManager.handleServerState(data);
     },
 
     [OP_CODES.ENTER_CHANNEL_EVENT]: (data: any) => {
       if (!data?.channel_id || !data?.user_id) return;
 
-      this.mediaManager.handleUserJoin(data.channel_id, {
+      this.userStateManager.handleUserJoin(data.channel_id, {
         user_id: data.user_id,
         username: data.username,
         profile_image: data.profile_image,
+        channel_id: data.channel_id,
         muted: data.muted,
         deafened: data.deafened,
         camera_on: data.camera_on,
         screen_sharing: data.screen_sharing,
-        channel_id: data.channel_id,
       });
     },
 
     [OP_CODES.UPDATE_STATE_EVENT]: (data: any) => {
       if (!data?.channel_id || !data?.user_id) return;
 
-      this.mediaManager.handleUserStateUpdate(data.channel_id, data.user_id, {
-        isMuted: data.muted,
-        isDeafened: data.deafened,
-        isCameraOn: data.camera_on,
-        isScreenSharing: data.screen_sharing,
+      this.userStateManager.handleUserStateUpdate(data.channel_id, data.user_id, {
+        muted: data.muted,
+        deafened: data.deafened,
+        camera_on: data.camera_on,
+        screen_sharing: data.screen_sharing,
       });
     },
 
     [OP_CODES.LEAVE_CHANNEL_EVENT]: (data: any) => {
       if (!data?.channel_id || !data?.user_id) return;
-      this.mediaManager.handleUserLeave(data.channel_id, data.user_id);
+      this.userStateManager.handleUserLeave(data.channel_id, data.user_id);
     },
 
     [OP_CODES.VIDEO_ANSWER]: (data: any) => {
@@ -219,64 +202,22 @@ export class CallConnection {
     this.scheduleReconnect();
   };
 
-  async updateServerConnection(): Promise<boolean> {
+  async setCurrentServerId(serverId: string) {
+    this.currentServerId = serverId;
+    return this.updateServerConnection();
+  }
+
+  private async updateServerConnection(): Promise<boolean> {
     if (!this.isConnected() || !this.currentServerId) {
       return false;
     }
 
     return new Promise((resolve) => {
-      let isResolved = false;
-      const timeoutId = setTimeout(() => {
-        if (!isResolved) {
-          console.error('Server join timeout');
-          resolve(false);
-        }
-      }, 5000);
-
-      // 서버 응답 핸들러
-      const handleServerAck = (data: any) => {
-        if (!this.currentServerId) return;
-
-        // 기존 상태 초기화
-        useUserChannelStore.getState().resetAllState();
-
-        // 서버에서 전달된 사용자 데이터 처리
-        if (Array.isArray(data)) {
-          data.forEach(userData => {
-            if (userData.channel_id) {
-              this.mediaManager.handleUserJoin(userData.channel_id, userData);
-            }
-          });
-        }
-
-        // 프로세스 완료
-        isResolved = true;
-        clearTimeout(timeoutId);
-
-        const currentUser = useAuthStore.getState().user;
-        console.log('Entered server [', this.currentServerId, '] :', currentUser?.email);
-        resolve(true);
-      };
-
-      // 일회성 이벤트 핸들러 등록
-      const originalHandler = this.messageHandlers[OP_CODES.SERVER_ACK];
-      this.messageHandlers[OP_CODES.SERVER_ACK] = (data: any) => {
-        handleServerAck(data);
-        if (originalHandler && !isResolved) {
-          originalHandler(data);
-        }
-      };
-
-      // 서버 입장 요청 전송
       this.sendOp(OP_CODES.SERVER, {
         server_id: this.currentServerId,
       });
+      resolve(true);
     });
-  }
-
-  async setCurrentServerId(serverId: string) {
-    this.currentServerId = serverId;
-    return this.updateServerConnection();
   }
 
   async joinChannel(channelId: string, type: MediaType) {
@@ -286,24 +227,13 @@ export class CallConnection {
     }
 
     return new Promise((resolve) => {
-      let isResolved = false;
-      const timeoutId = setTimeout(() => {
-        if (!isResolved) {
-          console.error('Channel join timed out');
-          resolve(false);
-        }
-      }, 5000);
-
-      isResolved = true;
-      clearTimeout(timeoutId);
-      resolve(true);
-
       console.log('SEND CHANNEL ENTER');
       this.sendOp(OP_CODES.ENTER_CHANNEL, {
         server_id: this.currentServerId,
         channel_id: channelId,
         channel_type: type,
       });
+      resolve(true);
     });
   }
 

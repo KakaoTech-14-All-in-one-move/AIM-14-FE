@@ -8,7 +8,6 @@ import { useServerStore } from '@/stores/serverStore';
 import { useChannelStore } from '@/stores/channelStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useUserChannelStore } from '@/stores/userChannelStore';
-import { MediaConnectionManager } from '@/services/call/MediaConnectionManager';
 import { Channel } from '@/types/server';
 import { MediaType } from '@/services/call/types';
 import ContextMenu from './ContextMenu';
@@ -25,8 +24,7 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
   const channelStore = useChannelStore();
   const { user } = useAuthStore();
   const { currentUserChannel, channelUsers } = useUserChannelStore();
-  const mediaManager = MediaConnectionManager.getInstance();
-  const BASE_URL = import.meta.env.VITE_BE_SERVER_URL
+  const BASE_URL = import.meta.env.VITE_BE_SERVER_URL;
 
   const {
     channels,
@@ -95,7 +93,6 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
     }
 
     const mediaType = type.toUpperCase() as MediaType;
-
     if (isMemberClick) return;
 
     if (currentUserChannel.channelId) {
@@ -104,7 +101,17 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
       );
       if (!confirmSwitch) return;
 
-      await mediaManager.leaveChannel();
+      // 현재 채널에서 나가기 전에 확장 상태 제거
+      const currentChannel = currentChannels.find(c => c.channelId.toString() === currentUserChannel.channelId);
+      if (currentChannel) {
+        setExpandedChannels(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(currentChannel.channelName);
+          return newSet;
+        });
+      }
+
+      await ChannelNavigator.getInstance().handleChannelLeave();
     }
 
     const success = await ChannelNavigator.getInstance().handleChannelEnter(
@@ -112,10 +119,13 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
       mediaType
     );
 
-    if (success) {
-      toggleChannelExpand(channel.channelName);
+    if (!success) {
+      alert(`${type === 'voice' ? '음성' : '화상'} 채널 접속에 실패했습니다.`);
+      return;
     }
-  }, [type, currentUserChannel.channelId, mediaManager, toggleChannelExpand]);
+
+    toggleChannelExpand(channel.channelName);
+  }, [type, currentUserChannel.channelId, currentChannels, toggleChannelExpand, navigate]);
 
   const renderChannelMembers = useCallback((channel: Channel) => {
     if (!['voice', 'video'].includes(type)) return null;
@@ -166,7 +176,7 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
         })}
       </>
     );
-  }, [type, channelUsers, user, handleChannelClick]);
+  }, [type, channelUsers, user, handleChannelClick, BASE_URL]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, channel: Channel) => {
     e.preventDefault();
@@ -178,18 +188,25 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
     if (!['voice', 'video'].includes(type)) return;
 
     const activeChannelIds = Array.from(channelUsers.keys());
+    const currentlyInChannel = currentUserChannel.channelId !== null;
 
-    // 활성 채널 자동 확장
     setExpandedChannels(prev => {
       const newSet = new Set(prev);
       currentChannels.forEach(channel => {
-        if (activeChannelIds.includes(channel.channelId.toString())) {
+        const channelId = channel.channelId.toString();
+        const isActiveChannel = activeChannelIds.includes(channelId);
+        const isCurrentUserChannel = channelId === currentUserChannel.channelId;
+
+        // 채널에 활성 사용자가 있거나 현재 사용자가 해당 채널에 있는 경우만 확장
+        if (isActiveChannel || (isCurrentUserChannel && currentlyInChannel)) {
           newSet.add(channel.channelName);
+        } else {
+          newSet.delete(channel.channelName);
         }
       });
       return newSet;
     });
-  }, [type, channelUsers, currentChannels]);
+  }, [type, channelUsers, currentChannels, currentUserChannel.channelId]);
 
   return (
     <div className="mt-5">
@@ -280,4 +297,4 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
   );
 };
 
-export default ChannelList;
+export default React.memo(ChannelList);
