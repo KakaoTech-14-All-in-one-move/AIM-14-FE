@@ -122,19 +122,38 @@ export class MediaConnectionManager {
       const currentChannel = useUserChannelStore.getState().currentUserChannel;
       if (!currentChannel.channelId) return;
 
-      // 1. 소켓으로 채널 퇴장
+      // 1. MediaServerConnection에서 현재 활성화된 모든 미디어 스트림을 가져옴
+      const userState = useUserChannelStore.getState()
+        .channelUsers.get(currentChannel.channelId)
+        ?.find(user => user.userId === useAuthStore.getState().user?.email);
+
+      // 2. 스트림이 있으면 모든 트랙 중지
+      if (userState?.mediaState.stream) {
+        userState.mediaState.stream.getTracks().forEach(track => {
+          track.stop();
+        });
+      }
+
+      // 3. 스크린 공유 스트림이 있으면 중지
+      if (userState?.mediaState.screenStream) {
+        userState.mediaState.screenStream.getTracks().forEach(track => {
+          track.stop();
+        });
+      }
+
+      // 4. 소켓으로 채널 퇴장
       MediaConnectionManager.getCallConnection()?.leaveChannel();
 
-      // 2. 미디어 연결 정리
+      // 5. 미디어 연결 정리
       this.mediaServer.disconnect();
 
-      // 3. 스토어 상태 초기화
+      // 6. 스토어 상태 초기화
       this.userStateManager.handleUserLeave(
         currentChannel.channelId,
         useAuthStore.getState().user?.email || '',
       );
 
-      // 4. 채널에 남은 사용자가 없으면 채널 자체를 Map에서 제거
+      // 7. 채널에 남은 사용자가 없으면 채널 자체를 Map에서 제거
       const channelUsers = useUserChannelStore.getState().channelUsers;
       const remainingUsers = channelUsers.get(currentChannel.channelId) || [];
       if (remainingUsers.length === 0) {
