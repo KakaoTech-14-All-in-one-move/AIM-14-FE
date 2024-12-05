@@ -27,7 +27,6 @@ export class MediaConnectionManager {
 
   setCallConnection(connection: CallConnection) {
     MediaConnectionManager.callConnection = connection;
-    console.log('THIS : ', connection);
     this.mediaServer.setCallConnection(connection);
   }
 

@@ -26,7 +26,6 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
     const connect = async () => {
       try {
-        console.log('CON : ', callConnection);
         setConnection(callConnection);
         mediaManager.setCallConnection(callConnection);
         const connected = await callConnection.connect();
