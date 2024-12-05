@@ -61,7 +61,10 @@ export class MediaConnectionManager {
       }
 
       // 3. 로컬 미디어 스트림 설정
-      const stream = await this.mediaServer.updateLocalStream(type);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: false
+      });
       if (!stream) {
         console.error('Failed to get local media stream');
         return false;
@@ -98,7 +101,7 @@ export class MediaConnectionManager {
         channel_id: channelId,
         muted: false,
         deafened: false,
-        camera_on: type === 'VIDEO',
+        camera_on: false,
         screen_sharing: false,
       });
 
@@ -146,14 +149,6 @@ export class MediaConnectionManager {
     }
   }
 
-  handleUserLeave(channelId: string, userId: string) {
-    this.userStateManager.handleUserLeave(channelId, userId);
-  }
-
-  handleUserStateUpdate(channelId: string, userId: string, updates: any) {
-    this.userStateManager.handleUserStateUpdate(channelId, userId, updates);
-  }
-
   async updateMediaState(updates: Partial<MediaState>) {
     try {
       const { currentUserChannel } = useUserChannelStore.getState();
@@ -164,7 +159,7 @@ export class MediaConnectionManager {
       // 1. 현재 상태 가져오기
       const channelUsers = useUserChannelStore.getState().channelUsers;
       const currentUserState = channelUsers.get(currentUserChannel.channelId)?.find(
-        user => user.userId === currentUser.email
+        user => user.userId === currentUser.email,
       );
 
       if (!currentUserState) return;
@@ -215,7 +210,7 @@ export class MediaConnectionManager {
       this.userStateManager.handleUserStateUpdate(
         currentUserChannel.channelId,
         currentUser.email,
-        serverUpdates
+        serverUpdates,
       );
 
     } catch (error) {

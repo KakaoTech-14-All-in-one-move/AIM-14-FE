@@ -121,8 +121,8 @@ export class UserStateManager {
       mediaState: {
         isMuted: userData.muted,
         isDeafened: userData.deafened,
-        isCameraOn: userData.camera_on,
-        isScreenSharing: userData.screen_sharing,
+        isCameraOn: false,
+        isScreenSharing: false,
         isSpeaking: false,
         stream: null,
         screenStream: null,

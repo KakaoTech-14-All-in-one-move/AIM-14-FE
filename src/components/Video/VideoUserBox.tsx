@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { CameraOff, HeadphoneOff, MicOff, MonitorUp } from 'lucide-react';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage';
 import { ChannelUser } from '@/stores/userChannelStore';
@@ -63,9 +63,18 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare
   ]);
 
   // 비디오를 보여줄지 결정하는 조건을 더 명확하게 수정
-  const showVideo = isScreenShare
-    ? !!user.mediaState.screenStream
-    : !!user.mediaState.stream && user.mediaState.isCameraOn;
+  const showVideo = useMemo(() => {
+    if (isScreenShare) {
+      return !!user.mediaState.screenStream;
+    }
+
+    // 스트림이 있고, 비디오 트랙이 있고, 카메라가 켜져있을 때만 true
+    return !!(
+      user.mediaState.stream &&
+      user.mediaState.stream.getVideoTracks().length > 0 &&
+      user.mediaState.isCameraOn
+    );
+  }, [isScreenShare, user.mediaState.stream, user.mediaState.screenStream, user.mediaState.isCameraOn]);
 
   return (
     <div
@@ -108,6 +117,7 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare
                 <HeadphoneOff className="w-4 h-4 text-white" />
               </div>
             )}
+            {/* 카메라가 꺼져있을 때만 아이콘 표시 */}
             {!user.mediaState.isCameraOn && (
               <div className="bg-red-500/90 rounded-full p-2">
                 <CameraOff className="w-4 h-4 text-white" />

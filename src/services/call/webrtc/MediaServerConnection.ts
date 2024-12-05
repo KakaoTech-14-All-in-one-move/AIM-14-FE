@@ -274,42 +274,44 @@ export class MediaServerConnection {
       const audioContext = new AudioContext();
       const source = audioContext.createMediaStreamSource(stream);
       const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 256;
+
+      // FFT 크기를 더 작게 설정하여 반응성 향상
+      analyser.fftSize = 128;
+      // smoothingTimeConstant를 낮춰서 더 빠른 반응
+      analyser.smoothingTimeConstant = 0.2;
+
       source.connect(analyser);
 
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
       this.audioContextMap.set(userId, { context: audioContext, analyser, dataArray });
 
-      // 기존 인터벌이 없을 때만 새로 설정
       if (!this.audioDetectionInterval) {
         this.audioDetectionInterval = window.setInterval(() => {
-          // 모든 사용자의 오디오 레벨 체크
           this.audioContextMap.forEach((audio, uid) => {
             const { analyser, dataArray } = audio;
             analyser.getByteFrequencyData(dataArray);
+
+            // 더 낮은 임계값 설정 (원래 20)
+            const threshold = 10;
             const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+            const isSpeaking = average > threshold;
 
-            const isSpeaking = average > 20;
-
-            // 현재 채널 ID 가져오기
             const currentChannelId = useUserChannelStore.getState().currentUserChannel.channelId;
             if (!currentChannelId) return;
 
-            // speaking 상태가 변경될 때만 업데이트
             const currentState = useUserChannelStore.getState()
               .channelUsers.get(currentChannelId)
               ?.find(user => user.userId === uid)?.mediaState.isSpeaking;
 
             if (currentState !== isSpeaking) {
-              // 로컬 상태만 업데이트하고 서버로는 전송하지 않음
               useUserChannelStore.getState().updateUserMediaState(
                 currentChannelId,
                 uid,
-                { isSpeaking },
+                { isSpeaking }
               );
             }
           });
-        }, 100);
+        }, 50); // 간격을 100ms에서 50ms로 줄임
       }
     } catch (error) {
       console.error('Failed to setup audio detection:', error);
