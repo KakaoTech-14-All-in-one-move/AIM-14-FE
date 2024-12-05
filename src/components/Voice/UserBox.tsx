@@ -1,27 +1,24 @@
 import { HeadphoneOff, MicOff } from 'lucide-react';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage';
 import React, { useEffect, useRef } from 'react';
-import { useMediaChat } from '@/hooks/useMediaChat';
-import { MediaUser } from '@/types/media';
+import { ChannelUser } from '@/stores/userChannelStore';
 
 interface UserBoxProps {
-  user: MediaUser;
+  user: ChannelUser;
   isScreenShare?: boolean;
 }
 
 export const UserBox: React.FC<UserBoxProps> = React.memo(({ user, isScreenShare = false }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const mediaChat = useMediaChat();
-  const userState = mediaChat.userStates.get(user.userId);
-  const isSpeaking = mediaChat.speakingUsers.has(user.userId);
+  const BASE_URL = import.meta.env.VITE_BE_SERVER_URL
 
   useEffect(() => {
-    if (!videoRef.current || !userState) return;
+    if (!videoRef.current) return;
 
-    const stream = isScreenShare ? userState.screenStream : userState.stream;
+    const stream = isScreenShare ? user.mediaState.screenStream : user.mediaState.stream;
     if (stream) {
       videoRef.current.srcObject = stream;
-      videoRef.current.muted = userState.muted || userState.deafened;
+      videoRef.current.muted = user.mediaState.isMuted || user.mediaState.isDeafened;
     }
 
     return () => {
@@ -29,17 +26,20 @@ export const UserBox: React.FC<UserBoxProps> = React.memo(({ user, isScreenShare
         videoRef.current.srcObject = null;
       }
     };
-  }, [userState?.stream, userState?.screenStream, isScreenShare, userState?.muted, userState?.deafened]);
+  }, [
+    user.mediaState.stream,
+    user.mediaState.screenStream,
+    isScreenShare,
+    user.mediaState.isMuted,
+    user.mediaState.isDeafened,
+  ]);
 
-  if (!userState) return null;
-
-  const showVideo = isScreenShare ? Boolean(userState.screenStream) : userState.cameraOn;
+  const showVideo = isScreenShare ? Boolean(user.mediaState.screenStream) : user.mediaState.isCameraOn;
 
   return (
     <div
       className={`relative w-full aspect-video bg-gray-900 rounded-xl overflow-hidden shadow-lg transition-all duration-200 
-        ${isSpeaking && !userState.muted && !isScreenShare ? 'ring-2 ring-green-500 animate-pulse' : ''}
-        ${isScreenShare ? 'col-span-2' : ''}`}
+        ${user.mediaState.isSpeaking && !user.mediaState.isMuted ? 'ring-2 ring-green-500' : ''}`}
     >
       {/* 비디오 스트림 */}
       {showVideo && (
@@ -56,43 +56,28 @@ export const UserBox: React.FC<UserBoxProps> = React.memo(({ user, isScreenShare
         <div className="absolute inset-0 flex items-center justify-center">
           {user.profileImage ? (
             <img
-              src={import.meta.env.VITE_BE_SERVER_URL + user.profileImage}
+              src={BASE_URL + user.profileImage}
               alt={user.username}
-              className="w-28 h-28 rounded-full"
+              className="w-20 h-20 rounded-full"
             />
           ) : (
-            <DefaultProfileImage username={user.username} size={80} margin="mr-2" />
+            <DefaultProfileImage username={user.username} size={80} />
           )}
         </div>
       )}
 
       {/* 상태 아이콘 */}
       <div className="absolute top-4 right-4 flex gap-2">
-        {userState.muted && (
+        {user.mediaState.isMuted && (
           <div className="bg-red-500/90 rounded-full p-3">
             <MicOff className="w-7 h-7 text-white" />
           </div>
         )}
-        {/*{!userState.muted && isSpeaking && !isScreenShare && (*/}
-        {/*  <div className="bg-green-500/90 rounded-full p-2">*/}
-        {/*    <MicOff className="w-7 h-7 text-white" />*/}
-        {/*  </div>*/}
-        {/*)}*/}
-        {userState.deafened && (
+        {user.mediaState.isDeafened && (
           <div className="bg-red-500/90 rounded-full p-3">
             <HeadphoneOff className="w-7 h-7 text-white" />
           </div>
         )}
-        {/*{!userState.cameraOn && !isScreenShare && (*/}
-        {/*  <div className="bg-red-500/90 rounded-full p-3">*/}
-        {/*    <CameraOff className="w-7 h-7 text-white" />*/}
-        {/*  </div>*/}
-        {/*)}*/}
-        {/*{userState.screenSharing && !isScreenShare && (*/}
-        {/*  <div className="bg-green-500/90 rounded-full p-2">*/}
-        {/*    <MonitorUp className="w-4 h-4 text-white" />*/}
-        {/*  </div>*/}
-        {/*)}*/}
       </div>
 
       {/* 유저 정보 */}

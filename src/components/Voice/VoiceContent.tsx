@@ -1,40 +1,35 @@
 import { useMemo, useState } from 'react';
 import { UserBox } from '@/components/Voice/UserBox';
 import { VoiceControls } from '@/components/Voice/VoiceControls';
-import { useMediaChat } from '@/hooks/useMediaChat';
-import { useMediaStore } from '@/stores/mediaStore';
-import { useUserStore } from '@/stores/userStore';
-import { convertCallUserToMediaUser } from '@/types/media';
+import { useUserChannelStore } from '@/stores/userChannelStore';
+import { useAuthStore } from '@/stores/authStore';
 
 export const VoiceContent = () => {
   const [showControls, setShowControls] = useState(false);
-  const users = useUserStore(state => state.users);
-  const currentUser = useUserStore(state => state.currentUser);
-  const mediaStore = useMediaStore();
-  const mediaChat = useMediaChat();
+  const { channelUsers, currentUserChannel } = useUserChannelStore();
+  const currentUser = useAuthStore(state => state.user);
+
+  const currentChannelUsers = useMemo(() => {
+    if (!currentUserChannel.channelId) return [];
+    return channelUsers.get(currentUserChannel.channelId) || [];
+  }, [channelUsers, currentUserChannel.channelId]);
 
   // 화면 공유 중인 사용자 찾기
   const screenShareUser = useMemo(() => {
-    return users.find(user => {
-      const state = mediaChat.userStates.get(user.user_id);
-      return state && state.screenSharing;
-    });
-  }, [users, mediaChat.userStates]);
+    return currentChannelUsers.find(user => user.mediaState.isScreenSharing);
+  }, [currentChannelUsers]);
 
   // 일반 사용자 목록 (화면 공유 중인 사용자 제외)
   const sortedUsers = useMemo(() => {
-    const nonScreenShareUsers = users.filter(user => {
-      const state = mediaChat.userStates.get(user.user_id);
-      return !state?.screenSharing;
-    });
+    const nonScreenShareUsers = currentChannelUsers.filter(user => !user.mediaState.isScreenSharing);
 
     if (!currentUser) return nonScreenShareUsers;
 
     return [
-      ...nonScreenShareUsers.filter(u => u.user_id !== currentUser.user_id),
-      ...nonScreenShareUsers.filter(u => u.user_id === currentUser.user_id),
+      ...nonScreenShareUsers.filter(user => user.userId !== currentUser.email),
+      ...nonScreenShareUsers.filter(user => user.userId === currentUser.email),
     ];
-  }, [users, currentUser, mediaChat.userStates]);
+  }, [currentChannelUsers, currentUser]);
 
   // 그리드 레이아웃 계산
   const gridLayout = useMemo(() => {
@@ -58,11 +53,8 @@ export const VoiceContent = () => {
           {/* 화면 공유 박스 */}
           {screenShareUser && (
             <UserBox
-              key={`${screenShareUser.user_id}-screen`}
-              user={{
-                ...convertCallUserToMediaUser(screenShareUser),
-                screenSharing: true,
-              }}
+              key={`${screenShareUser.userId}-screen`}
+              user={screenShareUser}
               isScreenShare={true}
             />
           )}
@@ -70,18 +62,15 @@ export const VoiceContent = () => {
           {/* 일반 사용자 박스 */}
           {sortedUsers.map(user => (
             <UserBox
-              key={user.user_id}
-              user={convertCallUserToMediaUser(user)}
+              key={user.userId}
+              user={user}
               isScreenShare={false}
             />
           ))}
         </div>
       </div>
 
-      <VoiceControls
-        show={showControls}
-        isVideo={mediaStore.channelType === 'VIDEO'}
-      />
+      <VoiceControls show={showControls} />
     </div>
   );
 };

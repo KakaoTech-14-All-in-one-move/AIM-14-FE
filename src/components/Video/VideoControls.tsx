@@ -1,49 +1,48 @@
 import { Camera, CameraOff, HeadphoneOff, Headphones, Mic, MicOff, MonitorOff, MonitorUp, PhoneOff } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { useCall } from '@/services/call/CallProvider';
+import { useCallback } from 'react';
 import { useMediaChat } from '@/hooks/useMediaChat';
 import { ControlButton } from './ControlButton';
-import { useCallback } from 'react';
+import { useAuthStore } from '@/stores/authStore';
+import { useUserChannelStore } from '@/stores/userChannelStore';
 
 interface VideoControlsProps {
   show: boolean;
 }
 
 export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
-  const navigate = useNavigate();
-  const { connection, currentUser } = useCall();
-  const mediaChat = useMediaChat();
-
-  // 현재 사용자의 상태 가져오기
-  const userState = mediaChat.userStates.get(currentUser?.user_id ?? '');
-
-  const handleDisconnect = useCallback(() => {
-    if (connection) {
-      if (userState?.screenSharing) {
-        mediaChat.toggleScreenShare();
-      }
-      connection.leaveChannel();
-      mediaChat.resetState();
-    }
-    navigate('/home');
-  }, [connection, userState?.screenSharing, mediaChat, navigate]);
+  const { user } = useAuthStore();
+  const { channelUsers, currentUserChannel } = useUserChannelStore();
+  const {
+    isMuted,
+    isDeafened,
+    isCameraOn,
+    isScreenSharing,
+    toggleMute,
+    toggleDeafen,
+    toggleCamera,
+    toggleScreenShare,
+    leaveChannel
+  } = useMediaChat();
 
   // 화면 공유 가능 여부 체크
   const canShareScreen = useCallback(() => {
-    if (!userState || !currentUser) return false;
+    if (!user?.email || !currentUserChannel.channelId) return false;
 
     // 카메라가 켜져 있으면 화면 공유 불가
-    if (userState.cameraOn) return false;
+    if (isCameraOn) return false;
+
+    // 현재 채널의 사용자들 가져오기
+    const currentUsers = channelUsers.get(currentUserChannel.channelId) || [];
 
     // 이미 다른 사용자가 화면 공유 중인지 확인
-    const otherUserSharing = Array.from(mediaChat.userStates.entries()).some(
-      ([userId, state]) => userId !== currentUser.user_id && state.screenSharing
+    const otherUserSharing = currentUsers.some(
+      channelUser => channelUser.userId !== user.email && channelUser.mediaState.isScreenSharing
     );
 
     return !otherUserSharing;
-  }, [userState, currentUser, mediaChat.userStates]);
+  }, [user, currentUserChannel.channelId, channelUsers, isCameraOn]);
 
-  if (!currentUser || !userState) return null;
+  if (!user) return null;
 
   return (
     <div
@@ -51,39 +50,39 @@ export const VideoControls: React.FC<VideoControlsProps> = ({ show }) => {
         transition-all duration-300 ${show ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
     >
       <ControlButton
-        icon={userState.cameraOn ? Camera : CameraOff}
-        onClick={mediaChat.toggleCamera}
-        tooltip={userState.cameraOn ? 'Turn Off Camera' : 'Turn On Camera'}
-        active={userState.cameraOn}
-        disabled={userState.screenSharing}
+        icon={isCameraOn ? Camera : CameraOff}
+        onClick={toggleCamera}
+        tooltip={isCameraOn ? '카메라 끄기' : '카메라 켜기'}
+        active={isCameraOn}
+        disabled={isScreenSharing}
       />
 
       <ControlButton
-        icon={userState.muted ? MicOff : Mic}
-        onClick={mediaChat.toggleMute}
-        tooltip={userState.muted ? 'Unmute' : 'Mute'}
-        active={userState.muted}
+        icon={isMuted ? MicOff : Mic}
+        onClick={toggleMute}
+        tooltip={isMuted ? '음소거 해제' : '음소거'}
+        active={isMuted}
       />
 
       <ControlButton
-        icon={userState.deafened ? HeadphoneOff : Headphones}
-        onClick={mediaChat.toggleDeafen}
-        tooltip={userState.deafened ? 'Undeafen' : 'Deafen'}
-        active={userState.deafened}
+        icon={isDeafened ? HeadphoneOff : Headphones}
+        onClick={toggleDeafen}
+        tooltip={isDeafened ? '스피커 음소거 해제' : '스피커 음소거'}
+        active={isDeafened}
       />
 
       <ControlButton
-        icon={userState.screenSharing ? MonitorOff : MonitorUp}
-        onClick={mediaChat.toggleScreenShare}
-        tooltip={userState.screenSharing ? 'Stop Screen Share' : 'Share Screen'}
-        active={userState.screenSharing}
-        disabled={!canShareScreen() && !userState.screenSharing}
+        icon={isScreenSharing ? MonitorOff : MonitorUp}
+        onClick={toggleScreenShare}
+        tooltip={isScreenSharing ? '화면 공유 중지' : '화면 공유'}
+        active={isScreenSharing}
+        disabled={!canShareScreen() && !isScreenSharing}
       />
 
       <ControlButton
         icon={PhoneOff}
-        onClick={handleDisconnect}
-        tooltip="Disconnect"
+        onClick={leaveChannel}
+        tooltip="연결 종료"
         className="bg-red-500 hover:bg-red-600"
       />
     </div>

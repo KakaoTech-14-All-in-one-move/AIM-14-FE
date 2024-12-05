@@ -1,33 +1,26 @@
-import React, { useEffect, useRef, memo } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { CameraOff, HeadphoneOff, MicOff, MonitorUp } from 'lucide-react';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage';
-import { useMediaChat } from '@/hooks/useMediaChat';
-import { MediaUser } from '@/services/call/types';
+import { ChannelUser } from '@/stores/userChannelStore';
 
 interface VideoUserBoxProps {
-  user: MediaUser;
+  user: ChannelUser;
   isScreenShare?: boolean;
 }
 
-export const VideoUserBox: React.FC<VideoUserBoxProps> = memo(({
-                                                                 user,
-                                                                 isScreenShare = false
-                                                               }) => {
+export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare = false }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const mediaChat = useMediaChat();
-  const userState = mediaChat.userStates.get(user.userId);
-  const isSpeaking = mediaChat.speakingUsers.has(user.userId);
 
   useEffect(() => {
     const videoElement = videoRef.current;
-    if (!videoElement || !userState) return;
+    if (!videoElement) return;
 
-    const stream = isScreenShare ? userState.screenStream : userState.stream;
+    const stream = isScreenShare ? user.mediaState.screenStream : user.mediaState.stream;
 
     if (stream) {
       if (videoElement.srcObject !== stream) {
         videoElement.srcObject = stream;
-        videoElement.muted = userState.muted || userState.deafened;
+        videoElement.muted = user.mediaState.isMuted || user.mediaState.isDeafened;
 
         const playVideo = async () => {
           try {
@@ -50,16 +43,15 @@ export const VideoUserBox: React.FC<VideoUserBoxProps> = memo(({
     return () => {
       videoElement.srcObject = null;
     };
-  }, [userState?.stream, userState?.screenStream, userState?.muted, userState?.deafened, isScreenShare]);
+  }, [user.mediaState.stream, user.mediaState.screenStream, user.mediaState.isMuted, user.mediaState.isDeafened, isScreenShare]);
 
-  if (!userState) return null;
-
-  const showVideo = isScreenShare ? userState.screenStream : (userState.cameraOn && userState.stream);
+  const showVideo = isScreenShare ? user.mediaState.screenStream :
+    (user.mediaState.isCameraOn && user.mediaState.stream);
 
   return (
     <div
       className={`relative w-full aspect-video bg-gray-900 rounded-xl overflow-hidden shadow-lg
-        ${isSpeaking && !userState.muted && !isScreenShare ? 'ring-2 ring-green-500 animate-pulse' : ''}
+        ${user.mediaState.isSpeaking && !user.mediaState.isMuted && !isScreenShare ? 'ring-2 ring-green-500 animate-pulse' : ''}
         transition-all duration-200 hover:shadow-xl`}
     >
       {showVideo ? (
@@ -71,15 +63,7 @@ export const VideoUserBox: React.FC<VideoUserBoxProps> = memo(({
         />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center">
-          {!isScreenShare && user.profileImage ? (
-            <img
-              src={import.meta.env.VITE_BE_SERVER_URL + user.profileImage}
-              alt={user.username}
-              className="w-28 h-28 rounded-full"
-            />
-          ) : (
-            <DefaultProfileImage username={user.username} size={80} margin="mr-1" />
-          )}
+          <DefaultProfileImage username={user.username} size={80} margin="mr-1" />
         </div>
       )}
 
@@ -87,17 +71,17 @@ export const VideoUserBox: React.FC<VideoUserBoxProps> = memo(({
       <div className="absolute top-4 right-4 flex gap-2">
         {!isScreenShare && (
           <>
-            {userState.muted && (
+            {user.mediaState.isMuted && (
               <div className="bg-red-500/90 rounded-full p-2">
                 <MicOff className="w-4 h-4 text-white" />
               </div>
             )}
-            {userState.deafened && (
+            {user.mediaState.isDeafened && (
               <div className="bg-red-500/90 rounded-full p-2">
                 <HeadphoneOff className="w-4 h-4 text-white" />
               </div>
             )}
-            {!userState.cameraOn && (
+            {!user.mediaState.isCameraOn && (
               <div className="bg-red-500/90 rounded-full p-2">
                 <CameraOff className="w-4 h-4 text-white" />
               </div>

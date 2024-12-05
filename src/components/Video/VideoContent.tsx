@@ -1,40 +1,38 @@
 import { useMemo, useState } from 'react';
 import { VideoUserBox } from '@/components/Video/VideoUserBox';
 import { VideoControls } from '@/components/Video/VideoControls';
-import { useCall } from '@/services/call/CallProvider';
-import { useMediaChat } from '@/hooks/useMediaChat';
-import { useUserStore } from '@/stores/userStore';
-import { MediaUser, convertCallUserToMediaUser } from '@/types/media';
+import { useUserChannelStore } from '@/stores/userChannelStore';
 
 export const VideoContent = () => {
   const [showControls, setShowControls] = useState(false);
-  const { currentUser } = useCall();
-  const users = useUserStore(state => state.users);
-  const mediaChat = useMediaChat();
+  const { channelUsers, currentUserChannel } = useUserChannelStore();
 
-  const displayUsers = useMemo<MediaUser[]>(() => {
-    // 기본 사용자 목록 (현재 사용자가 없으면 추가)
-    const baseUsers = currentUser
-      ? (users.some(u => u.user_id === currentUser.user_id)
-        ? users
-        : [...users, currentUser])
-      : users;
+  const currentChannelUsers = useMemo(() => {
+    if (!currentUserChannel.channelId) return [];
+    return channelUsers.get(currentUserChannel.channelId) || [];
+  }, [channelUsers, currentUserChannel.channelId]);
 
-    // MediaUser 타입으로 변환
-    const mediaUsers = baseUsers.map(convertCallUserToMediaUser);
+  // 화면 공유 엔트리 생성을 포함한 표시할 사용자 목록
+  const displayUsers = useMemo(() => {
+    const regularUsers = currentChannelUsers;
 
     // 화면 공유 중인 사용자들의 추가 엔트리 생성
-    const screenShareEntries = mediaUsers
-      .filter(user => mediaChat.userStates.get(user.userId)?.screenSharing)
+    const screenShareEntries = regularUsers
+      .filter(user => user.mediaState.isScreenSharing)
       .map(user => ({
         ...user,
         userId: `${user.userId}_screen`,
-        username: `${user.username} (Screen)`,
-        stream: mediaChat.userStates.get(user.userId)?.screenStream ?? null
+        username: user.username,
+        // screenStream을 주 스트림으로 사용
+        mediaState: {
+          ...user.mediaState,
+          stream: user.mediaState.screenStream,
+          isScreenShare: true,
+        },
       }));
 
-    return [...mediaUsers, ...screenShareEntries];
-  }, [users, currentUser, mediaChat.userStates]);
+    return [...regularUsers, ...screenShareEntries];
+  }, [currentChannelUsers]);
 
   const gridLayout = useMemo(() => {
     const totalBoxes = displayUsers.length;
@@ -57,11 +55,11 @@ export const VideoContent = () => {
           {displayUsers.map(user => (
             <div
               key={user.userId}
-              className={user.userId.includes('_screen') ? 'col-span-2' : ''}
+              className={user.mediaState.isScreenSharing ? 'col-span-2' : ''}
             >
               <VideoUserBox
                 user={user}
-                isScreenShare={user.userId.includes('_screen')}
+                isScreenShare={user.mediaState.isScreenSharing}
               />
             </div>
           ))}

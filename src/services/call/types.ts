@@ -24,9 +24,12 @@ export interface MediaState {
   // Media states
   isMuted: boolean;
   isDeafened: boolean;
-  isCameraOff: boolean;
+  isCameraOn: boolean;
   isScreenSharing: boolean;
-  speaking: boolean;
+  isSpeaking: boolean;
+
+  stream: MediaStream | null;
+  screenStream: MediaStream | null;
 
   // Device IDs
   currentAudioInputId: string | null;

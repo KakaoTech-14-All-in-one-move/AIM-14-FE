@@ -3,14 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { CameraOff, ChevronDown, HeadphoneOff, MicOff, MonitorUp, Plus } from 'lucide-react';
 import { ChannelType } from '@/components/Home/Channelbar/types';
 import { useChannels } from '@/components/Home/Channelbar/ChannelContext';
-import { useMediaConnection } from '@/hooks/useMediaConnection';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage';
 import { useServerStore } from '@/stores/serverStore';
 import { useChannelStore } from '@/stores/channelStore';
-import { useUserStore } from '@/stores/userStore';
-import { useMediaChatStore } from '@/stores/useMediaChatStore';
+import { useAuthStore } from '@/stores/authStore';
+import { useUserChannelStore } from '@/stores/userChannelStore';
+import { MediaConnectionManager } from '@/services/call/MediaConnectionManager';
 import { Channel } from '@/types/server';
+import { MediaType } from '@/services/call/types';
 import ContextMenu from './ContextMenu';
+import { ChannelNavigator } from '@/components/Provider/ChannelNavigator.ts';
 
 interface Props {
   type: ChannelType;
@@ -21,24 +23,20 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
   const navigate = useNavigate();
   const { selectedServerId } = useServerStore();
   const channelStore = useChannelStore();
-  const userStore = useUserStore();
-  const mediaChatStore = useMediaChatStore();
-  const { joinChannel, leaveChannel, currentChannelId } = useMediaConnection();
+  const { user } = useAuthStore();
+  const { currentUserChannel, channelUsers } = useUserChannelStore();
+  const mediaManager = MediaConnectionManager.getInstance();
+  const BASE_URL = import.meta.env.VITE_BE_SERVER_URL
+
   const {
     channels,
     openSections,
     toggleSection,
   } = useChannels();
 
-  // MediaChat 관련 상태들을 직접 store에서 가져오기
-  const userStates = mediaChatStore.userStates;
-  const speakingUsers = mediaChatStore.speakingUsers;
-  const currentUserId = mediaChatStore.currentUserId;
-
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; channel: Channel } | null>(null);
   const [expandedChannels, setExpandedChannels] = useState<Set<string>>(new Set());
 
-  // 현재 타입의 채널들
   const currentChannels = useMemo(() => channels[type] || [], [channels, type]);
 
   const toggleChannelExpand = useCallback((channelName: string) => {
@@ -53,7 +51,6 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
     });
   }, []);
 
-  // 채널 관리 함수들
   const handleAddChannel = async () => {
     if (!selectedServerId) return;
 
@@ -97,74 +94,70 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
       return;
     }
 
-    const mediaType = type.toUpperCase() as 'VOICE' | 'VIDEO';
+    const mediaType = type.toUpperCase() as MediaType;
 
-    // 멤버를 클릭한 경우는 채널 전환을 하지 않음
-    if (isMemberClick) {
-      return;
-    }
+    if (isMemberClick) return;
 
-    // 다른 채널에 이미 접속해 있는 경우
-    if (currentChannelId) {
+    if (currentUserChannel.channelId) {
       const confirmSwitch = window.confirm(
         `현재 ${type === 'voice' ? '음성' : '화상'} 채널에 접속 중입니다.\n통화를 종료하고 이동하시겠습니까?`,
       );
       if (!confirmSwitch) return;
 
-      await leaveChannel();
+      await mediaManager.leaveChannel();
     }
 
-    // 새 채널 입장
-    const success = await joinChannel(channel.channelId.toString(), mediaType);
+    const success = await ChannelNavigator.getInstance().handleChannelEnter(
+      channel.channelId.toString(),
+      mediaType
+    );
+
     if (success) {
-      // navigate(`/${type}/${channel.channelId}`);
       toggleChannelExpand(channel.channelName);
     }
-  }, [type, currentChannelId, joinChannel, leaveChannel, navigate, toggleChannelExpand]);
+  }, [type, currentUserChannel.channelId, mediaManager, toggleChannelExpand]);
 
   const renderChannelMembers = useCallback((channel: Channel) => {
     if (!['voice', 'video'].includes(type)) return null;
 
-    const channelMembers = userStore.users.filter(member =>
-      member.channel_id === channel.channelId.toString() &&
-      member.channel_type === type.toUpperCase(),
-    );
+    const currentChannelUsers = channelUsers.get(channel.channelId.toString()) || [];
 
     return (
       <>
-        {channelMembers.map(member => {
-          const memberState = userStates.get(member.user_id);
+        {currentChannelUsers.map(member => {
+          const isCurrentUser = member.userId === user?.email;
+          const { isMuted, isDeafened, isCameraOn, isScreenSharing, isSpeaking } = member.mediaState;
 
           return (
             <div
-              key={member.user_id}
+              key={member.userId}
               className={`ml-6 mt-2 mb-2 flex items-center text-gray-400 cursor-pointer
-              ${member.user_id === currentUserId ? 'bg-gray-700/30 rounded px-2' : ''}`}
+              ${isCurrentUser ? 'bg-gray-700/30 rounded px-2' : ''}`}
               onClick={(e) => {
                 e.stopPropagation();
                 handleChannelClick(channel, true);
               }}
             >
-              {member.profile_image ? (
+              {member.profileImage ? (
                 <img
-                  src={`${import.meta.env.VITE_BE_SERVER_URL}${member.profile_image}`}
+                  src={BASE_URL + member.profileImage}
                   alt={member.username}
-                  className="w-5 h-5 rounded-full mr-2"
+                  className="w-7 h-7 rounded-full mr-1"
                 />
               ) : (
-                <DefaultProfileImage username={member.username} size={20} margin="mr-1" />
+                <DefaultProfileImage username={member.username} size={28} margin="mr-1" />
               )}
               <span className="text-sm font-semibold">{member.username}</span>
               <div className="ml-auto mr-4 flex items-center gap-2">
-                {memberState?.muted && <MicOff size={16} className="text-red-500" />}
-                {memberState?.deafened && <HeadphoneOff size={16} className="text-red-500" />}
-                {type === 'video' && !memberState?.cameraOn && (
+                {isMuted && <MicOff size={16} className="text-red-500" />}
+                {isDeafened && <HeadphoneOff size={16} className="text-red-500" />}
+                {type === 'video' && !isCameraOn && (
                   <CameraOff size={16} className="text-red-500" />
                 )}
-                {type === 'video' && memberState?.screenSharing && (
+                {type === 'video' && isScreenSharing && (
                   <MonitorUp size={16} className="text-green-500" />
                 )}
-                {speakingUsers.has(member.user_id) && (
+                {isSpeaking && (
                   <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
                 )}
               </div>
@@ -173,7 +166,7 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
         })}
       </>
     );
-  }, [type, userStore.users, userStates, currentUserId, speakingUsers, handleChannelClick]);
+  }, [type, channelUsers, user, handleChannelClick]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, channel: Channel) => {
     e.preventDefault();
@@ -184,23 +177,19 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
   useEffect(() => {
     if (!['voice', 'video'].includes(type)) return;
 
-    const activeChannels = new Set(
-      userStore.users
-        .filter(user => user.channel_type === type.toUpperCase())
-        .map(user => user.channel_id),
-    );
+    const activeChannelIds = Array.from(channelUsers.keys());
 
     // 활성 채널 자동 확장
     setExpandedChannels(prev => {
       const newSet = new Set(prev);
       currentChannels.forEach(channel => {
-        if (activeChannels.has(channel.channelId.toString())) {
+        if (activeChannelIds.includes(channel.channelId.toString())) {
           newSet.add(channel.channelName);
         }
       });
       return newSet;
     });
-  }, [type, userStore.users, currentChannels]);
+  }, [type, channelUsers, currentChannels]);
 
   return (
     <div className="mt-5">
@@ -231,11 +220,8 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
       {openSections[type] && (
         <div className="space-y-1">
           {currentChannels.map((channel) => {
-            const isCurrentChannel = channel.channelId.toString() === currentChannelId;
-            const hasActiveUsers = userStore.users.some(
-              user => user.channel_id === channel.channelId.toString() &&
-                user.channel_type === type.toUpperCase(),
-            );
+            const isCurrentChannel = channel.channelId.toString() === currentUserChannel.channelId;
+            const hasActiveUsers = channelUsers.has(channel.channelId.toString());
 
             return (
               <div key={channel.channelId} className="ml-3">

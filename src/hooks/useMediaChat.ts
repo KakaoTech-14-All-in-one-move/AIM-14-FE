@@ -1,34 +1,45 @@
 import { useCallback } from 'react';
-import { useMediaStore } from '@/stores/mediaStore';
+import { useUserChannelStore } from '@/stores/userChannelStore';
 import { useMediaConnection } from './useMediaConnection';
-import { WebRTCConnection } from '@/services/call/webrtc/WebRTCConnection';
-import { MediaDevicesManager } from '@/services/call/webrtc/MediaDevicesManager';
-import { useMediaChatStore } from '@/stores/useMediaChatStore';
+import { useMediaDeviceStore } from '@/stores/mediaDeviceStore';
+import { useAuthStore } from '@/stores/authStore';
+import { MediaServerConnection } from '@/services/call/webrtc/MediaServerConnection';
 
 export function useMediaChat() {
-  const mediaStore = useMediaStore();
-  const mediaChatStore = useMediaChatStore();
-  const { updateState } = useMediaConnection(); // TODO : 뭐지?
-  const webrtc = WebRTCConnection.getInstance();
+  const userChannelStore = useUserChannelStore();
+  const mediaDeviceStore = useMediaDeviceStore();
+  const { updateMediaState, leaveChannel } = useMediaConnection();
+  const mediaServer = MediaServerConnection.getInstance();
+  const currentUser = useAuthStore(state => state.user);
+
+  const getCurrentUserState = useCallback(() => {
+    if (!currentUser?.email || !userChannelStore.currentUserChannel.channelId) return null;
+    const channelUsers = userChannelStore.channelUsers.get(userChannelStore.currentUserChannel.channelId) || [];
+    return channelUsers.find(user => user.userId === currentUser.email);
+  }, [currentUser, userChannelStore.currentUserChannel.channelId, userChannelStore.channelUsers]);
 
   const toggleMute = useCallback(async () => {
-    const newMuted = !mediaStore.isMuted;
-    await webrtc.toggleAudio(!newMuted);
-    updateState({ muted: newMuted });
-  }, [mediaStore.isMuted, updateState]);
+    const currentState = getCurrentUserState();
+    if (!currentState) return;
+
+    const newMuted = !currentState.mediaState.isMuted;
+    updateMediaState({ isMuted: newMuted });
+  }, [getCurrentUserState, updateMediaState]);
 
   const toggleDeafen = useCallback(async () => {
-    const newDeafened = !mediaStore.isDeafened;
-    webrtc.toggleDeafen(newDeafened);
-    updateState({ deafened: newDeafened });
-  }, [mediaStore.isDeafened, updateState]);
+    const currentState = getCurrentUserState();
+    if (!currentState) return;
+
+    const newDeafened = !currentState.mediaState.isDeafened;
+    updateMediaState({ isDeafened: newDeafened });
+  }, [getCurrentUserState, updateMediaState]);
 
   const toggleCamera = useCallback(async () => {
-    if (!mediaChatStore.currentUserId) return;
+    const currentState = getCurrentUserState();
+    if (!currentState) return;
 
     try {
-      const currentState = mediaChatStore.userStates.get(mediaChatStore.currentUserId);
-      const newCameraState = !(currentState?.cameraOn);
+      const newCameraState = !currentState.mediaState.isCameraOn;
 
       if (newCameraState) {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -36,94 +47,104 @@ export function useMediaChat() {
           audio: false,
         });
 
-        await webrtc.toggleVideo(true);
-        mediaChatStore.setStream(mediaChatStore.currentUserId, stream);
-        mediaChatStore.updateUserState(mediaChatStore.currentUserId, { cameraOn: true });
-        updateState({ camera_on: true });
+        updateMediaState({
+          isCameraOn: true,
+          stream,
+        });
       } else {
-        await webrtc.toggleVideo(false);
-        mediaChatStore.setStream(mediaChatStore.currentUserId, null);
-        mediaChatStore.updateUserState(mediaChatStore.currentUserId, { cameraOn: false });
-        updateState({ camera_on: false });
+        updateMediaState({
+          isCameraOn: false,
+          stream: null,
+        });
       }
     } catch (error) {
       console.error('Failed to toggle camera:', error);
     }
-  }, [mediaChatStore.currentUserId, webrtc, updateState]);
+  }, [getCurrentUserState, updateMediaState]);
 
   const toggleScreenShare = useCallback(async () => {
-    if (!mediaChatStore.currentUserId) return;
+    const currentState = getCurrentUserState();
+    if (!currentState) return;
 
     try {
-      const currentState = mediaChatStore.userStates.get(mediaChatStore.currentUserId);
-      const newScreenShareState = !(currentState?.screenSharing);
+      const newScreenShareState = !currentState.mediaState.isScreenSharing;
 
       if (newScreenShareState) {
-        const stream = await navigator.mediaDevices.getDisplayMedia({
-          video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
-          audio: false,
-        });
+        const stream = await mediaServer.startScreenShare();
+        if (stream) {
+          stream.getVideoTracks()[0].onended = () => {
+            toggleScreenShare();
+          };
 
-        stream.getVideoTracks()[0].onended = () => {
-          toggleScreenShare();
-        };
-
-        await webrtc.startScreenShare();
-        mediaChatStore.setStream(mediaChatStore.currentUserId, stream, true);
-        mediaChatStore.updateUserState(mediaChatStore.currentUserId, { screenSharing: true });
-        updateState({ screen_sharing: true });
+          updateMediaState({
+            isScreenSharing: true,
+            screenStream: stream,
+          });
+        }
       } else {
-        await webrtc.stopScreenShare();
-        mediaChatStore.setStream(mediaChatStore.currentUserId, null, true);
-        mediaChatStore.updateUserState(mediaChatStore.currentUserId, { screenSharing: false });
-        updateState({ screen_sharing: false });
+        await mediaServer.stopScreenShare();
+        updateMediaState({
+          isScreenSharing: false,
+          screenStream: null,
+        });
       }
     } catch (error) {
       console.error('Failed to toggle screen share:', error);
     }
-  }, [mediaChatStore.currentUserId, webrtc, updateState]);
+  }, [getCurrentUserState, mediaServer, updateMediaState]);
 
   const changeAudioInput = useCallback(async (deviceId: string) => {
     try {
-      await webrtc.changeAudioDevice(deviceId);
-      mediaStore.setAudioInput(deviceId);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { deviceId: { exact: deviceId } }
+      });
+      mediaDeviceStore.setSelectedDevice('audioInput', deviceId);
+
+      const currentState = getCurrentUserState();
+      if (currentState) {
+        updateMediaState({ stream });
+      }
     } catch (error) {
       console.error('Failed to change audio input:', error);
     }
-  }, []);
+  }, [getCurrentUserState, updateMediaState]);
 
   const changeAudioOutput = useCallback(async (deviceId: string) => {
     try {
-      const mediaDevices = MediaDevicesManager.getInstance();
-      const remoteVideos = document.querySelectorAll<HTMLVideoElement>('.remote-video');
+      const mediaElements = document.querySelectorAll<HTMLMediaElement>('.remote-audio, .remote-video');
       await Promise.all(
-        Array.from(remoteVideos).map(element =>
-          mediaDevices.setSinkId(element, deviceId),
-        ),
+        Array.from(mediaElements).map(element =>
+          // @ts-ignore: setSinkId exists but TypeScript doesn't know about it
+          element.setSinkId(deviceId)
+        )
       );
-      mediaStore.setAudioOutput(deviceId);
+      mediaDeviceStore.setSelectedDevice('audioOutput', deviceId);
     } catch (error) {
       console.error('Failed to change audio output:', error);
     }
   }, []);
 
+  const currentState = getCurrentUserState();
+
   return {
-    isMuted: mediaStore.isMuted,
-    isDeafened: mediaStore.isDeafened,
-    isCameraOff: mediaStore.isCameraOff,
-    isScreenSharing: mediaStore.isScreenSharing,
-    speaking: mediaStore.speaking,
-    userStates: mediaChatStore.userStates,
-    speakingUsers: mediaChatStore.speakingUsers,
-    currentUserId: mediaChatStore.currentUserId,
+    // 상태
+    isMuted: currentState?.mediaState.isMuted ?? false,
+    isDeafened: currentState?.mediaState.isDeafened ?? false,
+    isCameraOn: currentState?.mediaState.isCameraOn ?? false,
+    isScreenSharing: currentState?.mediaState.isScreenSharing ?? false,
+    speaking: currentState?.mediaState.isSpeaking ?? false,
+
+    // 현재 채널 사용자들
+    channelUsers: userChannelStore.channelUsers.get(userChannelStore.currentUserChannel.channelId ?? '') ?? [],
+    currentChannelId: userChannelStore.currentUserChannel.channelId,
+
+    // 액션
     toggleMute,
     toggleDeafen,
     toggleCamera,
     toggleScreenShare,
     changeAudioInput,
     changeAudioOutput,
-    updateUserState: mediaChatStore.updateUserState,
-    setCurrentUserId: mediaChatStore.setCurrentUserId,
-    resetState: mediaChatStore.resetState,
+    leaveChannel,  // 추가
   };
 }

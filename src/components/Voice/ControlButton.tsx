@@ -26,7 +26,7 @@ export const ControlButton: React.FC<ControlButtonProps> = ({
         ${disabled ? 'opacity-50 cursor-not-allowed hover:bg-gray-700' : className}`}
     >
       <Icon className={`w-5 h-5 ${active ? 'text-red-500' : 'text-white'}`} />
-      <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100">
+      <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap">
         {tooltip}
       </span>
     </button>
