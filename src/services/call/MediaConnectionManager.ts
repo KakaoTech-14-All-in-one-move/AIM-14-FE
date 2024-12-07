@@ -11,6 +11,7 @@ export class MediaConnectionManager {
   private mediaServer: MediaServerConnection;
   private stateUpdateCallbacks: Set<(channelId: string | null) => void>;
   private userStateManager: UserStateManager;
+  private screenShareStream: MediaStream | null = null;
 
   private constructor() {
     this.mediaServer = MediaServerConnection.getInstance();
@@ -68,7 +69,7 @@ export class MediaConnectionManager {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: true,
-          video: false
+          video: false,
         });
 
         if (!stream) {
@@ -152,7 +153,7 @@ export class MediaConnectionManager {
       if (userState) {
         this.userStateManager.handleUserLeave(
           currentChannel.channelId,
-          useAuthStore.getState().user?.email || ''
+          useAuthStore.getState().user?.email || '',
         );
       }
 
@@ -196,18 +197,38 @@ export class MediaConnectionManager {
         screen_sharing: 'isScreenSharing' in updates ? updates.isScreenSharing : currentUserState.mediaState.isScreenSharing,
       };
 
-      // MediaServer에 스트림 업데이트 요청
+      // 화면 공유 상태 변경 처리
       if ('isScreenSharing' in updates) {
         try {
-          const stream = updates.isScreenSharing ? await this.mediaServer.startScreenShare() : null;
-          if (stream || !updates.isScreenSharing) {
-            // 스트림 상태 로깅
-            console.log('Screen share stream update:', {
-              hasStream: !!stream,
-              trackCount: stream?.getTracks().length,
-            });
+          if (updates.isScreenSharing) {
+            // 화면 공유 시작
+            const stream = await this.mediaServer.startScreenShare();
 
-            // 스트림 업데이트를 포함하여 상태 업데이트
+            // NotAllowedError나 stream이 null인 경우 화면 공유를 시작하지 않음
+            if (!stream) {
+              // 상태 롤백 및 early return
+              this.userStateManager.handleUserStateUpdate(
+                currentUserChannel.channelId,
+                currentUser.email,
+                {
+                  ...serverUpdates,
+                  isScreenSharing: false,
+                  screenStream: null
+                }
+              );
+              // 서버에도 취소 상태 전송
+              MediaConnectionManager.getCallConnection()?.updateState({
+                ...serverUpdates,
+                screen_sharing: false
+              });
+              return;
+            }
+
+            // 화면 공유 종료 이벤트 핸들러
+            stream.getVideoTracks()[0].onended = () => {
+              this.updateMediaState({ isScreenSharing: false });
+            };
+
             this.userStateManager.handleUserStateUpdate(
               currentUserChannel.channelId,
               currentUser.email,
@@ -216,10 +237,66 @@ export class MediaConnectionManager {
                 screenStream: stream
               }
             );
+          } else {
+            // 화면 공유 중지
+            await this.mediaServer.stopScreenShare();
+            this.userStateManager.handleUserStateUpdate(
+              currentUserChannel.channelId,
+              currentUser.email,
+              {
+                ...serverUpdates,
+                screenStream: null
+              }
+            );
           }
         } catch (error) {
-          console.error('Failed to handle screen share:', error);
+          console.error('Error in screen share:', error);
+          throw error;
+        }
+      }
+
+      // 카메라 상태 변경 처리
+      if ('isCameraOn' in updates) {
+        try {
+          const stream = updates.isCameraOn
+            ? await this.mediaServer.updateLocalStream(currentUserChannel.channelType!)
+            : await this.mediaServer.updateLocalStream('VOICE');
+
+          if (stream) {
+            this.userStateManager.handleUserStateUpdate(
+              currentUserChannel.channelId,
+              currentUser.email,
+              {
+                ...serverUpdates,
+                stream
+              }
+            );
+          }
+        } catch (error) {
+          console.error('Failed to toggle camera:', error);
+          // 카메라 상태 변경 실패 시 롤백
+          this.userStateManager.handleUserStateUpdate(
+            currentUserChannel.channelId,
+            currentUser.email,
+            {
+              ...serverUpdates,
+              isCameraOn: !updates.isCameraOn
+            }
+          );
           return;
+        }
+      }
+
+      // 음소거/음성 차단 상태 변경 처리
+      if ('isMuted' in updates || 'isDeafened' in updates) {
+        const channelUser = channelUsers.get(currentUserChannel.channelId)?.find(
+          user => user.userId === currentUser.email
+        );
+
+        if (channelUser?.mediaState.stream) {
+          if ('isMuted' in updates) {
+            await this.mediaServer.toggleAudio(!updates.isMuted);
+          }
         }
       }
 
@@ -232,6 +309,10 @@ export class MediaConnectionManager {
   }
 
   dispose() {
+    if (this.screenShareStream) {
+      this.screenShareStream.getTracks().forEach(track => track.stop());
+      this.screenShareStream = null;
+    }
     this.mediaServer.dispose();
     this.stateUpdateCallbacks.clear();
     MediaConnectionManager.instance = null;

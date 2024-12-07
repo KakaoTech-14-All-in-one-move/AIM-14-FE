@@ -49,50 +49,30 @@ export function useMediaChat() {
     try {
       const newScreenShareState = !currentState.mediaState.isScreenSharing;
 
-      // 이미 상태 변경 중인지 확인하는 ref 추가
-      if ((toggleScreenShare as any).isProcessing) {
+      // 화면 공유를 끄는 경우
+      if (!newScreenShareState) {
+        await mediaServer.stopScreenShare();
+        updateMediaState({ isScreenSharing: false });
         return;
       }
-      (toggleScreenShare as any).isProcessing = true;
 
-      if (newScreenShareState) {
-        const stream = await mediaServer.startScreenShare().catch(error => {
-          // 사용자가 공유를 취소한 경우
-          if (error.name === 'NotAllowedError' || error.name === 'AbortError') {
-            return null;
-          }
-          throw error;
-        });
-
-        if (stream) {
-          // 화면 공유가 실제로 시작될 때만 상태 업데이트
-          stream.getVideoTracks()[0].onended = () => {
-            toggleScreenShare();
-          };
-
-          updateMediaState({
-            isScreenSharing: true,
-            screenStream: stream,
-          });
-        }
-      } else {
-        await mediaServer.stopScreenShare();
-        updateMediaState({
-          isScreenSharing: false,
-          screenStream: null,
-        });
+      // 화면 공유를 켜는 경우
+      try {
+        // 상태 업데이트만 하고 실제 스트림은 MediaConnectionManager에서 처리
+        updateMediaState({ isScreenSharing: true });
+      } catch (error) {
+        // 사용자가 취소했거나 오류 발생
+        throw error;
       }
     } catch (error) {
       console.error('Failed to toggle screen share:', error);
-    } finally {
-      (toggleScreenShare as any).isProcessing = false;
     }
   }, [getCurrentUserState, mediaServer, updateMediaState]);
 
   const changeAudioInput = useCallback(async (deviceId: string) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { deviceId: { exact: deviceId } }
+        audio: { deviceId: { exact: deviceId } },
       });
       mediaDeviceStore.setSelectedDevice('audioInput', deviceId);
 
@@ -111,8 +91,8 @@ export function useMediaChat() {
       await Promise.all(
         Array.from(mediaElements).map(element =>
           // @ts-ignore: setSinkId exists but TypeScript doesn't know about it
-          element.setSinkId(deviceId)
-        )
+          element.setSinkId(deviceId),
+        ),
       );
       mediaDeviceStore.setSelectedDevice('audioOutput', deviceId);
     } catch (error) {

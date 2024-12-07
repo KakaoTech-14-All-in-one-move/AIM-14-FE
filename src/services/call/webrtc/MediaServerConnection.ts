@@ -569,6 +569,10 @@ export class MediaServerConnection {
 
       return screenStream;
     } catch (error) {
+      if (error instanceof Error &&
+        (error.name === 'NotAllowedError' || error.name === 'AbortError')) {
+        return null;
+      }
       console.error('Error starting screen share:', error);
       return null;
     }
