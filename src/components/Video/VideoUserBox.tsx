@@ -12,29 +12,62 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare
   const videoRef = useRef<HTMLVideoElement>(null);
   const BASE_URL = import.meta.env.VITE_BE_SERVER_URL;
 
+  // 스트림 상태 디버깅을 위한 상세 로깅
+  const logStreamInfo = (stream: MediaStream | null, context: string) => {
+    console.log(`[Stream Info] ${context}:`, {
+      userId: user.userId,
+      isScreenShare,
+      hasStream: !!stream,
+      tracks: stream?.getTracks().map(t => ({
+        kind: t.kind,
+        enabled: t.enabled,
+        muted: t.muted,
+        readyState: t.readyState,
+        label: t.label
+      }))
+    });
+  };
+
   useEffect(() => {
     const videoElement = videoRef.current;
     if (!videoElement) return;
 
     const stream = isScreenShare ? user.mediaState.screenStream : user.mediaState.stream;
-    console.log('Stream update:', {
-      userId: user.userId,
-      isScreenShare,
-      hasStream: !!stream,
-      isCameraOn: user.mediaState.isCameraOn,
-      tracks: stream?.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled }))
-    });
 
-    if (stream && (isScreenShare || user.mediaState.isCameraOn)) {
+    // 스트림 상태 로깅
+    logStreamInfo(stream, 'Stream Update');
+
+    if (stream) {
+      console.log(`[VideoUserBox] Attaching ${isScreenShare ? 'screen' : 'camera'} stream to video element:`, {
+        userId: user.userId,
+        trackCount: stream.getTracks().length,
+        videoTracks: stream.getVideoTracks().length,
+        audioTracks: stream.getAudioTracks().length
+      });
+
+      // 스트림 연결
       if (videoElement.srcObject !== stream) {
         videoElement.srcObject = stream;
         videoElement.muted = user.mediaState.isMuted || user.mediaState.isDeafened;
 
+        // 비디오 재생 시도
         const playVideo = async () => {
           try {
             await videoElement.play();
+            console.log(`[VideoUserBox] Successfully playing video for ${user.userId}`);
           } catch (error) {
-            console.error('Failed to play video:', error);
+            console.error(`[VideoUserBox] Failed to play video for ${user.userId}:`, error);
+
+            // 자동 재생 정책 문제 해결을 위한 재시도
+            if (error instanceof Error && error.name === 'NotAllowedError') {
+              videoElement.muted = true;
+              try {
+                await videoElement.play();
+                console.log(`[VideoUserBox] Retried playing muted video for ${user.userId}`);
+              } catch (retryError) {
+                console.error(`[VideoUserBox] Failed retry for ${user.userId}:`, retryError);
+              }
+            }
           }
         };
 
@@ -45,6 +78,7 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare
         }
       }
     } else {
+      console.log(`[VideoUserBox] No stream available for ${user.userId} (${isScreenShare ? 'screen' : 'camera'})`);
       videoElement.srcObject = null;
     }
 
@@ -62,18 +96,30 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare
     isScreenShare
   ]);
 
-  // 비디오를 보여줄지 결정하는 조건을 더 명확하게 수정
+  // 비디오 표시 조건 로직 개선
   const showVideo = useMemo(() => {
     if (isScreenShare) {
-      return !!user.mediaState.screenStream;
+      const hasScreenStream = !!user.mediaState.screenStream;
+      console.log(`[VideoUserBox] Screen share display check for ${user.userId}:`, {
+        hasScreenStream,
+        tracks: user.mediaState.screenStream?.getTracks().length
+      });
+      return hasScreenStream;
     }
 
-    // 스트림이 있고, 비디오 트랙이 있고, 카메라가 켜져있을 때만 true
-    return !!(
+    const hasVideoStream = !!(
       user.mediaState.stream &&
       user.mediaState.stream.getVideoTracks().length > 0 &&
       user.mediaState.isCameraOn
     );
+
+    console.log(`[VideoUserBox] Video display check for ${user.userId}:`, {
+      hasStream: !!user.mediaState.stream,
+      hasVideoTracks: user.mediaState.stream?.getVideoTracks().length! > 0,
+      isCameraOn: user.mediaState.isCameraOn
+    });
+
+    return hasVideoStream;
   }, [isScreenShare, user.mediaState.stream, user.mediaState.screenStream, user.mediaState.isCameraOn]);
 
   return (
@@ -117,7 +163,6 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare
                 <HeadphoneOff className="w-4 h-4 text-white" />
               </div>
             )}
-            {/* 카메라가 꺼져있을 때만 아이콘 표시 */}
             {!user.mediaState.isCameraOn && (
               <div className="bg-red-500/90 rounded-full p-2">
                 <CameraOff className="w-4 h-4 text-white" />

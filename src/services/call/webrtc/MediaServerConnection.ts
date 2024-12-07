@@ -257,7 +257,7 @@ export class MediaServerConnection {
               useUserChannelStore.getState().updateUserMediaState(
                 currentChannelId,
                 uid,
-                { isSpeaking }
+                { isSpeaking },
               );
             }
           });
@@ -413,7 +413,7 @@ export class MediaServerConnection {
         video: type === 'VIDEO' && isCameraOn ? {
           width: { ideal: 1280 },
           height: { ideal: 720 },
-        } : false
+        } : false,
       };
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -485,21 +485,89 @@ export class MediaServerConnection {
 
   async startScreenShare(): Promise<MediaStream | null> {
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
+      // 화면 공유 스트림 얻기
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: {
           width: { ideal: 1920 },
           height: { ideal: 1080 },
-        },
+          frameRate: { ideal: 30 }
+        }
       });
 
-      // 스크린 공유 트랙을 SFU 서버로 전송
-      if (this.peerConnection) {
-        const videoTrack = stream.getVideoTracks()[0];
-        videoTrack.contentHint = `${useAuthStore.getState().user?.email}_screen`;
-        this.peerConnection.addTrack(videoTrack, stream);
+      // 현재 오디오 스트림 가져오기
+      const audioStream = this.localStream;
+      if (!audioStream) {
+        console.warn('No audio stream available');
+        return null;
       }
 
-      return stream;
+      // 화면 공유가 취소되었을 때의 처리
+      screenStream.getVideoTracks()[0].onended = () => {
+        const currentUser = useAuthStore.getState().user;
+        const currentChannelId = useUserChannelStore.getState().currentUserChannel.channelId;
+
+        if (currentUser?.email && currentChannelId) {
+          useUserChannelStore.getState().updateUserMediaState(
+            currentChannelId,
+            currentUser.email,
+            {
+              isScreenSharing: false,
+              screenStream: null
+            }
+          );
+
+          // 화면 공유 트랙 제거
+          if (this.peerConnection) {
+            const senders = this.peerConnection.getSenders();
+            const screenSender = senders.find(sender =>
+              sender.track?.kind === 'video' &&
+              sender.track.label.includes('screen')
+            );
+            if (screenSender) {
+              this.peerConnection.removeTrack(screenSender);
+            }
+          }
+        }
+      };
+
+      // 오디오 트랙을 화면 공유 스트림에 추가
+      const audioTrack = audioStream.getAudioTracks()[0];
+      if (audioTrack) {
+        screenStream.addTrack(audioTrack.clone());
+      }
+
+      // WebRTC 연결에 트랙 추가
+      if (this.peerConnection) {
+        const videoTrack = screenStream.getVideoTracks()[0];
+
+        // 기존 비디오 트랙이 있다면 제거
+        const senders = this.peerConnection.getSenders();
+        const existingVideoSender = senders.find(sender =>
+          sender.track?.kind === 'video'
+        );
+
+        if (existingVideoSender) {
+          if (existingVideoSender.track) {
+            existingVideoSender.track.stop();
+          }
+          await existingVideoSender.replaceTrack(videoTrack);
+        } else {
+          this.peerConnection.addTrack(videoTrack, screenStream);
+        }
+
+        // 스트림 품질 최적화 설정
+        const sender = senders.find(s => s.track === videoTrack);
+        if (sender) {
+          const params = sender.getParameters();
+          if (!params.encodings) {
+            params.encodings = [{}];
+          }
+          params.encodings[0].maxBitrate = 3000000; // 3Mbps
+          await sender.setParameters(params);
+        }
+      }
+
+      return screenStream;
     } catch (error) {
       console.error('Error starting screen share:', error);
       return null;
@@ -509,12 +577,46 @@ export class MediaServerConnection {
   async stopScreenShare() {
     if (!this.peerConnection) return;
 
-    // 스크린 공유 트랙 제거
-    this.peerConnection.getSenders().forEach(sender => {
-      if (sender.track?.id.includes('_screen')) {
-        this.peerConnection?.removeTrack(sender);
+    try {
+      // 화면 공유 트랙 찾기 및 제거
+      const senders = this.peerConnection.getSenders();
+      const screenSender = senders.find(sender =>
+        sender.track?.kind === 'video' &&
+        sender.track.readyState === 'live' &&
+        sender.track.label.includes('screen')
+      );
+
+      if (screenSender) {
+        // 트랙 중지
+        if (screenSender.track) {
+          screenSender.track.stop();
+        }
+
+        // WebRTC 연결에서 제거
+        this.peerConnection.removeTrack(screenSender);
+
+        // 오디오 전용 스트림으로 복귀
+        const audioStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: false
+        });
+
+        if (audioStream) {
+          const audioTrack = audioStream.getAudioTracks()[0];
+          const existingAudioSender = senders.find(sender =>
+            sender.track?.kind === 'audio'
+          );
+
+          if (existingAudioSender) {
+            await existingAudioSender.replaceTrack(audioTrack);
+          } else {
+            this.peerConnection.addTrack(audioTrack, audioStream);
+          }
+        }
       }
-    });
+    } catch (error) {
+      console.error('Error stopping screen share:', error);
+    }
   }
 
   disconnect() {

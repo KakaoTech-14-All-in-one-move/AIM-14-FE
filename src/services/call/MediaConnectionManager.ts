@@ -178,7 +178,7 @@ export class MediaConnectionManager {
 
       if (!currentUserChannel.channelId || !currentUser) return;
 
-      // 1. 현재 상태 가져오기
+      // 현재 상태 가져오기
       const channelUsers = useUserChannelStore.getState().channelUsers;
       const currentUserState = channelUsers.get(currentUserChannel.channelId)?.find(
         user => user.userId === currentUser.email,
@@ -186,7 +186,9 @@ export class MediaConnectionManager {
 
       if (!currentUserState) return;
 
-      // 2. 현재 상태와 업데이트를 병합
+      console.log('Current user state before update:', currentUserState);
+
+      // 서버에 전송할 업데이트 준비
       const serverUpdates = {
         muted: 'isMuted' in updates ? updates.isMuted : currentUserState.mediaState.isMuted,
         deafened: 'isDeafened' in updates ? updates.isDeafened : currentUserState.mediaState.isDeafened,
@@ -194,52 +196,35 @@ export class MediaConnectionManager {
         screen_sharing: 'isScreenSharing' in updates ? updates.isScreenSharing : currentUserState.mediaState.isScreenSharing,
       };
 
-      // 3. 카메라 상태 변경 처리
-      if ('isCameraOn' in updates) {
+      // MediaServer에 스트림 업데이트 요청
+      if ('isScreenSharing' in updates) {
         try {
-          if (updates.isCameraOn) {
-            // 카메라 켤 때: 오디오와 비디오 모두 포함된 새 스트림
-            const newStream = await navigator.mediaDevices.getUserMedia({
-              video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-              audio: true
+          const stream = updates.isScreenSharing ? await this.mediaServer.startScreenShare() : null;
+          if (stream || !updates.isScreenSharing) {
+            // 스트림 상태 로깅
+            console.log('Screen share stream update:', {
+              hasStream: !!stream,
+              trackCount: stream?.getTracks().length,
             });
 
-            this.mediaServer.replaceStream(newStream);
-            updates.stream = newStream;
-          } else {
-            // 카메라 끌 때: 오디오만 있는 새 스트림
-            const audioOnlyStream = await navigator.mediaDevices.getUserMedia({
-              audio: true,
-              video: false
-            });
-
-            this.mediaServer.replaceStream(audioOnlyStream);
-            updates.stream = audioOnlyStream;
+            // 스트림 업데이트를 포함하여 상태 업데이트
+            this.userStateManager.handleUserStateUpdate(
+              currentUserChannel.channelId,
+              currentUser.email,
+              {
+                ...serverUpdates,
+                screenStream: stream
+              }
+            );
           }
         } catch (error) {
-          console.error('Failed to toggle camera:', error);
+          console.error('Failed to handle screen share:', error);
           return;
         }
       }
 
-      // 4. 서버에 상태 업데이트 전송
+      // 서버에 상태 업데이트 전송
       MediaConnectionManager.getCallConnection()?.updateState(serverUpdates);
-
-      // 5. 로컬 상태 업데이트
-      this.userStateManager.handleUserStateUpdate(
-        currentUserChannel.channelId,
-        currentUser.email,
-        serverUpdates,
-      );
-
-      // 6. 스트림 업데이트가 있으면 처리
-      if (updates.stream) {
-        this.userStateManager.updateUserStream(
-          currentUserChannel.channelId,
-          currentUser.email,
-          updates.stream
-        );
-      }
 
     } catch (error) {
       console.error('Error updating media state:', error);

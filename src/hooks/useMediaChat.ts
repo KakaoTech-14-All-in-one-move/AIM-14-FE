@@ -49,9 +49,23 @@ export function useMediaChat() {
     try {
       const newScreenShareState = !currentState.mediaState.isScreenSharing;
 
+      // 이미 상태 변경 중인지 확인하는 ref 추가
+      if ((toggleScreenShare as any).isProcessing) {
+        return;
+      }
+      (toggleScreenShare as any).isProcessing = true;
+
       if (newScreenShareState) {
-        const stream = await mediaServer.startScreenShare();
+        const stream = await mediaServer.startScreenShare().catch(error => {
+          // 사용자가 공유를 취소한 경우
+          if (error.name === 'NotAllowedError' || error.name === 'AbortError') {
+            return null;
+          }
+          throw error;
+        });
+
         if (stream) {
+          // 화면 공유가 실제로 시작될 때만 상태 업데이트
           stream.getVideoTracks()[0].onended = () => {
             toggleScreenShare();
           };
@@ -70,6 +84,8 @@ export function useMediaChat() {
       }
     } catch (error) {
       console.error('Failed to toggle screen share:', error);
+    } finally {
+      (toggleScreenShare as any).isProcessing = false;
     }
   }, [getCurrentUserState, mediaServer, updateMediaState]);
 

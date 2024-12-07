@@ -80,6 +80,8 @@ export class UserStateManager {
 
   // 유저 상태 업데이트 처리
   handleUserStateUpdate(channelId: string, userId: string, updates: any) {
+    console.log('Handling user state update:', { channelId, userId, updates });
+
     // 상태 업데이트 전에 현재 상태 확인
     const currentUsers = useUserChannelStore.getState().channelUsers.get(channelId);
     if (!currentUsers) {
@@ -87,11 +89,27 @@ export class UserStateManager {
       return;
     }
 
+    // 현재 사용자의 상태를 찾아서 스트림 정보 보존
+    const currentUser = currentUsers.find(user => user.userId === userId);
+    const currentStream = currentUser?.mediaState.stream;
+    const currentScreenStream = currentUser?.mediaState.screenStream;
+
     useUserChannelStore.getState().updateUserMediaState(channelId, userId, {
       isMuted: updates.muted !== undefined ? updates.muted : false,
       isDeafened: updates.deafened !== undefined ? updates.deafened : false,
       isCameraOn: updates.camera_on !== undefined ? updates.camera_on : false,
       isScreenSharing: updates.screen_sharing !== undefined ? updates.screen_sharing : false,
+      stream: updates.stream || currentStream, // 기존 스트림 보존
+      screenStream: updates.screenStream || currentScreenStream, // 화면 공유 스트림 보존
+    });
+
+    // 상태 업데이트 후 로그
+    console.log('User state updated:', {
+      channelId,
+      userId,
+      updates,
+      hasStream: !!updates.stream,
+      hasScreenStream: !!updates.screenStream,
     });
   }
 
