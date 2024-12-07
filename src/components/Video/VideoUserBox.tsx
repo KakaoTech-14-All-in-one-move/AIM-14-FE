@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { CameraOff, HeadphoneOff, MicOff, MonitorUp } from 'lucide-react';
+import { CameraOff, HeadphoneOff, MicOff, MonitorUp, MonitorOff } from 'lucide-react';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage';
 import { ChannelUser } from '@/stores/userChannelStore';
 
@@ -137,14 +137,21 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare
         />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center">
-          {user.profileImage ? (
-            <img
-              src={BASE_URL + user.profileImage}
-              alt={user.username}
-              className="w-20 h-20 rounded-full"
-            />
+          {isScreenShare ? (
+            <div className="flex flex-col items-center gap-2">
+              <MonitorOff className="w-16 h-16 text-gray-400" />
+              <span className="text-gray-400 text-sm">화면 공유 준비 중...</span>
+            </div>
           ) : (
-            <DefaultProfileImage username={user.username} size={80} />
+            user.profileImage ? (
+              <img
+                src={BASE_URL + user.profileImage}
+                alt={user.username}
+                className="w-20 h-20 rounded-full"
+              />
+            ) : (
+              <DefaultProfileImage username={user.username} size={80} />
+            )
           )}
         </div>
       )}
@@ -171,8 +178,12 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare
           </>
         )}
         {isScreenShare && (
-          <div className="bg-green-500/90 rounded-full p-2">
-            <MonitorUp className="w-4 h-4 text-white" />
+          <div className={`${showVideo ? 'bg-green-500/90' : 'bg-yellow-500/90'} rounded-full p-2`}>
+            {showVideo ? (
+              <MonitorUp className="w-4 h-4 text-white" />
+            ) : (
+              <MonitorOff className="w-4 h-4 text-white" />
+            )}
           </div>
         )}
       </div>

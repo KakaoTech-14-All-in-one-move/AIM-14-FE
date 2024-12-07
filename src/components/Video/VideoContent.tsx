@@ -24,25 +24,35 @@ export const VideoContent = () => {
         },
       };
 
-      // 화면 공유 중인 경우에만 추가 항목 생성
-      if (user.mediaState.isScreenSharing && user.mediaState.screenStream) {
-        const screenShareUser = {
-          ...user,
-          userId: `${user.userId}_screen`,
+      // 화면 공유 중인 사용자를 찾음 (현재 채널의 모든 사용자 중에서 화면 공유 중인 사용자)
+      const screenSharingUser = currentChannelUsers.find(u => u.mediaState.isScreenSharing);
+
+      // 화면 공유 중인 사용자가 있는 경우, 모든 사용자의 목록에 화면 공유 박스 추가
+      if (screenSharingUser) {
+        const screenShareBox = {
+          ...screenSharingUser,
+          userId: `${screenSharingUser.userId}_screen`,
           mediaState: {
-            ...user.mediaState,
-            stream: user.mediaState.screenStream,
+            ...screenSharingUser.mediaState,
+            stream: screenSharingUser.mediaState.screenStream,
             isScreenShare: true,
           },
         };
-        return [baseUser, screenShareUser];
+        return [baseUser, screenShareBox];
       }
 
       return [baseUser];
     });
 
-    // 평탄화하여 최종 배열 생성
-    return allDisplayUsers.flat();
+    // 평탄화하여 최종 배열 생성 후, 화면 공유 박스가 중복되지 않도록 필터링
+    const flattenedUsers = allDisplayUsers.flat();
+
+    // 화면 공유 박스는 한 번만 표시되도록 중복 제거
+    const uniqueUsers = flattenedUsers.filter((user, index, self) =>
+      index === self.findIndex(u => u.userId === user.userId)
+    );
+
+    return uniqueUsers;
   }, [currentChannelUsers]);
 
   const gridLayout = useMemo(() => {
@@ -64,7 +74,10 @@ export const VideoContent = () => {
       <div className="flex-1 w-full flex items-center justify-center">
         <div className={`grid gap-4 w-full max-w-[1400px] mx-auto ${gridLayout}`}>
           {displayUsers.map(user => (
-            <div key={user.userId} className="col-span-1">
+            <div
+              key={user.userId}
+              className="col-span-1"
+            >
               <VideoUserBox
                 user={user}
                 isScreenShare={user.mediaState.isScreenShare}
