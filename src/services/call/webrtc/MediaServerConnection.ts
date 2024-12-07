@@ -345,17 +345,33 @@ export class MediaServerConnection {
 
   async updateLocalStream(type: MediaType): Promise<MediaStream | null> {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: type === 'VIDEO' ? {
+      // 현재 사용자와 채널 ID 가져오기
+      const currentUser = useAuthStore.getState().user;
+      const currentChannelId = useUserChannelStore.getState().currentUserChannel.channelId;
+
+      if (!currentUser?.email || !currentChannelId) return null;
+
+      // 현재 사용자의 미디어 상태 확인
+      const channelUsers = useUserChannelStore.getState().channelUsers.get(currentChannelId) || [];
+      const userState = channelUsers.find(user => user.userId === currentUser.email);
+      const isCameraOn = userState?.mediaState.isCameraOn ?? false;
+
+      // 미디어 제약 조건 설정
+      const constraints: MediaStreamConstraints = {
+        audio: true, // 오디오는 항상 필요
+        video: type === 'VIDEO' && isCameraOn ? {
           width: { ideal: 1280 },
           height: { ideal: 720 },
-        } : false,
-      });
+        } : false
+      };
 
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+      // 오디오 감지 설정 및 스트림 교체
       this.setupLocalAudioDetection(stream);
       this.replaceStream(stream);
       this.localStream = stream;
+
       return stream;
     } catch (error) {
       console.error('Error getting user media:', error);
@@ -363,20 +379,25 @@ export class MediaServerConnection {
     }
   }
 
-  private replaceStream(newStream: MediaStream) {
-    // 기존 트랙 제거
+  replaceStream(newStream: MediaStream) {
+    // 기존 트랙 중지 및 제거
     if (this.localStream) {
       this.localStream.getTracks().forEach(track => {
-        track.stop();
+        track.stop();  // 모든 트랙 확실히 중지
       });
     }
 
+    // 새로운 스트림 설정
+    this.localStream = newStream;
+
     // 피어 커넥션의 기존 sender 제거 및 새로운 트랙 추가
     if (this.peerConnection) {
-      this.peerConnection.getSenders().forEach(sender => {
+      const senders = this.peerConnection.getSenders();
+      senders.forEach(sender => {
         this.peerConnection?.removeTrack(sender);
       });
 
+      // 새 트랙 추가
       newStream.getTracks().forEach(track => {
         this.peerConnection?.addTrack(track, newStream);
       });
@@ -436,12 +457,22 @@ export class MediaServerConnection {
   disconnect() {
     this.cleanupAudioDetection();
     this.reset();
+
+    // localStream 정리를 더 명시적으로
     if (this.localStream) {
-      this.localStream.getTracks().forEach(track => track.stop());
+      this.localStream.getTracks().forEach(track => {
+        track.stop();  // 각 트랙 확실히 중지
+      });
       this.localStream = null;
     }
 
     if (this.peerConnection) {
+      // sender 정리 추가
+      this.peerConnection.getSenders().forEach(sender => {
+        if (sender.track) {
+          sender.track.stop();
+        }
+      });
       this.peerConnection.close();
       this.peerConnection = null;
     }

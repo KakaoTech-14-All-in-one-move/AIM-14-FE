@@ -38,43 +38,8 @@ export function useMediaChat() {
     const currentState = getCurrentUserState();
     if (!currentState) return;
 
-    try {
-      const newCameraState = !currentState.mediaState.isCameraOn;
-      const currentStream = currentState.mediaState.stream;
-
-      if (newCameraState) {
-        // 카메라 켤 때
-        const videoStream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false,
-        });
-
-        if (currentStream) {
-          // 기존 스트림이 있다면 비디오 트랙만 추가
-          const videoTrack = videoStream.getVideoTracks()[0];
-          currentStream.addTrack(videoTrack);
-          updateMediaState({ isCameraOn: true });
-        } else {
-          // 기존 스트림이 없다면 새로운 스트림 생성
-          updateMediaState({
-            isCameraOn: true,
-            stream: videoStream
-          });
-        }
-      } else {
-        // 카메라 끌 때
-        if (currentStream) {
-          // 비디오 트랙만 제거
-          currentStream.getVideoTracks().forEach(track => {
-            track.stop();
-            currentStream.removeTrack(track);
-          });
-        }
-        updateMediaState({ isCameraOn: false });
-      }
-    } catch (error) {
-      console.error('Failed to toggle camera:', error);
-    }
+    // 단순히 상태 업데이트만 요청
+    updateMediaState({ isCameraOn: !currentState.mediaState.isCameraOn });
   }, [getCurrentUserState, updateMediaState]);
 
   const toggleScreenShare = useCallback(async () => {

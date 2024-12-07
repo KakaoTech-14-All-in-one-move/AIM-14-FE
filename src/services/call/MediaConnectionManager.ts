@@ -41,7 +41,7 @@ export class MediaConnectionManager {
   async joinChannel(channelId: string, type: MediaType): Promise<boolean> {
     try {
       if (!MediaConnectionManager.getCallConnection()) {
-        console.error('No CallConnection available : ', MediaConnectionManager.getCallConnection());
+        console.error('No CallConnection available');
         return false;
       }
 
@@ -56,13 +56,7 @@ export class MediaConnectionManager {
         return false;
       }
 
-      // MediaServerConnection을 통해 로컬 스트림 설정
-      const stream = await this.mediaServer.updateLocalStream(type);
-      if (!stream) {
-        console.error('Failed to get local media stream');
-        return false;
-      }
-
+      // 연결 준비
       try {
         await this.mediaServer.prepareConnection(channelId);
       } catch (error) {
@@ -70,6 +64,25 @@ export class MediaConnectionManager {
         return false;
       }
 
+      // 오디오 전용 스트림으로 시작 (카메라는 꺼진 상태로 시작)
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: false
+        });
+
+        if (!stream) {
+          console.error('Failed to get audio stream');
+          return false;
+        }
+
+        this.mediaServer.replaceStream(stream);
+      } catch (error) {
+        console.error('Failed to get initial audio stream:', error);
+        return false;
+      }
+
+      // WebRTC 연결 수립
       try {
         await this.mediaServer.connect();
       } catch (error) {
@@ -95,9 +108,6 @@ export class MediaConnectionManager {
         screen_sharing: false,
       });
 
-      // 스트림 업데이트
-      this.userStateManager.updateUserStream(channelId, currentUser.email, stream);
-
       this.notifyStateUpdate(channelId);
       return true;
 
@@ -113,38 +123,40 @@ export class MediaConnectionManager {
       const currentChannel = useUserChannelStore.getState().currentUserChannel;
       if (!currentChannel.channelId) return;
 
-      // 1. MediaServerConnection에서 현재 활성화된 모든 미디어 스트림을 가져옴
+      // 1. 현재 채널의 사용자 상태 가져오기
       const userState = useUserChannelStore.getState()
         .channelUsers.get(currentChannel.channelId)
         ?.find(user => user.userId === useAuthStore.getState().user?.email);
 
-      // 2. 스트림이 있으면 모든 트랙 중지
-      if (userState?.mediaState.stream) {
-        userState.mediaState.stream.getTracks().forEach(track => {
-          track.stop();
-        });
+      if (userState) {
+        // 2. 모든 미디어 스트림 정리
+        if (userState.mediaState.stream) {
+          userState.mediaState.stream.getTracks().forEach(track => {
+            track.stop();
+          });
+        }
+        if (userState.mediaState.screenStream) {
+          userState.mediaState.screenStream.getTracks().forEach(track => {
+            track.stop();
+          });
+        }
       }
 
-      // 3. 스크린 공유 스트림이 있으면 중지
-      if (userState?.mediaState.screenStream) {
-        userState.mediaState.screenStream.getTracks().forEach(track => {
-          track.stop();
-        });
-      }
+      // 3. MediaServer 연결 정리 (이 안에서 모든 트랙과 연결을 정리)
+      this.mediaServer.disconnect();
 
       // 4. 소켓으로 채널 퇴장
       MediaConnectionManager.getCallConnection()?.leaveChannel();
 
-      // 5. 미디어 연결 정리
-      this.mediaServer.disconnect();
+      // 5. 스토어 상태 초기화
+      if (userState) {
+        this.userStateManager.handleUserLeave(
+          currentChannel.channelId,
+          useAuthStore.getState().user?.email || ''
+        );
+      }
 
-      // 6. 스토어 상태 초기화
-      this.userStateManager.handleUserLeave(
-        currentChannel.channelId,
-        useAuthStore.getState().user?.email || '',
-      );
-
-      // 7. 채널에 남은 사용자가 없으면 채널 자체를 Map에서 제거
+      // 6. 채널 정리
       const channelUsers = useUserChannelStore.getState().channelUsers;
       const remainingUsers = channelUsers.get(currentChannel.channelId) || [];
       if (remainingUsers.length === 0) {
@@ -153,6 +165,7 @@ export class MediaConnectionManager {
 
       useUserChannelStore.getState().setCurrentUserChannel(null, null);
       this.notifyStateUpdate(null);
+
     } catch (error) {
       console.error('Error leaving channel:', error);
     }
@@ -181,34 +194,31 @@ export class MediaConnectionManager {
         screen_sharing: 'isScreenSharing' in updates ? updates.isScreenSharing : currentUserState.mediaState.isScreenSharing,
       };
 
-      // 3. 미디어 상태 업데이트 로직
-      if ('isMuted' in updates) {
-        await this.mediaServer.toggleAudio(!updates.isMuted);
-      }
+      // 3. 카메라 상태 변경 처리
       if ('isCameraOn' in updates) {
-        await this.mediaServer.toggleVideo(!!updates.isCameraOn);
-      }
-      if ('isScreenSharing' in updates) {
-        if (updates.isScreenSharing) {
-          const stream = await this.mediaServer.startScreenShare();
-          if (stream) {
-            updates.screenStream = stream;
-            this.userStateManager.updateUserStream(
-              currentUserChannel.channelId,
-              currentUser.email,
-              stream,
-              true,
-            );
+        try {
+          if (updates.isCameraOn) {
+            // 카메라 켤 때: 오디오와 비디오 모두 포함된 새 스트림
+            const newStream = await navigator.mediaDevices.getUserMedia({
+              video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+              audio: true
+            });
+
+            this.mediaServer.replaceStream(newStream);
+            updates.stream = newStream;
+          } else {
+            // 카메라 끌 때: 오디오만 있는 새 스트림
+            const audioOnlyStream = await navigator.mediaDevices.getUserMedia({
+              audio: true,
+              video: false
+            });
+
+            this.mediaServer.replaceStream(audioOnlyStream);
+            updates.stream = audioOnlyStream;
           }
-        } else {
-          await this.mediaServer.stopScreenShare();
-          updates.screenStream = null;
-          this.userStateManager.updateUserStream(
-            currentUserChannel.channelId,
-            currentUser.email,
-            null,
-            true,
-          );
+        } catch (error) {
+          console.error('Failed to toggle camera:', error);
+          return;
         }
       }
 
@@ -221,6 +231,15 @@ export class MediaConnectionManager {
         currentUser.email,
         serverUpdates,
       );
+
+      // 6. 스트림 업데이트가 있으면 처리
+      if (updates.stream) {
+        this.userStateManager.updateUserStream(
+          currentUserChannel.channelId,
+          currentUser.email,
+          updates.stream
+        );
+      }
 
     } catch (error) {
       console.error('Error updating media state:', error);
