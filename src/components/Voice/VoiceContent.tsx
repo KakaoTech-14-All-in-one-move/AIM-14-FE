@@ -42,6 +42,8 @@ export const VoiceContent = () => {
     return 'grid-cols-3';
   }, [sortedUsers.length, screenShareUser]);
 
+  const totalBoxes = sortedUsers.length + (screenShareUser ? 1 : 0);
+
   if (!sortedUsers.length) return null;
 
   return (
@@ -57,6 +59,7 @@ export const VoiceContent = () => {
               key={user.userId}
               user={user}
               isScreenShare={false}
+              totalUsers={totalBoxes}
             />
           ))}
         </div>

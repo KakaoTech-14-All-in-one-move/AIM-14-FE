@@ -7,13 +7,45 @@ import { useAuthStore } from '@/stores/authStore.ts';
 interface VideoUserBoxProps {
   user: ChannelUser;
   isScreenShare?: boolean;
+  totalUsers: number; // 추가된 prop
 }
 
-export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare = false }) => {
+export const VideoUserBox = React.memo<VideoUserBoxProps>(({
+                                                             user,
+                                                             isScreenShare = false,
+                                                             totalUsers
+                                                           }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const BASE_URL = import.meta.env.VITE_BE_SERVER_URL;
   const currentUser = useAuthStore(state => state.user);
   const isCurrentUser = currentUser?.email === user.userId;
+
+  // totalUsers에 따른 크기 조정 값 계산
+  const sizes = useMemo(() => {
+    switch (totalUsers) {
+      case 1:
+        return {
+          iconSize: 6,      // w-6 h-6
+          profileSize: 32,  // 80px
+          padding: 3,      // p-3
+          textSize: 'xl',  // text-xl
+        };
+      case 2:
+        return {
+          iconSize: 5,      // w-5 h-5
+          profileSize: 20,  // 64px
+          padding: 2,      // p-2
+          textSize: 'lg',  // text-lg
+        };
+      default:
+        return {
+          iconSize: 4,      // w-4 h-4
+          profileSize: 16,  // 48px
+          padding: 2,      // p-2
+          textSize: 'base', // text-base
+        };
+    }
+  }, [totalUsers]);
 
   const logStreamInfo = (stream: MediaStream | null, context: string) => {
     console.log(`[Stream Info] ${context}:`, {
@@ -136,7 +168,7 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare
     if (isScreenShare) {
       return (
         <div className="flex flex-col items-center gap-2">
-          <MonitorOff className="w-16 h-16 text-gray-400" />
+          <MonitorOff className={`w-${sizes.iconSize * 3} h-${sizes.iconSize * 3} text-gray-400`} />
           <span className="text-gray-400 text-sm">화면 공유 준비 중...</span>
         </div>
       );
@@ -146,7 +178,7 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare
     if (user.mediaState.isCameraOn && !isCurrentUser) {
       return (
         <div className="flex flex-col items-center gap-2">
-          <Video className="w-16 h-16 text-gray-400" />
+          <Video className={`w-${sizes.iconSize * 3} h-${sizes.iconSize * 3} text-gray-400`} />
           <span className="text-gray-400 text-sm">비디오 스트림 수신 중...</span>
         </div>
       );
@@ -157,10 +189,17 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare
       <img
         src={BASE_URL + user.profileImage}
         alt={user.username}
-        className="w-20 h-20 rounded-full"
+        style={{
+          width: `${sizes.profileSize * 4}px`,
+          height: `${sizes.profileSize * 4}px`
+        }}
+        className="rounded-full"
       />
     ) : (
-      <DefaultProfileImage username={user.username} size={80} />
+      <DefaultProfileImage
+        username={user.username}
+        size={sizes.profileSize * 4}
+      />
     );
   };
 
@@ -188,30 +227,30 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare
         {!isScreenShare && (
           <>
             {user.mediaState.isMuted && (
-              <div className="bg-red-500/90 rounded-full p-2">
-                <MicOff className="w-4 h-4 text-white" />
+              <div className={`bg-red-500/90 rounded-full p-${sizes.padding}`}>
+                <MicOff className={`w-${sizes.iconSize} h-${sizes.iconSize} text-white`} />
               </div>
             )}
             {user.mediaState.isDeafened && (
-              <div className="bg-red-500/90 rounded-full p-2">
-                <HeadphoneOff className="w-4 h-4 text-white" />
+              <div className={`bg-red-500/90 rounded-full p-${sizes.padding}`}>
+                <HeadphoneOff className={`w-${sizes.iconSize} h-${sizes.iconSize} text-white`} />
               </div>
             )}
-            <div className={`rounded-full p-2 ${user.mediaState.isCameraOn ? (showVideo ? 'bg-green-500/90' : 'bg-yellow-500/90') : 'bg-red-500/90'}`}>
+            <div className={`rounded-full p-${sizes.padding} ${user.mediaState.isCameraOn ? (showVideo ? 'bg-green-500/90' : 'bg-yellow-500/90') : 'bg-red-500/90'}`}>
               {user.mediaState.isCameraOn ? (
-                <Video className="w-4 h-4 text-white" />
+                <Video className={`w-${sizes.iconSize} h-${sizes.iconSize} text-white`} />
               ) : (
-                <CameraOff className="w-4 h-4 text-white" />
+                <CameraOff className={`w-${sizes.iconSize} h-${sizes.iconSize} text-white`} />
               )}
             </div>
           </>
         )}
         {isScreenShare && (
-          <div className={`${showVideo ? 'bg-green-500/90' : 'bg-yellow-500/90'} rounded-full p-2`}>
+          <div className={`${showVideo ? 'bg-green-500/90' : 'bg-yellow-500/90'} rounded-full p-${sizes.padding}`}>
             {showVideo ? (
-              <MonitorUp className="w-4 h-4 text-white" />
+              <MonitorUp className={`w-${sizes.iconSize} h-${sizes.iconSize} text-white`} />
             ) : (
-              <MonitorOff className="w-4 h-4 text-white" />
+              <MonitorOff className={`w-${sizes.iconSize} h-${sizes.iconSize} text-white`} />
             )}
           </div>
         )}
@@ -220,7 +259,7 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare
       {/* 유저 정보 */}
       <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
         <div className="flex items-center justify-between">
-          <span className="text-white text-lg font-medium">
+          <span className={`text-white text-${sizes.textSize} font-medium`}>
             {isScreenShare ? `${user.username}'s Screen` : user.username}
           </span>
         </div>

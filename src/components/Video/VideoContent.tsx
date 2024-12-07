@@ -63,6 +63,8 @@ export const VideoContent = () => {
     return 'grid-cols-3';
   }, [displayUsers.length]);
 
+  const videoUserCount = displayUsers.length;
+
   if (!displayUsers.length) return null;
 
   return (
@@ -81,6 +83,7 @@ export const VideoContent = () => {
               <VideoUserBox
                 user={user}
                 isScreenShare={user.mediaState.isScreenShare}
+                totalUsers={videoUserCount}
               />
             </div>
           ))}
