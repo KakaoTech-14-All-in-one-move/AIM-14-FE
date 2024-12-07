@@ -485,6 +485,24 @@ export class MediaServerConnection {
 
   async startScreenShare(): Promise<MediaStream | null> {
     try {
+      // 기존 트랙들 정리
+      if (this.peerConnection) {
+        const senders = this.peerConnection.getSenders();
+        const videoSenders = senders.filter(sender =>
+          sender.track?.kind === 'video'
+        );
+
+        for (const sender of videoSenders) {
+          if (sender.track) {
+            sender.track.stop();
+            this.peerConnection.removeTrack(sender);
+          }
+        }
+
+        // 트랙 제거가 완료되도록 잠시 대기
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
       // 화면 공유 스트림 얻기
       const screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: {
@@ -524,6 +542,7 @@ export class MediaServerConnection {
               sender.track.label.includes('screen')
             );
             if (screenSender) {
+              screenSender.track?.stop();
               this.peerConnection.removeTrack(screenSender);
             }
           }
@@ -540,23 +559,11 @@ export class MediaServerConnection {
       if (this.peerConnection) {
         const videoTrack = screenStream.getVideoTracks()[0];
 
-        // 기존 비디오 트랙이 있다면 제거
-        const senders = this.peerConnection.getSenders();
-        const existingVideoSender = senders.find(sender =>
-          sender.track?.kind === 'video'
-        );
+        // 새로운 화면 공유 트랙 추가
+        this.peerConnection.addTrack(videoTrack, screenStream);
 
-        if (existingVideoSender) {
-          if (existingVideoSender.track) {
-            existingVideoSender.track.stop();
-          }
-          await existingVideoSender.replaceTrack(videoTrack);
-        } else {
-          this.peerConnection.addTrack(videoTrack, screenStream);
-        }
-
-        // 스트림 품질 최적화 설정
-        const sender = senders.find(s => s.track === videoTrack);
+        // 화면 공유 스트림 품질 최적화 설정
+        const sender = this.peerConnection.getSenders().find(s => s.track === videoTrack);
         if (sender) {
           const params = sender.getParameters();
           if (!params.encodings) {
@@ -565,6 +572,9 @@ export class MediaServerConnection {
           params.encodings[0].maxBitrate = 3000000; // 3Mbps
           await sender.setParameters(params);
         }
+
+        // 로컬 스트림 업데이트
+        this.localStream = screenStream;
       }
 
       return screenStream;
@@ -584,38 +594,36 @@ export class MediaServerConnection {
     try {
       // 화면 공유 트랙 찾기 및 제거
       const senders = this.peerConnection.getSenders();
-      const screenSender = senders.find(sender =>
+      const screenSenders = senders.filter(sender =>
         sender.track?.kind === 'video' &&
         sender.track.readyState === 'live' &&
         sender.track.label.includes('screen')
       );
 
-      if (screenSender) {
-        // 트랙 중지
-        if (screenSender.track) {
-          screenSender.track.stop();
+      // 모든 화면 공유 트랙 제거
+      for (const sender of screenSenders) {
+        if (sender.track) {
+          sender.track.stop();
         }
+        this.peerConnection.removeTrack(sender);
+      }
 
-        // WebRTC 연결에서 제거
-        this.peerConnection.removeTrack(screenSender);
+      // 오디오 전용 스트림으로 복귀
+      const audioStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: false
+      });
 
-        // 오디오 전용 스트림으로 복귀
-        const audioStream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: false
-        });
+      if (audioStream) {
+        const audioTrack = audioStream.getAudioTracks()[0];
+        const existingAudioSender = senders.find(sender =>
+          sender.track?.kind === 'audio'
+        );
 
-        if (audioStream) {
-          const audioTrack = audioStream.getAudioTracks()[0];
-          const existingAudioSender = senders.find(sender =>
-            sender.track?.kind === 'audio'
-          );
-
-          if (existingAudioSender) {
-            await existingAudioSender.replaceTrack(audioTrack);
-          } else {
-            this.peerConnection.addTrack(audioTrack, audioStream);
-          }
+        if (existingAudioSender) {
+          await existingAudioSender.replaceTrack(audioTrack);
+        } else {
+          this.peerConnection.addTrack(audioTrack, audioStream);
         }
       }
     } catch (error) {

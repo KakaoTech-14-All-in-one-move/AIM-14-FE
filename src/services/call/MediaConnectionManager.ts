@@ -201,6 +201,12 @@ export class MediaConnectionManager {
       if ('isScreenSharing' in updates) {
         try {
           if (updates.isScreenSharing) {
+            if (currentUserState.mediaState.isCameraOn) {
+              await this.updateMediaState({ isCameraOn: false });
+              // 상태가 적용될 시간을 주기 위해 잠시 대기
+              await new Promise(resolve => setTimeout(resolve, 100));
+            }
+
             // 화면 공유 시작
             const stream = await this.mediaServer.startScreenShare();
 
