@@ -143,8 +143,8 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
           return (
             <div
               key={member.userId}
-              className={`ml-4 mt-2 mb-2 flex items-center gap-2 text-gray-400 cursor-pointer
-            ${isCurrentUser ? 'bg-gray-700/30 rounded px-2' : ''}`}
+              className={`ml-4 mt-2 mb-2 flex items-center gap-2 text-gray-400 cursor-pointer min-w-0 w-full
+            ${isCurrentUser ? 'bg-gray-700/30 rounded px-2' : 'px-2'}`}
               onClick={(e) => {
                 e.stopPropagation();
                 handleChannelClick(channel, true);
@@ -163,8 +163,8 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
                   </div>
                 )}
               </div>
-              <span className="text-sm font-semibold">{member.username}</span>
-              <div className="ml-auto pr-3 flex items-center gap-2">
+              <span className="text-sm font-semibold truncate">{member.username}</span>
+              <div className="ml-auto flex items-center gap-1 mr-6">
                 {isMuted && <MicOff size={16} className="text-red-500" />}
                 {isDeafened && <HeadphoneOff size={16} className="text-red-500" />}
                 {type === 'video' && !isCameraOn && (
