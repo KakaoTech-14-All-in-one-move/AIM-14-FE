@@ -132,13 +132,6 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
   const renderChannelMembers = useCallback((channel: Channel) => {
     if (!['voice', 'video'].includes(type)) return null;
 
-    // console.log('Debug channel expansion:', {
-    //   activeChannelIds: Array.from(channelUsers.keys()),
-    //   currentChannelId: currentUserChannel.channelId,
-    //   currentChannels: currentChannels,
-    //   currentExpanded: Array.from(expandedChannels)
-    // });
-
     const currentChannelUsers = channelUsers.get(channel.channelId.toString()) || [];
 
     return (
@@ -150,24 +143,28 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
           return (
             <div
               key={member.userId}
-              className={`ml-6 mt-2 mb-2 flex items-center text-gray-400 cursor-pointer
-              ${isCurrentUser ? 'bg-gray-700/30 rounded px-2' : ''}`}
+              className={`ml-4 mt-2 mb-2 flex items-center gap-2 text-gray-400 cursor-pointer
+            ${isCurrentUser ? 'bg-gray-700/30 rounded px-2' : ''}`}
               onClick={(e) => {
                 e.stopPropagation();
                 handleChannelClick(channel, true);
               }}
             >
-              {member.profileImage ? (
-                <img
-                  src={BASE_URL + member.profileImage}
-                  alt={member.username}
-                  className="w-7 h-7 rounded-full mr-1"
-                />
-              ) : (
-                <DefaultProfileImage username={member.username} size={28} margin="mr-1" />
-              )}
+              <div className={`flex-shrink-0 relative w-7 h-7 ${isSpeaking && !isMuted ? 'ring-2 ring-green-500 rounded-full' : ''}`}>
+                {member.profileImage ? (
+                  <img
+                    src={BASE_URL + member.profileImage}
+                    alt={member.username}
+                    className="w-full h-full rounded-full"
+                  />
+                ) : (
+                  <div className="w-full h-full">
+                    <DefaultProfileImage username={member.username} size={28} margin="" />
+                  </div>
+                )}
+              </div>
               <span className="text-sm font-semibold">{member.username}</span>
-              <div className="ml-auto mr-4 flex items-center gap-2">
+              <div className="ml-auto pr-3 flex items-center gap-2">
                 {isMuted && <MicOff size={16} className="text-red-500" />}
                 {isDeafened && <HeadphoneOff size={16} className="text-red-500" />}
                 {type === 'video' && !isCameraOn && (
@@ -175,9 +172,6 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
                 )}
                 {type === 'video' && isScreenSharing && (
                   <MonitorUp size={16} className="text-green-500" />
-                )}
-                {isSpeaking && (
-                  <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
                 )}
               </div>
             </div>
