@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { CameraOff, HeadphoneOff, MicOff, MonitorUp, MonitorOff } from 'lucide-react';
+import { CameraOff, HeadphoneOff, MicOff, MonitorUp, MonitorOff, Video } from 'lucide-react';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage';
 import { ChannelUser } from '@/stores/userChannelStore';
+import { useAuthStore } from '@/stores/authStore.ts';
 
 interface VideoUserBoxProps {
   user: ChannelUser;
@@ -11,8 +12,9 @@ interface VideoUserBoxProps {
 export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare = false }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const BASE_URL = import.meta.env.VITE_BE_SERVER_URL;
+  const currentUser = useAuthStore(state => state.user);
+  const isCurrentUser = currentUser?.email === user.userId;
 
-  // 스트림 상태 디버깅을 위한 상세 로깅
   const logStreamInfo = (stream: MediaStream | null, context: string) => {
     console.log(`[Stream Info] ${context}:`, {
       userId: user.userId,
@@ -33,8 +35,6 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare
     if (!videoElement) return;
 
     const stream = isScreenShare ? user.mediaState.screenStream : user.mediaState.stream;
-
-    // 스트림 상태 로깅
     logStreamInfo(stream, 'Stream Update');
 
     if (stream) {
@@ -45,12 +45,10 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare
         audioTracks: stream.getAudioTracks().length
       });
 
-      // 스트림 연결
       if (videoElement.srcObject !== stream) {
         videoElement.srcObject = stream;
         videoElement.muted = user.mediaState.isMuted || user.mediaState.isDeafened;
 
-        // 비디오 재생 시도
         const playVideo = async () => {
           try {
             await videoElement.play();
@@ -58,7 +56,6 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare
           } catch (error) {
             console.error(`[VideoUserBox] Failed to play video for ${user.userId}:`, error);
 
-            // 자동 재생 정책 문제 해결을 위한 재시도
             if (error instanceof Error && error.name === 'NotAllowedError') {
               videoElement.muted = true;
               try {
@@ -96,31 +93,76 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare
     isScreenShare
   ]);
 
-  // 비디오 표시 조건 로직 개선
   const showVideo = useMemo(() => {
     if (isScreenShare) {
       const hasScreenStream = !!user.mediaState.screenStream;
-      console.log(`[VideoUserBox] Screen share display check for ${user.userId}:`, {
+      console.log('[VideoUserBox] Screen share check:', {
+        userId: user.userId,
         hasScreenStream,
-        tracks: user.mediaState.screenStream?.getTracks().length
       });
       return hasScreenStream;
     }
 
-    const hasVideoStream = !!(
-      user.mediaState.stream &&
-      user.mediaState.stream.getVideoTracks().length > 0 &&
-      user.mediaState.isCameraOn
-    );
-
-    console.log(`[VideoUserBox] Video display check for ${user.userId}:`, {
+    // 스트림 상태 로깅
+    console.log('[VideoUserBox] Video stream check:', {
+      userId: user.userId,
+      isCurrentUser,
+      isCameraOn: user.mediaState.isCameraOn,
       hasStream: !!user.mediaState.stream,
-      hasVideoTracks: user.mediaState.stream?.getVideoTracks().length! > 0,
-      isCameraOn: user.mediaState.isCameraOn
+      trackCount: user.mediaState.stream?.getVideoTracks().length
     });
 
-    return hasVideoStream;
-  }, [isScreenShare, user.mediaState.stream, user.mediaState.screenStream, user.mediaState.isCameraOn]);
+    const hasVideoStream = !!(
+      user.mediaState.stream &&
+      user.mediaState.stream.getVideoTracks().length > 0
+    );
+
+    // 현재 사용자의 경우 카메라가 켜져있으면 일단 보여주기
+    if (isCurrentUser) {
+      return user.mediaState.isCameraOn;
+    }
+
+    // 다른 사용자의 경우 스트림이 있어야 함
+    return hasVideoStream && user.mediaState.isCameraOn;
+  }, [
+    isScreenShare,
+    user.mediaState.stream,
+    user.mediaState.screenStream,
+    user.mediaState.isCameraOn,
+    isCurrentUser
+  ]);
+
+  const NoStreamDisplay = () => {
+    if (isScreenShare) {
+      return (
+        <div className="flex flex-col items-center gap-2">
+          <MonitorOff className="w-16 h-16 text-gray-400" />
+          <span className="text-gray-400 text-sm">화면 공유 준비 중...</span>
+        </div>
+      );
+    }
+
+    // 카메라가 켜져있지만 스트림이 없는 경우
+    if (user.mediaState.isCameraOn && !isCurrentUser) {
+      return (
+        <div className="flex flex-col items-center gap-2">
+          <Video className="w-16 h-16 text-gray-400" />
+          <span className="text-gray-400 text-sm">비디오 스트림 수신 중...</span>
+        </div>
+      );
+    }
+
+    // 카메라가 꺼져있거나 기본 상태일 경우 프로필 이미지 표시
+    return user.profileImage ? (
+      <img
+        src={BASE_URL + user.profileImage}
+        alt={user.username}
+        className="w-20 h-20 rounded-full"
+      />
+    ) : (
+      <DefaultProfileImage username={user.username} size={80} />
+    );
+  };
 
   return (
     <div
@@ -137,22 +179,7 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare
         />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center">
-          {isScreenShare ? (
-            <div className="flex flex-col items-center gap-2">
-              <MonitorOff className="w-16 h-16 text-gray-400" />
-              <span className="text-gray-400 text-sm">화면 공유 준비 중...</span>
-            </div>
-          ) : (
-            user.profileImage ? (
-              <img
-                src={BASE_URL + user.profileImage}
-                alt={user.username}
-                className="w-20 h-20 rounded-full"
-              />
-            ) : (
-              <DefaultProfileImage username={user.username} size={80} />
-            )
-          )}
+          <NoStreamDisplay />
         </div>
       )}
 
@@ -170,11 +197,13 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({ user, isScreenShare
                 <HeadphoneOff className="w-4 h-4 text-white" />
               </div>
             )}
-            {!user.mediaState.isCameraOn && (
-              <div className="bg-red-500/90 rounded-full p-2">
+            <div className={`rounded-full p-2 ${user.mediaState.isCameraOn ? (showVideo ? 'bg-green-500/90' : 'bg-yellow-500/90') : 'bg-red-500/90'}`}>
+              {user.mediaState.isCameraOn ? (
+                <Video className="w-4 h-4 text-white" />
+              ) : (
                 <CameraOff className="w-4 h-4 text-white" />
-              </div>
-            )}
+              )}
+            </div>
           </>
         )}
         {isScreenShare && (

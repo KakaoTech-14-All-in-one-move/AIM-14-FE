@@ -258,17 +258,43 @@ export class MediaConnectionManager {
       // 카메라 상태 변경 처리
       if ('isCameraOn' in updates) {
         try {
-          const stream = updates.isCameraOn
-            ? await this.mediaServer.updateLocalStream(currentUserChannel.channelType!)
-            : await this.mediaServer.updateLocalStream('VOICE');
+          if (updates.isCameraOn) {
+            // 비디오 스트림 요청
+            const videoStream = await navigator.mediaDevices.getUserMedia({
+              audio: true,
+              video: {
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+                frameRate: { ideal: 30 }
+              }
+            });
 
-          if (stream) {
+            // 스트림을 MediaServer에 전달
+            this.mediaServer.replaceStream(videoStream);
+
+            // 상태 업데이트
             this.userStateManager.handleUserStateUpdate(
               currentUserChannel.channelId,
               currentUser.email,
               {
                 ...serverUpdates,
-                stream
+                stream: videoStream
+              }
+            );
+          } else {
+            // 카메라를 끄는 경우 오디오만 있는 스트림으로 변경
+            const audioOnlyStream = await navigator.mediaDevices.getUserMedia({
+              audio: true,
+              video: false
+            });
+
+            this.mediaServer.replaceStream(audioOnlyStream);
+            this.userStateManager.handleUserStateUpdate(
+              currentUserChannel.channelId,
+              currentUser.email,
+              {
+                ...serverUpdates,
+                stream: audioOnlyStream
               }
             );
           }
