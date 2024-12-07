@@ -13,7 +13,7 @@ export const VideoContent = () => {
   }, [channelUsers, currentUserChannel.channelId]);
 
   const displayUsers = useMemo(() => {
-    // 모든 사용자 목록을 먼저 매핑
+    // 모든 사용자 목록을 매핑
     const allDisplayUsers = currentChannelUsers.map(user => {
       // 기본 사용자 박스용 항목
       const baseUser = {
@@ -46,21 +46,12 @@ export const VideoContent = () => {
   }, [currentChannelUsers]);
 
   const gridLayout = useMemo(() => {
-    const totalBoxes = displayUsers.length;
-    const hasScreenShare = displayUsers.some(user => user.mediaState.isScreenShare);
+    const totalUsers = displayUsers.length;
 
-    // 화면 공유가 있는 경우의 레이아웃 처리
-    if (hasScreenShare) {
-      if (totalBoxes <= 2) return 'grid-cols-1';  // 1명이 화면 공유 시
-      if (totalBoxes <= 4) return 'grid-cols-2';  // 2-3명일 때
-      return 'grid-cols-3';                       // 4명 이상일 때
-    }
-
-    // 일반적인 경우의 레이아웃
-    if (totalBoxes <= 1) return 'grid-cols-1';
-    if (totalBoxes <= 4) return 'grid-cols-2';
+    if (totalUsers <= 1) return 'grid-cols-1';
+    if (totalUsers <= 4) return 'grid-cols-2';
     return 'grid-cols-3';
-  }, [displayUsers.length, displayUsers]);
+  }, [displayUsers.length]);
 
   if (!displayUsers.length) return null;
 
@@ -73,14 +64,7 @@ export const VideoContent = () => {
       <div className="flex-1 w-full flex items-center justify-center">
         <div className={`grid gap-4 w-full max-w-[1400px] mx-auto ${gridLayout}`}>
           {displayUsers.map(user => (
-            <div
-              key={user.userId}
-              className={`${
-                user.mediaState.isScreenShare
-                  ? 'col-span-full lg:col-span-2 row-span-2'
-                  : 'col-span-1'
-              }`}
-            >
+            <div key={user.userId} className="col-span-1">
               <VideoUserBox
                 user={user}
                 isScreenShare={user.mediaState.isScreenShare}

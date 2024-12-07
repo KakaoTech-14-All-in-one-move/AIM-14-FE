@@ -18,12 +18,12 @@ export const VoiceContent = () => {
   const { screenShareUser, sortedUsers } = useMemo(() => {
     // 화면 공유 중인 유저 찾기
     const screenShareUser = currentChannelUsers.find(
-      user => user.mediaState.isScreenSharing && user.mediaState.screenStream?.active
+      user => user.mediaState.isScreenSharing && user.mediaState.screenStream?.active,
     );
 
     // 나머지 유저들 (화면 공유 안하는 유저들)
     const nonScreenShareUsers = currentChannelUsers.filter(user =>
-      !user.mediaState.isScreenSharing || !user.mediaState.screenStream?.active
+      !user.mediaState.isScreenSharing || !user.mediaState.screenStream?.active,
     );
 
     // 현재 유저를 마지막으로 정렬
@@ -52,14 +52,6 @@ export const VoiceContent = () => {
     >
       <div className="flex-1 w-full flex items-center justify-center">
         <div className={`grid gap-4 w-full max-w-[1400px] mx-auto ${gridLayout}`}>
-          {screenShareUser && (
-            <UserBox
-              key={`${screenShareUser.userId}-screen`}
-              user={screenShareUser}
-              isScreenShare={true}
-            />
-          )}
-
           {sortedUsers.map(user => (
             <UserBox
               key={user.userId}
