@@ -214,7 +214,58 @@ export class MediaServerConnection {
     const currentUser = useAuthStore.getState().user;
     if (!currentUser?.email) return;
 
-    this.setupAudioDetection(stream, currentUser.email);
+    // 기존 오디오 감지 정리 (있다면)
+    this.cleanupAudioDetection(currentUser.email);
+
+    try {
+      const audioContext = new AudioContext();
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+
+      // 오디오 처리 파이프라인 설정
+      source.connect(analyser);
+      source.connect(audioContext.destination);
+
+      // FFT 설정
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.3;
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      this.audioContextMap.set(currentUser.email, { context: audioContext, analyser, dataArray });
+
+      // 음성 감지 인터벌 설정
+      if (!this.audioDetectionInterval) {
+        this.audioDetectionInterval = window.setInterval(() => {
+          this.audioContextMap.forEach((audio, uid) => {
+            const { analyser, dataArray } = audio;
+            analyser.getByteFrequencyData(dataArray);
+
+            // 음성 감지 로직
+            const sum = dataArray.reduce((a, b) => a + b, 0);
+            const average = sum / dataArray.length;
+            const isSpeaking = average > 15; // 임계값 15로 설정
+
+            const currentChannelId = useUserChannelStore.getState().currentUserChannel.channelId;
+            if (!currentChannelId) return;
+
+            const currentState = useUserChannelStore.getState()
+              .channelUsers.get(currentChannelId)
+              ?.find(user => user.userId === uid)?.mediaState.isSpeaking;
+
+            // 상태가 변경됐을 때만 업데이트
+            if (currentState !== isSpeaking) {
+              useUserChannelStore.getState().updateUserMediaState(
+                currentChannelId,
+                uid,
+                { isSpeaking }
+              );
+            }
+          });
+        }, 50); // 50ms 간격으로 체크
+      }
+    } catch (error) {
+      console.error('Failed to setup audio detection:', error);
+    }
   }
 
   private setupRemoteAudioDetection(stream: MediaStream, userId: string) {
@@ -390,6 +441,12 @@ export class MediaServerConnection {
     // 새로운 스트림 설정
     this.localStream = newStream;
 
+    // 새 스트림에 대한 오디오 감지 설정
+    const audioTracks = newStream.getAudioTracks();
+    if (audioTracks.length > 0) {
+      this.setupLocalAudioDetection(newStream);
+    }
+
     // 피어 커넥션의 기존 sender 제거 및 새로운 트랙 추가
     if (this.peerConnection) {
       const senders = this.peerConnection.getSenders();
@@ -397,8 +454,14 @@ export class MediaServerConnection {
         this.peerConnection?.removeTrack(sender);
       });
 
-      // 새 트랙 추가
-      newStream.getTracks().forEach(track => {
+      // 새 트랙 추가 (오디오 트랙 먼저)
+      audioTracks.forEach(track => {
+        this.peerConnection?.addTrack(track, newStream);
+      });
+
+      // 비디오 트랙 추가
+      const videoTracks = newStream.getVideoTracks();
+      videoTracks.forEach(track => {
         this.peerConnection?.addTrack(track, newStream);
       });
     }
@@ -455,19 +518,18 @@ export class MediaServerConnection {
   }
 
   disconnect() {
-    this.cleanupAudioDetection();
+    // 기존 코드는 유지하면서 오디오 감지 정리 추가
+    this.cleanupAudioDetection(); // 모든 오디오 감지 정리
     this.reset();
 
-    // localStream 정리를 더 명시적으로
     if (this.localStream) {
       this.localStream.getTracks().forEach(track => {
-        track.stop();  // 각 트랙 확실히 중지
+        track.stop();
       });
       this.localStream = null;
     }
 
     if (this.peerConnection) {
-      // sender 정리 추가
       this.peerConnection.getSenders().forEach(sender => {
         if (sender.track) {
           sender.track.stop();
@@ -475,6 +537,12 @@ export class MediaServerConnection {
       });
       this.peerConnection.close();
       this.peerConnection = null;
+    }
+
+    // 오디오 감지 인터벌 정리
+    if (this.audioDetectionInterval) {
+      clearInterval(this.audioDetectionInterval);
+      this.audioDetectionInterval = null;
     }
   }
 
