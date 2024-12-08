@@ -124,32 +124,42 @@ export class MediaConnectionManager {
       const currentChannel = useUserChannelStore.getState().currentUserChannel;
       if (!currentChannel.channelId) return;
 
-      // 1. 현재 채널의 사용자 상태 가져오기
+      // 1. 모든 활성 미디어 트랙을 찾아서 정리
+      const cleanupAllMediaTracks = () => {
+        // 현재 채널의 모든 사용자의 스트림 정리
+        const channelUsers = useUserChannelStore.getState().channelUsers.get(currentChannel.channelId!) || [];
+        channelUsers.forEach(user => {
+          // 일반 스트림 정리
+          if (user.mediaState.stream) {
+            user.mediaState.stream.getTracks().forEach(track => {
+              track.enabled = false;
+              track.stop();
+            });
+          }
+          // 스크린 쉐어 스트림 정리
+          if (user.mediaState.screenStream) {
+            user.mediaState.screenStream.getTracks().forEach(track => {
+              track.enabled = false;
+              track.stop();
+            });
+          }
+        });
+      };
+
+      // 2. 먼저 모든 미디어 트랙 정리
+      cleanupAllMediaTracks();
+
+      // 3. MediaServer 연결 정리
+      this.mediaServer.disconnect();
+
+      // 4. 소켓 연결 정리
+      MediaConnectionManager.getCallConnection()?.leaveChannel();
+
+      // 5. 상태 정리
       const userState = useUserChannelStore.getState()
         .channelUsers.get(currentChannel.channelId)
         ?.find(user => user.userId === useAuthStore.getState().user?.email);
 
-      if (userState) {
-        // 2. 모든 미디어 스트림 정리
-        if (userState.mediaState.stream) {
-          userState.mediaState.stream.getTracks().forEach(track => {
-            track.stop();
-          });
-        }
-        if (userState.mediaState.screenStream) {
-          userState.mediaState.screenStream.getTracks().forEach(track => {
-            track.stop();
-          });
-        }
-      }
-
-      // 3. MediaServer 연결 정리 (이 안에서 모든 트랙과 연결을 정리)
-      this.mediaServer.disconnect();
-
-      // 4. 소켓으로 채널 퇴장
-      MediaConnectionManager.getCallConnection()?.leaveChannel();
-
-      // 5. 스토어 상태 초기화
       if (userState) {
         this.userStateManager.handleUserLeave(
           currentChannel.channelId,
@@ -158,13 +168,11 @@ export class MediaConnectionManager {
       }
 
       // 6. 채널 정리
-      const channelUsers = useUserChannelStore.getState().channelUsers;
-      const remainingUsers = channelUsers.get(currentChannel.channelId) || [];
-      if (remainingUsers.length === 0) {
-        useUserChannelStore.getState().resetChannel(currentChannel.channelId);
-      }
-
       useUserChannelStore.getState().setCurrentUserChannel(null, null);
+
+      // 7. 한번 더 실행하여 누락된 트랙이 없도록 보장
+      setTimeout(cleanupAllMediaTracks, 200);
+
       this.notifyStateUpdate(null);
 
     } catch (error) {

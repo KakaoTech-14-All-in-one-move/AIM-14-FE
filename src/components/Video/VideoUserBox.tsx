@@ -26,7 +26,6 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({
 
   // totalUsers에 따른 크기 조정 값 계산
   const sizes = useMemo(() => {
-    console.log("MAX", isMaximized);
     if (isMaximized) {
       return {
         iconSize: 6,      // w-6 h-6

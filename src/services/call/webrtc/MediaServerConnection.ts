@@ -632,32 +632,49 @@ export class MediaServerConnection {
   }
 
   disconnect() {
-    // 기존 코드는 유지하면서 오디오 감지 정리 추가
-    this.cleanupAudioDetection(); // 모든 오디오 감지 정리
+    // 확실한 오디오 감지 정리
+    this.cleanupAudioDetection();
     this.reset();
 
-    if (this.localStream) {
-      this.localStream.getTracks().forEach(track => {
-        track.stop();
-      });
-      this.localStream = null;
-    }
+    // 모든 미디어 트랙 정리를 보장하는 함수
+    const cleanupMediaTracks = () => {
+      // localStream 정리
+      if (this.localStream) {
+        this.localStream.getTracks().forEach(track => {
+          track.enabled = false;  // 먼저 비활성화
+          track.stop();  // 그 다음 정지
+        });
+        this.localStream = null;
+      }
 
-    if (this.peerConnection) {
-      this.peerConnection.getSenders().forEach(sender => {
-        if (sender.track) {
-          sender.track.stop();
-        }
-      });
-      this.peerConnection.close();
-      this.peerConnection = null;
-    }
+      // PeerConnection의 모든 트랙 정리
+      if (this.peerConnection) {
+        this.peerConnection.getSenders().forEach(sender => {
+          if (sender.track) {
+            sender.track.enabled = false;
+            sender.track.stop();
+          }
+        });
+
+        // 모든 트랜시버 정지
+        this.peerConnection.getTransceivers().forEach(transceiver => {
+          transceiver.stop();
+        });
+
+        this.peerConnection.close();
+        this.peerConnection = null;
+      }
+    };
 
     // 오디오 감지 인터벌 정리
     if (this.audioDetectionInterval) {
       clearInterval(this.audioDetectionInterval);
       this.audioDetectionInterval = null;
     }
+
+    // 실행 보장을 위해 setTimeout으로 한번 더 실행
+    cleanupMediaTracks();
+    setTimeout(cleanupMediaTracks, 100);
   }
 
   dispose() {
