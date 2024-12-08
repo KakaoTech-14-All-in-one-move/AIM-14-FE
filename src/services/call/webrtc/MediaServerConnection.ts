@@ -485,7 +485,7 @@ export class MediaServerConnection {
 
   async startScreenShare(): Promise<MediaStream | null> {
     try {
-      // 기존 트랙들 정리
+      // 기존 비디오 트랙 정리
       if (this.peerConnection) {
         const senders = this.peerConnection.getSenders();
         const videoSenders = senders.filter(sender =>
@@ -498,9 +498,6 @@ export class MediaServerConnection {
             this.peerConnection.removeTrack(sender);
           }
         }
-
-        // 트랙 제거가 완료되도록 잠시 대기
-        await new Promise(resolve => setTimeout(resolve, 50));
       }
 
       // 화면 공유 스트림 얻기
@@ -512,11 +509,11 @@ export class MediaServerConnection {
         }
       });
 
-      // 현재 오디오 스트림 가져오기
-      const audioStream = this.localStream;
-      if (!audioStream) {
-        console.warn('No audio stream available');
-        return null;
+      // 기존 오디오 스트림 사용
+      const audioTrack = this.localStream?.getAudioTracks()[0];
+      if (audioTrack && !screenStream.getAudioTracks().length) {
+        // 기존 오디오 트랙을 그대로 사용 (클론하지 않음)
+        screenStream.addTrack(audioTrack);
       }
 
       // 화면 공유가 취소되었을 때의 처리
@@ -534,7 +531,7 @@ export class MediaServerConnection {
             }
           );
 
-          // 화면 공유 트랙 제거
+          // 화면 공유 트랙만 제거
           if (this.peerConnection) {
             const senders = this.peerConnection.getSenders();
             const screenSender = senders.find(sender =>
@@ -549,17 +546,9 @@ export class MediaServerConnection {
         }
       };
 
-      // 오디오 트랙을 화면 공유 스트림에 추가
-      const audioTrack = audioStream.getAudioTracks()[0];
-      if (audioTrack) {
-        screenStream.addTrack(audioTrack.clone());
-      }
-
       // WebRTC 연결에 트랙 추가
       if (this.peerConnection) {
         const videoTrack = screenStream.getVideoTracks()[0];
-
-        // 새로운 화면 공유 트랙 추가
         this.peerConnection.addTrack(videoTrack, screenStream);
 
         // 화면 공유 스트림 품질 최적화 설정
@@ -573,7 +562,7 @@ export class MediaServerConnection {
           await sender.setParameters(params);
         }
 
-        // 로컬 스트림 업데이트
+        // localStream 업데이트 (기존 오디오 트랙 유지)
         this.localStream = screenStream;
       }
 
