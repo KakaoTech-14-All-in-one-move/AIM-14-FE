@@ -1,7 +1,7 @@
 import recordIcon from '@/common/icons/record.png';
 
 const RecordIcon = () => (
-  <img width="20" height="20" src={recordIcon} alt="record" />
+  <img width="24" height="24" src={recordIcon} alt="record" />
 
 );
 

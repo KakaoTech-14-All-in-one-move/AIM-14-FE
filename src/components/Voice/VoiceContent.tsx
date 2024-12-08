@@ -1,20 +1,50 @@
-import { UserBox } from '@/components/Voice/UserBox.tsx';
-import { VoiceControls } from '@/components/Voice/VoiceControls.tsx';
-import { useState } from 'react';
-import { useCall } from '@/services/call/CallProvider.tsx';
-import { useVoiceChat } from '@/hooks/useVoiceChat';
+import { useMemo, useState } from 'react';
+import { UserBox } from '@/components/Voice/UserBox';
+import { VoiceControls } from '@/components/Voice/VoiceControls';
+import { useUserChannelStore } from '@/stores/userChannelStore';
+import { useAuthStore } from '@/stores/authStore';
 
 export const VoiceContent = () => {
   const [showControls, setShowControls] = useState(false);
-  const { currentUser } = useCall();
-  const voiceChatStore = useVoiceChat();  // VoiceChat store 사용
+  const { channelUsers, currentUserChannel } = useUserChannelStore();
+  const currentUser = useAuthStore(state => state.user);
 
-  // VoiceChat store의 users 사용
-  const allUsers = currentUser
-    ? [...voiceChatStore.users.filter(u => u.user_id !== currentUser.user_id), currentUser]
-    : voiceChatStore.users;
+  const currentChannelUsers = useMemo(() => {
+    if (!currentUserChannel.channelId) return [];
+    // 채널에 있는 모든 유저를 가져옵니다
+    return channelUsers.get(currentUserChannel.channelId) || [];
+  }, [channelUsers, currentUserChannel.channelId]);
 
-  if (!allUsers?.length) return null;
+  const { screenShareUser, sortedUsers } = useMemo(() => {
+    // 화면 공유 중인 유저 찾기
+    const screenShareUser = currentChannelUsers.find(
+      user => user.mediaState.isScreenSharing && user.mediaState.screenStream?.active,
+    );
+
+    // 나머지 유저들 (화면 공유 안하는 유저들)
+    const nonScreenShareUsers = currentChannelUsers.filter(user =>
+      !user.mediaState.isScreenSharing || !user.mediaState.screenStream?.active,
+    );
+
+    // 현재 유저를 마지막으로 정렬
+    const sortedUsers = currentUser ? [
+      ...nonScreenShareUsers.filter(user => user.userId !== currentUser.email),
+      ...nonScreenShareUsers.filter(user => user.userId === currentUser.email),
+    ] : nonScreenShareUsers;
+
+    return { screenShareUser, sortedUsers };
+  }, [currentChannelUsers, currentUser]);
+
+  const gridLayout = useMemo(() => {
+    const totalBoxes = sortedUsers.length + (screenShareUser ? 1 : 0);
+    if (totalBoxes <= 1) return 'grid-cols-1';
+    if (totalBoxes <= 4) return 'grid-cols-2';
+    return 'grid-cols-3';
+  }, [sortedUsers.length, screenShareUser]);
+
+  const totalBoxes = sortedUsers.length + (screenShareUser ? 1 : 0);
+
+  if (!sortedUsers.length) return null;
 
   return (
     <div
@@ -23,27 +53,18 @@ export const VoiceContent = () => {
       onMouseLeave={() => setShowControls(false)}
     >
       <div className="flex-1 w-full flex items-center justify-center">
-        <div className={`grid gap-8 w-full max-w-[1200px] mx-auto
-          ${allUsers.length === 1 ? 'grid-cols-1' :
-          allUsers.length === 2 ? 'grid-cols-2' :
-            allUsers.length === 3 || allUsers.length === 4 ? 'grid-cols-2' :
-              'grid-cols-3'}`}
-        >
-          {allUsers.map((user) => (
+        <div className={`grid gap-4 w-full max-w-[1400px] mx-auto ${gridLayout}`}>
+          {sortedUsers.map(user => (
             <UserBox
-              key={user.user_id}
-              user={{
-                id: user.user_id,
-                nickname: user.username,
-                isSpeaking: user.speaking,
-                isMuted: user.muted,
-                isDeafened: user.deafened,
-                imageUrl: user.profile_image
-              }}
+              key={user.userId}
+              user={user}
+              isScreenShare={false}
+              totalUsers={totalBoxes}
             />
           ))}
         </div>
       </div>
+
       <VoiceControls show={showControls} />
     </div>
   );

@@ -1,40 +1,52 @@
-import { ChannelMapping } from '@/services/call/types.ts';
-
 export const CALL_API = {
   GET_WEBSOCKET_URL: '/api/v1/call',
-  DEFAULT_SERVER_ID: '12345',
-  DEFAULT_CHANNEL_ID: '5143992e-9dcd-45fe-bcc7-e337417b0cfe'
-};
-
-// 기존 음성 채널 매핑은 그대로 유지
-export const TEMP_CHANNEL_MAPPING: ChannelMapping = {
-  serverId: '12345',
-  channelName: '일반',
-  channelId: '5143992e-9dcd-45fe-bcc7-e337417b0cfe',
-  channelType: 'VOICE'
-};
-
-// 비디오 채널 매핑 추가
-export const VIDEO_CHANNEL_MAPPING: ChannelMapping = {
-  serverId: '12345',
-  channelName: '일반',
-  channelId: '6143992e-9dcd-45fe-bcc7-e337417b0cfe',
-  channelType: 'VIDEO'
+  DEFAULT_SERVER_ID: '1',
+  DEFAULT_VOICE_CHANNEL_ID: '1',
+  DEFAULT_VIDEO_CHANNEL_ID: '2',
 };
 
 export const OP_CODES = {
-  INITIAL: 0,
-  INITIAL_ACK: 10,
+  // Client -> Server
+  INIT: 0,
   HEARTBEAT: 1,
-  HEARTBEAT_ACK: 11,
-  IDENTIFY: 2,
-  IDENTIFY_ACK: 12,
-  JOIN_CHANNEL: 3,
-  JOIN_CHANNEL_ACK: 13,
+  SERVER: 2,
+  ENTER_CHANNEL: 3,
   LEAVE_CHANNEL: 4,
-  LEAVE_CHANNEL_ACK: 14,
-  STATE_UPDATE: 5,
-  STATE_UPDATE_ACK: 15
+  UPDATE_STATE: 5,
+  ON_ICE_CANDIDATE: 6,
+  RECEIVE_VIDEO: 7,
+
+  // Server -> Client
+  ERROR: -1,
+  INIT_ACK: 10,
+  HEARTBEAT_ACK: 11,
+  SERVER_ACK: 12,
+  ENTER_CHANNEL_EVENT: 13,
+  LEAVE_CHANNEL_EVENT: 14,
+  UPDATE_STATE_EVENT: 15,
+  ICE_CANDIDATE: 16,
+  VIDEO_ANSWER: 17,
+} as const;
+
+export const ERROR_CODES = {
+  INTERNAL_SERVER_ERROR: 1000,
+  UNAUTHORIZED_ACCESS_TOKEN: 1001,
+  UNAUTHORIZED_USER: 1002,
+  INVALID_SERVER_ID: 1011,
+  INVALID_CHANNEL_ID: 1012,
+  INVALID_REQUEST_OPERATION: 1013,
+  DUPLICATE_SERVER_DESTINATION: 1021,
+  DUPLICATE_CHANNEL_ENTRY: 1022,
+  DUPLICATE_CHANNEL_EXIT: 1023,
+  WRONG_ACCESS_INACTIVE_USER: 1031,
+  WRONG_ACCESS_INACTIVE_SERVER: 1032,
+  WRONG_ACCESS_INACTIVE_CHANNEL: 1033,
 } as const;
 
 export const RECONNECT_DELAY = 5000;
+
+export const ICE_SERVER_CONFIG = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+  ],
+};
