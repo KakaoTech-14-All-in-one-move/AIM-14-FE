@@ -28,6 +28,7 @@ export class UserStateManager {
 
   // 서버 응답 처리 (초기 상태 설정)
   handleServerState(channelUsers: UserData[]) {
+    // console.log('UserStateManager received users:', channelUsers);
     // 기존 상태 초기화
     const channelUsersMap = new Map<string, ChannelUser[]>();
 
@@ -140,7 +141,7 @@ export class UserStateManager {
         isMuted: userData.muted,
         isDeafened: userData.deafened,
         isCameraOn: false,
-        isScreenSharing: false,
+        isScreenSharing: userData.screen_sharing,
         isSpeaking: false,
         stream: null,
         screenStream: null,

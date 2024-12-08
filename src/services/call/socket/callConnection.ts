@@ -45,22 +45,22 @@ export class CallConnection {
     [OP_CODES.SERVER_ACK]: (data: any) => {
       if (!this.currentServerId) return;
 
-      // data가 배열인지 확인하고 처리
-      const users = Array.isArray(data) ? data : [];
+      // users 배열을 얻는 방법 수정
+      const users = Array.isArray(data) ? data : [data];  // data 자체를 사용
 
-      // 서버에서 온 데이터를 UserData 형식으로 매핑
-      const channelUsers = users.map(user => ({
-        user_id: user.user_id,
-        username: user.username,
-        profile_image: user.profile_image,
-        channel_id: user.channel_id.toString(),
-        muted: user.muted,
-        deafened: user.deafened,
-        camera_on: user.camera_on,
-        screen_sharing: false,  // 초기값
-      }));
+      const channelUsers = users.map(user => {
+        return {
+          user_id: user.user_id,
+          username: user.username,
+          profile_image: user.profile_image,
+          channel_id: typeof user.channel_id === 'number' ? user.channel_id.toString() : user.channel_id,
+          muted: user.muted,
+          deafened: user.deafened,
+          camera_on: user.camera_on,
+          screen_sharing: user.screen_sharing,  // 직접 값 전달
+        };
+      });
 
-      // UserStateManager를 통해 상태 업데이트
       this.userStateManager.handleServerState(channelUsers);
     },
 
