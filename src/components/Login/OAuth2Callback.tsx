@@ -10,7 +10,7 @@ export const OAuth2Callback = () => {
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
-
+        console.log('OAuth2Callback params:', params.toString());
         const accessToken = params.get('accessToken');
         const refreshToken = params.get('refreshToken');
         const serversParam = params.get('servers');
@@ -37,9 +37,11 @@ export const OAuth2Callback = () => {
         const userInfo = {
             email: params.get('email') || '',
             username: params.get('username') || '',
+            userId: parseInt(params.get('userId') || '0', 10),
             profile_image: params.get('profile_image') || '',
             servers: servers
         };
+        console.log('User info:', userInfo);
 
         setUser(userInfo);
 
