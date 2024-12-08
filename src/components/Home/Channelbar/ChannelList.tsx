@@ -135,7 +135,7 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
     const currentChannelUsers = channelUsers.get(channel.channelId.toString()) || [];
 
     return (
-      <>
+      <div className="overflow-hidden"> {/* 새로 추가된 wrapper */}
         {currentChannelUsers.map(member => {
           const isCurrentUser = member.userId === user?.email;
           const { isMuted, isDeafened, isCameraOn, isScreenSharing, isSpeaking } = member.mediaState;
@@ -143,12 +143,8 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
           return (
             <div
               key={member.userId}
-              className={`ml-4 mt-2 mb-2 flex items-center gap-2 text-gray-400 cursor-pointer min-w-0 w-full
-            ${isCurrentUser ? 'bg-gray-700/30 rounded px-2' : 'px-2'}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleChannelClick(channel, true);
-              }}
+              className={`ml-4 mt-2 mb-2 flex items-center gap-2 text-gray-400 cursor-pointer min-w-0 
+            ${isCurrentUser ? 'bg-gray-700/30 rounded px-2' : 'px-2'}`} // w-full 제거됨
             >
               <div className={`flex-shrink-0 relative w-7 h-7 ${isSpeaking && !isMuted ? 'ring-2 ring-green-500 rounded-full' : ''}`}>
                 {member.profileImage ? (
@@ -164,7 +160,7 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
                 )}
               </div>
               <span className="text-sm font-semibold truncate">{member.username}</span>
-              <div className="ml-auto flex items-center gap-1 mr-6">
+              <div className="ml-auto flex items-center gap-1 mr-3">
                 {isMuted && <MicOff size={16} className="text-red-500" />}
                 {isDeafened && <HeadphoneOff size={16} className="text-red-500" />}
                 {type === 'video' && !isCameraOn && (
@@ -177,7 +173,7 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
             </div>
           );
         })}
-      </>
+      </div>
     );
   }, [type, channelUsers, user, handleChannelClick, BASE_URL]);
 
