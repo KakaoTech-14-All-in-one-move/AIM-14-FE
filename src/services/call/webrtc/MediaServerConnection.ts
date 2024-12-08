@@ -592,7 +592,7 @@ export class MediaServerConnection {
     if (!this.peerConnection) return;
 
     try {
-      // 화면 공유 트랙 찾기 및 제거
+      // 화면 공유 비디오 트랙만 찾아서 제거
       const senders = this.peerConnection.getSenders();
       const screenSenders = senders.filter(sender =>
         sender.track?.kind === 'video' &&
@@ -600,7 +600,7 @@ export class MediaServerConnection {
         sender.track.label.includes('screen')
       );
 
-      // 모든 화면 공유 트랙 제거
+      // 화면 공유 트랙만 제거
       for (const sender of screenSenders) {
         if (sender.track) {
           sender.track.stop();
@@ -608,23 +608,13 @@ export class MediaServerConnection {
         this.peerConnection.removeTrack(sender);
       }
 
-      // 오디오 전용 스트림으로 복귀
-      const audioStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: false
-      });
-
-      if (audioStream) {
-        const audioTrack = audioStream.getAudioTracks()[0];
-        const existingAudioSender = senders.find(sender =>
-          sender.track?.kind === 'audio'
-        );
-
-        if (existingAudioSender) {
-          await existingAudioSender.replaceTrack(audioTrack);
-        } else {
-          this.peerConnection.addTrack(audioTrack, audioStream);
-        }
+      // 기존 localStream에서 비디오 트랙만 제거
+      if (this.localStream) {
+        const videoTracks = this.localStream.getVideoTracks();
+        videoTracks.forEach(track => {
+          track.stop();
+          this.localStream?.removeTrack(track);
+        });
       }
     } catch (error) {
       console.error('Error stopping screen share:', error);
