@@ -4,6 +4,7 @@ import { Server } from '@/types/server';
 interface User {
   email: string;
   username: string;
+  userId: number;
   profile_image: string;
   servers: Server[];
 }
