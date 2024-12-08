@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { CameraOff, HeadphoneOff, MicOff, MonitorUp, MonitorOff, Video } from 'lucide-react';
+import { CameraOff, HeadphoneOff, MicOff, MonitorUp, MonitorOff, Video, Maximize2, Minimize2 } from 'lucide-react';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage';
 import { ChannelUser } from '@/stores/userChannelStore';
 import { useAuthStore } from '@/stores/authStore.ts';
@@ -7,13 +7,17 @@ import { useAuthStore } from '@/stores/authStore.ts';
 interface VideoUserBoxProps {
   user: ChannelUser;
   isScreenShare?: boolean;
-  totalUsers: number; // 추가된 prop
+  totalUsers: number;
+  onMaximize?: () => void;
+  isMaximized?: boolean;
 }
 
 export const VideoUserBox = React.memo<VideoUserBoxProps>(({
                                                              user,
                                                              isScreenShare = false,
-                                                             totalUsers
+                                                             totalUsers,
+                                                             onMaximize,
+                                                             isMaximized = false
                                                            }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const BASE_URL = import.meta.env.VITE_BE_SERVER_URL;
@@ -22,30 +26,41 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({
 
   // totalUsers에 따른 크기 조정 값 계산
   const sizes = useMemo(() => {
+    console.log("MAX", isMaximized);
+    if (isMaximized) {
+      return {
+        iconSize: 6,      // w-6 h-6
+        profileSize: 12,  // 32px
+        padding: 3,      // p-3
+        textSize: 'xl',  // text-xl
+      };
+    }
+
+    // isMaximized가 false일 때의 기본 크기들
     switch (totalUsers) {
       case 1:
         return {
           iconSize: 6,      // w-6 h-6
-          profileSize: 32,  // 80px
+          profileSize: 32,  // 32px
           padding: 3,      // p-3
           textSize: 'xl',  // text-xl
         };
       case 2:
         return {
           iconSize: 5,      // w-5 h-5
-          profileSize: 20,  // 64px
+          profileSize: 20,  // 24px
           padding: 2,      // p-2
           textSize: 'lg',  // text-lg
         };
       default:
         return {
           iconSize: 4,      // w-4 h-4
-          profileSize: 16,  // 48px
+          profileSize: 16,  // 16px
           padding: 2,      // p-2
           textSize: 'base', // text-base
         };
     }
-  }, [totalUsers]);
+  }, [totalUsers, isMaximized]);
 
   const logStreamInfo = (stream: MediaStream | null, context: string) => {
     console.log(`[Stream Info] ${context}:`, {
@@ -207,7 +222,8 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({
     <div
       className={`relative w-full aspect-video bg-gray-900 rounded-xl overflow-hidden shadow-lg
         ${user.mediaState.isSpeaking && !user.mediaState.isMuted && !isScreenShare ? 'ring-2 ring-green-500' : ''}
-        transition-all duration-200 hover:shadow-xl`}
+        transition-all duration-200 hover:shadow-xl
+        ${isMaximized ? 'h-full' : ''}`}
     >
       {showVideo ? (
         <video
@@ -219,6 +235,23 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({
       ) : (
         <div className="absolute inset-0 flex items-center justify-center">
           <NoStreamDisplay />
+        </div>
+      )}
+
+      {/* 최대화 버튼 */}
+      {isScreenShare && onMaximize && (
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            onMaximize();
+          }}
+          className={`absolute top-4 left-4 bg-gray-800/90 hover:bg-gray-700/90 rounded-full p-${sizes.padding} cursor-pointer transition-colors duration-200`}
+        >
+          {isMaximized ? (
+            <Minimize2 className={`w-${sizes.iconSize} h-${sizes.iconSize} text-white`} />
+          ) : (
+            <Maximize2 className={`w-${sizes.iconSize} h-${sizes.iconSize} text-white`} />
+          )}
         </div>
       )}
 
