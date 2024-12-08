@@ -12,6 +12,7 @@ export interface LoginResponse {
     user: {
       email: string;
       username: string;
+      userId: number;
       profile_image: string;
       servers: Server[]; // 서버 목록 추가
     };
@@ -38,6 +39,7 @@ export interface RegisterResponse {
   user: {
     email: string;
     username: string;
+    userId: number;
     profile_image: string;
   };
 }
