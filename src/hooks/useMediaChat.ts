@@ -15,7 +15,7 @@ export function useMediaChat() {
   const getCurrentUserState = useCallback(() => {
     if (!currentUser?.email || !userChannelStore.currentUserChannel.channelId) return null;
     const channelUsers = userChannelStore.channelUsers.get(userChannelStore.currentUserChannel.channelId) || [];
-    return channelUsers.find(user => user.userId === currentUser.email);
+    return channelUsers.find(user => user.userId === currentUser.userId.toString());
   }, [currentUser, userChannelStore.currentUserChannel.channelId, userChannelStore.channelUsers]);
 
   const toggleMute = useCallback(async () => {

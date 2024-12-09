@@ -28,8 +28,8 @@ export const VoiceContent = () => {
 
     // 현재 유저를 마지막으로 정렬
     const sortedUsers = currentUser ? [
-      ...nonScreenShareUsers.filter(user => user.userId !== currentUser.email),
-      ...nonScreenShareUsers.filter(user => user.userId === currentUser.email),
+      ...nonScreenShareUsers.filter(user => user.userId !== currentUser.userId.toString()),
+      ...nonScreenShareUsers.filter(user => user.userId === currentUser.userId.toString()),
     ] : nonScreenShareUsers;
 
     return { screenShareUser, sortedUsers };

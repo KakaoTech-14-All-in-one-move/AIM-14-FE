@@ -215,7 +215,7 @@ export class MediaServerConnection {
     if (!currentUser?.email) return;
 
     // 기존 오디오 감지 정리 (있다면)
-    this.cleanupAudioDetection(currentUser.email);
+    this.cleanupAudioDetection(currentUser.userId.toString());
 
     try {
       const audioContext = new AudioContext();
@@ -231,7 +231,7 @@ export class MediaServerConnection {
       analyser.smoothingTimeConstant = 0.3;
 
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      this.audioContextMap.set(currentUser.email, { context: audioContext, analyser, dataArray });
+      this.audioContextMap.set(currentUser.userId.toString(), { context: audioContext, analyser, dataArray });
 
       // 음성 감지 인터벌 설정
       if (!this.audioDetectionInterval) {
@@ -404,7 +404,7 @@ export class MediaServerConnection {
 
       // 현재 사용자의 미디어 상태 확인
       const channelUsers = useUserChannelStore.getState().channelUsers.get(currentChannelId) || [];
-      const userState = channelUsers.find(user => user.userId === currentUser.email);
+      const userState = channelUsers.find(user => user.userId === currentUser.userId.toString());
       const isCameraOn = userState?.mediaState.isCameraOn ?? false;
 
       // 미디어 제약 조건 설정
@@ -524,7 +524,7 @@ export class MediaServerConnection {
         if (currentUser?.email && currentChannelId) {
           useUserChannelStore.getState().updateUserMediaState(
             currentChannelId,
-            currentUser.email,
+            currentUser.userId.toString(),
             {
               isScreenSharing: false,
               screenStream: null

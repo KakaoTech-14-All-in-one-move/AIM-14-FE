@@ -99,7 +99,7 @@ export class MediaConnectionManager {
 
       useUserChannelStore.getState().setCurrentUserChannel(channelId, type);
       this.userStateManager.handleUserJoin(channelId, {
-        user_id: currentUser.email,
+        user_id: currentUser.userId.toString(),
         username: currentUser.username,
         profile_image: currentUser.profile_image,
         channel_id: channelId,
@@ -190,7 +190,7 @@ export class MediaConnectionManager {
       // 현재 상태 가져오기
       const channelUsers = useUserChannelStore.getState().channelUsers;
       const currentUserState = channelUsers.get(currentUserChannel.channelId)?.find(
-        user => user.userId === currentUser.email,
+        user => user.userId === currentUser.userId.toString(),
       );
 
       if (!currentUserState) return;
@@ -223,7 +223,7 @@ export class MediaConnectionManager {
               // 상태 롤백 및 early return
               this.userStateManager.handleUserStateUpdate(
                 currentUserChannel.channelId,
-                currentUser.email,
+                currentUser.userId.toString(),
                 {
                   ...serverUpdates,
                   isScreenSharing: false,
@@ -245,7 +245,7 @@ export class MediaConnectionManager {
 
             this.userStateManager.handleUserStateUpdate(
               currentUserChannel.channelId,
-              currentUser.email,
+              currentUser.userId.toString(),
               {
                 ...serverUpdates,
                 screenStream: stream
@@ -256,7 +256,7 @@ export class MediaConnectionManager {
             await this.mediaServer.stopScreenShare();
             this.userStateManager.handleUserStateUpdate(
               currentUserChannel.channelId,
-              currentUser.email,
+              currentUser.userId.toString(),
               {
                 ...serverUpdates,
                 screenStream: null
@@ -289,7 +289,7 @@ export class MediaConnectionManager {
             // 상태 업데이트
             this.userStateManager.handleUserStateUpdate(
               currentUserChannel.channelId,
-              currentUser.email,
+              currentUser.userId.toString(),
               {
                 ...serverUpdates,
                 stream: videoStream
@@ -305,7 +305,7 @@ export class MediaConnectionManager {
             this.mediaServer.replaceStream(audioOnlyStream);
             this.userStateManager.handleUserStateUpdate(
               currentUserChannel.channelId,
-              currentUser.email,
+              currentUser.userId.toString(),
               {
                 ...serverUpdates,
                 stream: audioOnlyStream
@@ -317,7 +317,7 @@ export class MediaConnectionManager {
           // 카메라 상태 변경 실패 시 롤백
           this.userStateManager.handleUserStateUpdate(
             currentUserChannel.channelId,
-            currentUser.email,
+            currentUser.userId.toString(),
             {
               ...serverUpdates,
               isCameraOn: !updates.isCameraOn
@@ -330,7 +330,7 @@ export class MediaConnectionManager {
       // 음소거/음성 차단 상태 변경 처리
       if ('isMuted' in updates || 'isDeafened' in updates) {
         const channelUser = channelUsers.get(currentUserChannel.channelId)?.find(
-          user => user.userId === currentUser.email
+          user => user.userId === currentUser.userId.toString()
         );
 
         if (channelUser?.mediaState.stream) {
