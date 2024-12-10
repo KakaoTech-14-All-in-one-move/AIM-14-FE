@@ -9,7 +9,7 @@ COPY .env.production .env
 #소스 코드 및 환경 변수 파일 복사
 COPY . .
 #npm 의존성 설치
-RUN npm ci
+RUN npm ci --no-cache
 #RUN npm install typescript --save-dev
 #빌드 실행
 RUN npm run build
