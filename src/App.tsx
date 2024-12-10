@@ -7,6 +7,7 @@ import { CallProvider } from '@/services/call/CallProvider';
 import { ChannelNavigationProvider } from '@/components/Provider/ChannelNavigationProvider.tsx';
 
 const App: React.FC = () => {
+  console.log('Current env:', import.meta.env);
   return (
     <Router>
       <ToastProvider>
