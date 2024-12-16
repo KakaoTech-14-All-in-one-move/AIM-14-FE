@@ -1,3 +1,4 @@
+// src/components/Home/Channelbar/ChannelList.tsx
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronDown, HeadphoneOff, MicOff, MonitorUp, Plus, CameraOff } from 'lucide-react';
@@ -9,6 +10,8 @@ import { useVoiceChat } from '@/hooks/useVoiceChat';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage';
 import { useServerStore } from '@/stores/serverStore';
 import { useChannelStore } from '@/stores/channelStore';
+import useWebSocketStore from '@/stores/webSocketStore';
+import useMessageStore from '@/stores/messageStore';
 import { Channel } from '@/types/server';
 
 interface Props {
@@ -38,7 +41,6 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; channel: Channel } | null>(null);
   const [expandedChannels, setExpandedChannels] = useState<Set<string>>(new Set());
 
-  // 현재 타입의 채널들 메모이제이션
   const currentChannels = useMemo(() => channels[type] || [], [channels, type]);
 
   const toggleChannelExpand = useCallback((channelName: string) => {
@@ -70,31 +72,9 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
     }
   };
 
-  const handleRenameChannel = async (channel: Channel) => {
-    const newName = prompt('새 채널 이름을 입력하세요:', channel.channelName);
-    if (!newName || newName === channel.channelName) return;
-
-    try {
-      await channelStore.updateChannelName(channel.serverId, channel.channelId, newName);
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || '채널 이름 변경에 실패했습니다.';
-      alert(errorMessage);
-    }
-  };
-
-  const handleDeleteChannel = async (channel: Channel) => {
-    if (!confirm(`정말로 '${channel.channelName}' 채널을 삭제하시겠습니까?`)) return;
-
-    try {
-      await channelStore.deleteChannel(channel.serverId, channel.channelId);
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || '채널 삭제에 실패했습니다.';
-      alert(errorMessage);
-    }
-  };
-
   const handleChannelClick = useCallback((channel: Channel) => {
     if (type === 'text') {
+      // 채널 이동만 하면 됩니다. ChatArea에서 WebSocket 연결을 처리합니다.
       navigate(`/channels/${channel.serverId}/${channel.channelId}`);
       return;
     }
@@ -130,6 +110,29 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
     navigate(`/${mediaType}/${channel.channelId}`);
     toggleChannelExpand(channel.channelName);
   }, [type, channelStates, connection, navigate, joinChannel, leaveChannel, toggleChannelExpand]);
+
+  const handleRenameChannel = async (channel: Channel) => {
+    const newName = prompt('새 채널 이름을 입력하세요:', channel.channelName);
+    if (!newName || newName === channel.channelName) return;
+
+    try {
+      await channelStore.updateChannelName(channel.serverId, channel.channelId, newName);
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || '채널 이름 변경에 실패했습니다.';
+      alert(errorMessage);
+    }
+  };
+
+  const handleDeleteChannel = async (channel: Channel) => {
+    if (!confirm(`정말로 '${channel.channelName}' 채널을 삭제하시겠습니까?`)) return;
+
+    try {
+      await channelStore.deleteChannel(channel.serverId, channel.channelId);
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || '채널 삭제에 실패했습니다.';
+      alert(errorMessage);
+    }
+  };
 
   const renderChannelMembers = useCallback((channel: Channel) => {
     if (!['voice', 'video'].includes(type)) return null;
@@ -173,13 +176,11 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
     setContextMenu({ x: e.clientX, y: e.clientY, channel });
   }, []);
 
-  // 채널 상태 모니터링
   useEffect(() => {
     if (!['voice', 'video'].includes(type)) return;
 
     const activeChannelUsers = new Map<string, string[]>();
 
-    // 각 채널별 활성 사용자 수집
     voiceChatStore.users.forEach(user => {
       if (user.channel_type === type.toUpperCase()) {
         const channelId = user.channel_id.toString();
@@ -188,7 +189,6 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
       }
     });
 
-    // 현재 채널들의 상태 업데이트
     currentChannels.forEach(channel => {
       const hasUsers = activeChannelUsers.has(channel.channelId.toString());
       if (hasUsers) {
