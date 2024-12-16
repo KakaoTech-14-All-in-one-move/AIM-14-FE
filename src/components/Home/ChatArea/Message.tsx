@@ -40,14 +40,14 @@ const Message: React.FC<MessageProps> = React.memo(
             ? user.profile_image
             : `${import.meta.env.VITE_BE_SERVER_URL}${user.profile_image}`;
         }
-        return generateProfileImageUrl(user?.username || '', 40);
+        return generateProfileImageUrl(user?.username || 'User', 40);
       }
       if (profile_image) {
         return profile_image.startsWith('http')
           ? profile_image
           : `${import.meta.env.VITE_BE_SERVER_URL}${profile_image}`;
       }
-      return generateProfileImageUrl(author.split('(')[0], 40);
+      return generateProfileImageUrl((author || 'Anonymous').split('(')[0], 40);
     }, [isCurrentUser, user, profile_image, author]);
 
     return (
