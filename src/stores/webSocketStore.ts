@@ -1,12 +1,18 @@
 // src/stores/webSocketStore.ts
 import { create } from 'zustand';
 import { apiClient } from '@/api/apiClient';
-import { ChatMessage, WebSocketCommand } from '@/types/chat';
+import { Chat, WebSocketCommand } from '@/types/chat';
+
+interface User {
+  id: string;
+  username: string;
+  profile_image?: string;
+}
 
 interface WebSocketStore {
   sockets: Record<string, WebSocket>;
   isConnected: Record<string, boolean>;
-  messages: Record<string, ChatMessage[]>;
+  messages: Record<string, Chat[]>;
   connect: (channelId: string) => void;
   disconnect: (channelId?: string) => void;
   sendMessage: (channelId: string, content: string, user: any) => void;
@@ -42,7 +48,7 @@ const useWebSocketStore = create<WebSocketStore>((set, get) => ({
         .get(`/ws/v1/channels/${Number(channelId)}/messages`)
         .then((response) => {
           console.log('Received messages:', response.data);
-          const messages: ChatMessage[] = response.data.map((msg: any) => ({
+          const messages: Chat[] = response.data.map((msg: any) => ({
             messageId: msg.messageId || Date.now().toString(),
             channelId: msg.channelId,
             message: msg.message,
@@ -66,7 +72,7 @@ const useWebSocketStore = create<WebSocketStore>((set, get) => ({
     };
 
     newSocket.onmessage = (event) => {
-      const wsMessage: ChatMessage = JSON.parse(event.data);
+      const wsMessage: Chat = JSON.parse(event.data);
       console.log('Received WebSocket message:', wsMessage);
 
       set((state) => ({
@@ -115,24 +121,23 @@ const useWebSocketStore = create<WebSocketStore>((set, get) => ({
     }
   },
 
-  sendMessage: (channelId: string, message: string, user: any) => {
+  sendMessage: (channelId: string, message: string, user: User) => {
     const ws = get().sockets[channelId];
     if (ws && ws.readyState === WebSocket.OPEN) {
-      console.log('Sending WebSocket message:', { user, message }); // 디버깅용 로그 추가
-      ws.send(
-        JSON.stringify({
-          type: 'SEND',
+      const payload = {
+        type: 'SEND',
+        channelId: parseInt(channelId),
+        payload: {
           channelId: parseInt(channelId),
-          payload: {
-            channelId: parseInt(channelId),
-            message,
-            sender: user.email, // id 대신 email 사용
-            senderName: user.username,
-            profile_image: user.profile_image,
-            type: 'TALK',
-          },
-        }),
-      );
+          message,
+          id: user.id, // sender로 사용될 email
+          username: user.username, // senderName으로 사용될 username
+          profile_image: user.profile_image,
+          type: 'TALK',
+        },
+      };
+      console.log('Sending WebSocket payload:', payload);
+      ws.send(JSON.stringify(payload));
     }
   },
 }));
