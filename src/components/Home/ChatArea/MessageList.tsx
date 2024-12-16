@@ -1,4 +1,4 @@
-// src/components/Home/ChatArea/MessageList.tsx
+// MessageList.tsx
 import React, { useEffect, useRef, useMemo } from 'react';
 import useWebSocketStore from '@/stores/webSocketStore';
 import Message from '@/components/Home/ChatArea/Message';
@@ -19,9 +19,10 @@ const MessageList: React.FC<MessageListProps> = ({ channelId }) => {
 
     return messages.reduce((acc, message, index, array) => {
       const showHeader = index === 0 || message.sender !== array[index - 1].sender;
+
       if (showHeader) {
         acc.push({
-          id: message.messageId,
+          id: `${message.messageId}-${Date.now()}-group`,
           author: message.senderName,
           sender: message.sender,
           profile_image: message.profile_image,
