@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { X } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { apiClient } from '@/api/apiClient';
+import { useAuth } from '@/hooks/useAuth';
 import { ProfileSection } from '@/components/UserSettings/ProfileSection';
 import { UserInfoSection } from '@/components/UserSettings/UserInfoSection';
 import { LogoutSection } from '@/components/UserSettings/LogoutSection';
@@ -16,7 +17,7 @@ const UserSettingsModal: React.FC<UserSettingsModalProps> = ({ isOpen, onClose }
     const user = useAuthStore(state => state.user);
     const setUser = useAuthStore(state => state.setUser);
     const setProfileImage = useAuthStore(state => state.setProfileImage);
-    const clearAuth = useAuthStore(state => state.clearAuth);
+    const { logout } = useAuth();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [isUploading, setIsUploading] = useState(false);
@@ -62,7 +63,6 @@ const UserSettingsModal: React.FC<UserSettingsModalProps> = ({ isOpen, onClose }
 
             const { profileImageUrl } = response.data;
             setProfileImage(profileImageUrl);
-
         } catch (error: any) {
             const errorMessage = error.response?.data?.message || '이미지 업로드에 실패했습니다.';
             alert(errorMessage);
@@ -119,8 +119,8 @@ const UserSettingsModal: React.FC<UserSettingsModalProps> = ({ isOpen, onClose }
             setIsDeleting(true);
             await apiClient.client.delete('/api/v1/users/me');
 
-            clearAuth();
             onClose();
+            await logout();
         } catch (error: any) {
             const errorMessage = error.response?.data?.message || '계정 삭제에 실패했습니다. 다시 시도해주세요.';
             alert(errorMessage);
@@ -135,8 +135,8 @@ const UserSettingsModal: React.FC<UserSettingsModalProps> = ({ isOpen, onClose }
         }
 
         try {
-            clearAuth();
             onClose();
+            await logout();
         } catch (error) {
             console.error('Failed to logout:', error);
         }

@@ -37,10 +37,8 @@ export const useAuth = () => {
       console.log('Login response:', response);
 
       if (response?.tokenInfo.accessToken && response?.tokenInfo.refreshToken) {
-        // 직접 response에서 토큰 값을 가져옴
         setTokens(response.tokenInfo.accessToken, response.tokenInfo.refreshToken);
 
-        // 임시 user 객체 생성 (실제 데이터에 맞게 수정 필요)
         const user = {
           email: response.userInfo.email,
           username: response.userInfo.username,
@@ -48,11 +46,8 @@ export const useAuth = () => {
           servers: response.userInfo.servers,
         };
         setUser(user);
-
-        // useServerStore에 서버 정보 저장
         setServers(response.userInfo.servers);
 
-        // 모든 채팅 채널에 WebSocket 연결
         console.log('Initiating WebSocket connections');
         connectToAllChatChannels(response.userInfo.servers);
 
@@ -94,15 +89,26 @@ export const useAuth = () => {
 
   const logout = async () => {
     try {
-      await authApi.logout();
-      // WebSocket 연결 해제
-      useWebSocketStore.getState().disconnect();
-      // Auth 상태 초기화
-      useAuthStore.getState().clearAuth();
+      const cleanup = () => {
+        // WebSocket 연결 해제
+        useWebSocketStore.getState().disconnect();
+        // 로컬 스토리지 정리
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('user');
+        // Auth 상태 초기화
+        useAuthStore.getState().clearAuth();
+        // Servers 상태 초기화
+        useServerStore.getState().setServers([]);
+        // 페이지 강제 이동
+        window.location.href = '/login';
+      };
+
+      cleanup();
       toast.success('로그아웃 되었습니다.');
-      navigate('/login');
     } catch (error) {
       console.error('Logout error:', error);
+      toast.error('로그아웃 중 오류가 발생했습니다.');
     }
   };
 
