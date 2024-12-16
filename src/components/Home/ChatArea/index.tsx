@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
 import ChatHeader from '@/components/Home/ChatArea/ChatHeader';
@@ -10,18 +11,17 @@ const ChatArea: React.FC = () => {
   const { channelId } = useParams<{ channelId?: string }>();
   const location = useLocation();
   const selectedServerId = useServerStore((state) => state.selectedServerId);
-  const { connect, disconnect, isConnected, loadMessages } = useWebSocketStore();
+  const { connect, disconnect } = useWebSocketStore();
 
   useEffect(() => {
-    if (channelId && location.pathname !== '/home' && selectedServerId && !isConnected[channelId]) {
+    if (channelId && location.pathname !== '/home' && selectedServerId) {
       connect(channelId);
-      loadMessages(channelId);
 
       return () => {
-        disconnect();
+        disconnect(channelId);
       };
     }
-  }, [channelId, location.pathname, selectedServerId, isConnected, connect, disconnect, loadMessages]);
+  }, [channelId, location.pathname, selectedServerId]);
 
   if (location.pathname === '/home') {
     return (
