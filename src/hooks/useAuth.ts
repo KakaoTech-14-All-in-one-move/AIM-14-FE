@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuthStore } from '@/stores/authStore';
 import { useServerStore } from '@/stores/serverStore';
+import useWebSocketStore from '@/stores/webSocketStore';
 import { authApi } from '@/api/auth.api';
+import { Server } from '@/types/server';
 import type { LoginRequest, RegisterRequest } from '@/types/auth.types';
 
 export const useAuth = () => {
@@ -11,6 +13,22 @@ export const useAuth = () => {
   const navigate = useNavigate();
   const { setTokens, setUser } = useAuthStore();
   const { setServers } = useServerStore();
+  const connectWebSocket = useWebSocketStore((state) => state.connect);
+
+  const connectToAllChatChannels = useCallback(
+    (servers: Server[]) => {
+      console.log('Connecting to all chat channels:', servers);
+      servers.forEach((server) => {
+        server.channels?.forEach((channel) => {
+          if (channel.channelCategory === 'CHAT') {
+            console.log(`Connecting to chat channel: ${channel.channelId}`);
+            connectWebSocket(channel.channelId.toString());
+          }
+        });
+      });
+    },
+    [connectWebSocket],
+  );
 
   const login = async (data: LoginRequest) => {
     setIsLoading(true);
@@ -25,14 +43,18 @@ export const useAuth = () => {
         // 임시 user 객체 생성 (실제 데이터에 맞게 수정 필요)
         const user = {
           email: response.userInfo.email,
-          username: response.userInfo.username, // 또는 적절한 기본값
-          profile_image: response.userInfo.profile_image, // 기본 프로필 이미지
+          username: response.userInfo.username,
+          profile_image: response.userInfo.profile_image,
           servers: response.userInfo.servers,
         };
         setUser(user);
 
         // useServerStore에 서버 정보 저장
         setServers(response.userInfo.servers);
+
+        // 모든 채팅 채널에 WebSocket 연결
+        console.log('Initiating WebSocket connections');
+        connectToAllChatChannels(response.userInfo.servers);
 
         toast.success('로그인 되었습니다.');
         navigate('/home');
@@ -73,6 +95,9 @@ export const useAuth = () => {
   const logout = async () => {
     try {
       await authApi.logout();
+      // WebSocket 연결 해제
+      useWebSocketStore.getState().disconnect();
+      // Auth 상태 초기화
       useAuthStore.getState().clearAuth();
       toast.success('로그아웃 되었습니다.');
       navigate('/login');
