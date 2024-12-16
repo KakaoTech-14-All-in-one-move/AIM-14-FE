@@ -17,22 +17,37 @@ const Message: React.FC<MessageProps> = React.memo(
 
     const formatDate = useMemo(() => {
       return (dateString: string) => {
-        const date = new Date(dateString);
-        return date.toLocaleString('ko-KR', {
+        // 타임스탬프를 Date 객체로 변환
+        const date = new Date(Number(dateString));
+
+        // 한국 시간대로 포맷팅
+        return new Intl.DateTimeFormat('ko-KR', {
+          timeZone: 'Asia/Seoul',
           year: 'numeric',
           month: 'long',
           day: 'numeric',
           hour: '2-digit',
           minute: '2-digit',
-        });
+          hour12: false, // 24시간제 사용
+        }).format(date);
       };
     }, []);
 
     const displayProfileImage = useMemo(() => {
       if (isCurrentUser) {
-        return user?.profile_image || generateProfileImageUrl(user?.username, 40);
+        if (user?.profile_image) {
+          return user.profile_image.startsWith('http')
+            ? user.profile_image
+            : `${import.meta.env.VITE_BE_SERVER_URL}${user.profile_image}`;
+        }
+        return generateProfileImageUrl(user?.username || '', 40);
       }
-      return profile_image || generateProfileImageUrl(author.split('(')[0], 40);
+      if (profile_image) {
+        return profile_image.startsWith('http')
+          ? profile_image
+          : `${import.meta.env.VITE_BE_SERVER_URL}${profile_image}`;
+      }
+      return generateProfileImageUrl(author.split('(')[0], 40);
     }, [isCurrentUser, user, profile_image, author]);
 
     return (
@@ -40,22 +55,14 @@ const Message: React.FC<MessageProps> = React.memo(
         {showHeader && (
           <div className="flex-shrink-0 mr-3 self-start pt-1">
             <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center overflow-hidden">
-              {profile_image ? (
-                <img
-                  src={profile_image}
-                  alt={author}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.src = generateProfileImageUrl(author.split('(')[0], 40);
-                  }}
-                />
-              ) : (
-                <img
-                  src={displayProfileImage}
-                  alt={author}
-                  className="w-full h-full object-cover"
-                />
-              )}
+              <img
+                src={displayProfileImage}
+                alt={author}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.src = generateProfileImageUrl(author.split('(')[0], 40);
+                }}
+              />
             </div>
           </div>
         )}
