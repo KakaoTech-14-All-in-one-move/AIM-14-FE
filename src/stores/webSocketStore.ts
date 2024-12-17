@@ -1,4 +1,3 @@
-// src/stores/webSocketStore.ts
 import { create } from 'zustand';
 import { apiClient } from '@/api/apiClient';
 import { ChatMessage, WebSocketCommand } from '@/types/chat';
@@ -15,7 +14,7 @@ interface WebSocketStore {
   messages: Record<string, ChatMessage[]>;
   connect: (channelId: string) => void;
   disconnect: (channelId?: string) => void;
-  sendMessage: (channelId: string, content: string, user: any) => void;
+  sendMessage: (channelId: string, content: string, user: User) => void;
 }
 
 const useWebSocketStore = create<WebSocketStore>((set, get) => ({
@@ -59,12 +58,27 @@ const useWebSocketStore = create<WebSocketStore>((set, get) => ({
             profile_image: msg.profile_image,
           }));
 
-          set((state) => ({
-            messages: {
-              ...state.messages,
-              [channelId]: messages,
-            },
-          }));
+          set((state) => {
+            // 현재 채널의 메시지 가져오기
+            const currentMessages = state.messages[channelId] || [];
+
+            // 중복 제거를 위해 Map 사용
+            const messageMap = new Map(currentMessages.map((msg) => [msg.messageId, msg]));
+
+            // 새 메시지 추가
+            messages.forEach((msg) => {
+              messageMap.set(msg.messageId, msg);
+            });
+
+            return {
+              messages: {
+                ...state.messages,
+                [channelId]: Array.from(messageMap.values()).sort(
+                  (a, b) => a.timestamp - b.timestamp,
+                ),
+              },
+            };
+          });
         })
         .catch((error) => {
           console.error('Failed to fetch messages:', error.response?.data || error.message);
@@ -75,12 +89,30 @@ const useWebSocketStore = create<WebSocketStore>((set, get) => ({
       const wsMessage: ChatMessage = JSON.parse(event.data);
       console.log('Received WebSocket message:', wsMessage);
 
-      set((state) => ({
-        messages: {
-          ...state.messages,
-          [channelId]: [...(state.messages[channelId] || []), wsMessage],
-        },
-      }));
+      set((state) => {
+        // 현재 채널의 메시지 목록 가져오기
+        const currentMessages = state.messages[channelId] || [];
+
+        // messageId로 중복 체크
+        const isDuplicate = currentMessages.some((msg) => msg.messageId === wsMessage.messageId);
+
+        // 중복이 아닐 경우에만 메시지 추가
+        if (!isDuplicate) {
+          const newMessages = [...currentMessages, wsMessage].sort(
+            (a, b) => a.timestamp - b.timestamp,
+          );
+
+          return {
+            messages: {
+              ...state.messages,
+              [channelId]: newMessages,
+            },
+          };
+        }
+
+        // 중복일 경우 상태 변경 없음
+        return state;
+      });
     };
 
     newSocket.onclose = () => {
@@ -94,6 +126,10 @@ const useWebSocketStore = create<WebSocketStore>((set, get) => ({
           isConnected: newIsConnected,
         };
       });
+    };
+
+    newSocket.onerror = (error) => {
+      console.error('WebSocket error:', error);
     };
   },
 
@@ -130,8 +166,8 @@ const useWebSocketStore = create<WebSocketStore>((set, get) => ({
         payload: {
           channelId: parseInt(channelId),
           message,
-          id: user.id, // sender로 사용될 email
-          username: user.username, // senderName으로 사용될 username
+          id: user.id,
+          username: user.username,
           profile_image: user.profile_image,
           type: 'TALK',
         },
