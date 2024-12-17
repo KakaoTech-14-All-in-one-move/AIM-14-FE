@@ -72,12 +72,11 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
 
   const handleChannelClick = useCallback((channel: Channel) => {
     if (type === 'text') {
-      // 채널 이동만 하면 됩니다. ChatArea에서 WebSocket 연결을 처리합니다.
       navigate(`/channels/${channel.serverId}/${channel.channelId}`);
       return;
     }
 
-    const mediaType = type as 'voice' | 'video';
+    const mediaType = type as Exclude<ChannelType, 'text'>;
     const isJoined = channelStates[mediaType]?.joined[channel.channelName] || false;
 
     if (isJoined) {
@@ -104,7 +103,7 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
     }
 
     joinChannel(mediaType, channel.channelName);
-    connection?.joinChannel(channel.channelId.toString(), mediaType.toUpperCase());
+    connection?.joinChannel(channel.channelId.toString(), mediaType.toUpperCase() as 'VOICE' | 'VIDEO');
     navigate(`/${mediaType}/${channel.channelId}`);
     toggleChannelExpand(channel.channelName);
   }, [type, channelStates, connection, navigate, joinChannel, leaveChannel, toggleChannelExpand]);
@@ -190,14 +189,15 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
     currentChannels.forEach(channel => {
       const hasUsers = activeChannelUsers.has(channel.channelId.toString());
       if (hasUsers) {
-        activateChannel(type, channel.channelName);
+        // type이 'text'가 아님이 확인되었으므로 Exclude<ChannelType, 'text'> 타입이 됨
+        activateChannel(type as Exclude<ChannelType, 'text'>, channel.channelName);
         setExpandedChannels(prev => {
           const newSet = new Set(prev);
           newSet.add(channel.channelName);
           return newSet;
         });
       } else {
-        deactivateChannel(type, channel.channelName);
+        deactivateChannel(type as Exclude<ChannelType, 'text'>, channel.channelName);
       }
     });
   }, [type, voiceChatStore.users, currentChannels, activateChannel, deactivateChannel]);
