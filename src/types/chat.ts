@@ -1,6 +1,6 @@
-export interface Chat {
+export interface ChatMessage {
   messageId: string;
-  channelId: number;
+  channelId: string;
   timestamp: number;
   type: 'ENTER' | 'TALK' | 'LEAVE';
   sender: string;
@@ -12,5 +12,5 @@ export interface Chat {
 export interface WebSocketCommand {
   type: 'SUBSCRIBE' | 'SEND' | 'UNSUBSCRIBE';
   channelId: number;
-  payload?: Chat;
+  payload?: ChatMessage;
 }
