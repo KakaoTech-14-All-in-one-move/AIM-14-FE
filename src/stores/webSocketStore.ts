@@ -1,7 +1,7 @@
 // src/stores/webSocketStore.ts
 import { create } from 'zustand';
 import { apiClient } from '@/api/apiClient';
-import { Chat, WebSocketCommand } from '@/types/chat';
+import { ChatMessage, WebSocketCommand } from '@/types/chat';
 
 interface User {
   id: string;
@@ -12,7 +12,7 @@ interface User {
 interface WebSocketStore {
   sockets: Record<string, WebSocket>;
   isConnected: Record<string, boolean>;
-  messages: Record<string, Chat[]>;
+  messages: Record<string, ChatMessage[]>;
   connect: (channelId: string) => void;
   disconnect: (channelId?: string) => void;
   sendMessage: (channelId: string, content: string, user: any) => void;
@@ -48,7 +48,7 @@ const useWebSocketStore = create<WebSocketStore>((set, get) => ({
         .get(`/ws/v1/channels/${Number(channelId)}/messages`)
         .then((response) => {
           console.log('Received messages:', response.data);
-          const messages: Chat[] = response.data.map((msg: any) => ({
+          const messages: ChatMessage[] = response.data.map((msg: any) => ({
             messageId: msg.messageId || Date.now().toString(),
             channelId: msg.channelId,
             message: msg.message,
@@ -72,7 +72,7 @@ const useWebSocketStore = create<WebSocketStore>((set, get) => ({
     };
 
     newSocket.onmessage = (event) => {
-      const wsMessage: Chat = JSON.parse(event.data);
+      const wsMessage: ChatMessage = JSON.parse(event.data);
       console.log('Received WebSocket message:', wsMessage);
 
       set((state) => ({
