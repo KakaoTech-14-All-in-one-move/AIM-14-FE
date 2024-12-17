@@ -15,7 +15,9 @@ const Channelbar: React.FC = () => {
           <ChannelList type="voice" icon={Volume2} />
           <ChannelList type="video" icon={Monitor} />
         </div>
-        <ChannelFooter className="bg-discord800" />
+        <div className='bg-discord800'>
+          <ChannelFooter />
+        </div>
       </div>
     </ChannelProvider>
   );
