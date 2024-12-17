@@ -1,12 +1,11 @@
-// src/stores/messageStore.ts
 import { create } from 'zustand';
-import { Message } from '@/types/chat';
+import { ChatMessage } from '@/types/chat';
 import { apiClient } from '@/api/apiClient';
 import { useAuthStore } from '@/stores/authStore';
 import useWebSocketStore from '@/stores/webSocketStore';
 
 interface MessageState {
-  messages: Record<string, Message[]>;
+  messages: Record<string, ChatMessage[]>;
   currentChannelId: string | null;
   isLoading: boolean;
   error: string | null;
@@ -14,7 +13,7 @@ interface MessageState {
 
 interface MessageActions {
   setCurrentChannelId: (channelId: string | null) => void;
-  addMessage: (channelId: string, message: Message) => void;
+  addMessage: (channelId: string, message: ChatMessage) => void;
   addWebSocketMessage: (channelId: string, message: any) => void;
   fetchMessages: (channelId: string) => Promise<void>;
   clearChannelMessages: (channelId: string) => void;
@@ -49,13 +48,15 @@ const useMessageStore = create<MessageState & MessageActions>((set, get) => ({
 
   addWebSocketMessage: (channelId, wsMessage) => {
     console.log('Adding WebSocket message:', wsMessage);
-    const message: Message = {
-      id: wsMessage.id || Date.now().toString(),
-      author: wsMessage.author,
-      content: wsMessage.content,
-      timestamp: wsMessage.timestamp || new Date().toISOString(),
-      profile_image: wsMessage.profileImage,
+    const message: ChatMessage = {
+      messageId: wsMessage.id || Date.now().toString(),
       channelId: channelId,
+      timestamp: Date.now(),
+      type: 'TALK',
+      sender: wsMessage.author,
+      senderName: wsMessage.author,
+      message: wsMessage.content,
+      profile_image: wsMessage.profileImage,
     };
 
     get().addMessage(channelId, message);
@@ -67,7 +68,6 @@ const useMessageStore = create<MessageState & MessageActions>((set, get) => ({
     console.log('Fetching messages for channel:', channelId);
     set({ isLoading: true, error: null });
     try {
-      // 요청 URL과 헤더 로깅
       console.log(
         'Request URL:',
         `${apiClient.client.defaults.baseURL}/ws/v1/channels/${channelId}/messages`,
@@ -85,7 +85,6 @@ const useMessageStore = create<MessageState & MessageActions>((set, get) => ({
       }));
     } catch (error: any) {
       console.error('Error fetching messages:', error);
-      // 에러 상세 정보 출력
       if (error.response) {
         console.error('Error response:', {
           status: error.response.status,
@@ -117,27 +116,25 @@ const useMessageStore = create<MessageState & MessageActions>((set, get) => ({
       return;
     }
 
-    // 임시 메시지 생성
-    const tempMessage: Message = {
-      id: Date.now().toString(),
-      author: user.username,
-      content,
-      timestamp: new Date().toISOString(),
+    const tempMessage: ChatMessage = {
+      messageId: Date.now().toString(),
+      channelId: channelId,
+      timestamp: Date.now(),
+      type: 'TALK',
+      sender: user.username,
+      senderName: user.username,
+      message: content,
       profile_image: user.profile_image,
-      channelId,
     };
 
-    // UI에 메시지 즉시 표시
     get().addMessage(channelId, tempMessage);
 
-    // API를 통해 메시지 전송
     apiClient.client
       .post(`/ws/v1/channels/${channelId}/messages`, {
         content,
       })
       .catch((error) => {
         console.error('Failed to send message:', error);
-        // 메시지 전송 실패 시 처리 로직 추가 가능
       });
   },
 }));
