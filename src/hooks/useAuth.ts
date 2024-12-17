@@ -42,6 +42,7 @@ export const useAuth = () => {
         const user = {
           email: response.userInfo.email,
           username: response.userInfo.username,
+          user_id: response.userInfo.user_id,
           profile_image: response.userInfo.profile_image,
           servers: response.userInfo.servers,
         };
