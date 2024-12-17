@@ -10,8 +10,6 @@ import { useVoiceChat } from '@/hooks/useVoiceChat';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage';
 import { useServerStore } from '@/stores/serverStore';
 import { useChannelStore } from '@/stores/channelStore';
-import useWebSocketStore from '@/stores/webSocketStore';
-import useMessageStore from '@/stores/messageStore';
 import { Channel } from '@/types/server';
 
 interface Props {
