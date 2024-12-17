@@ -1,7 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 import { useAuthStore } from '@/stores/authStore';
 
-const BASE_URL = ''; //import.meta.env.VITE_BE_SERVER_URL
+const BASE_URL = import.meta.env.VITE_BE_SERVER_URL;
 
 export class ApiClient {
   public readonly client: AxiosInstance;
