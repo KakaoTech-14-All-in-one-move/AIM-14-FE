@@ -11,10 +11,19 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://pitching-alb-676018791.ap-northeast-2.elb.amazonaws.com:8080',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+  },
   build: {
     outDir: 'dist',
     rollupOptions: {
-      input: path.resolve(__dirname, 'index.html') // input 형식 수정
-    }
-  }
+      input: path.resolve(__dirname, 'index.html'), // input 형식 수정
+    },
+  },
 });
