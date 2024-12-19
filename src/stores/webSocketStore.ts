@@ -5,7 +5,7 @@ import { ChatMessage, WebSocketCommand } from '@/types/chat';
 interface User {
   id: string;
   username: string;
-  profile_image?: string;
+  profile_image?: string; // snake_case를 camelCase로 변경
 }
 
 interface WebSocketStore {
@@ -15,6 +15,12 @@ interface WebSocketStore {
   connect: (channelId: string) => void;
   disconnect: (channelId?: string) => void;
   sendMessage: (channelId: string, content: string, user: User) => void;
+  updateUserMessages: (
+    channelId: string,
+    userId: string,
+    username: string,
+    profileImage: string,
+  ) => void;
 }
 
 const API_BASE_URL = import.meta.env.VITE_BE_SERVER_URL;
@@ -25,10 +31,16 @@ const useWebSocketStore = create<WebSocketStore>((set, get) => ({
   messages: {},
 
   connect: (channelId: string) => {
+    const numericChannelId = Number(channelId);
+    if (isNaN(numericChannelId) || numericChannelId <= 0) {
+      console.error('Invalid channel ID:', channelId);
+      return;
+    }
+
     const wsUrl = API_BASE_URL.startsWith('https://')
       ? API_BASE_URL.replace('https://', 'wss://')
       : API_BASE_URL.replace('http://', 'ws://');
-    const newSocket = new WebSocket(`${wsUrl}/ws/chat/${channelId}`);
+    const newSocket = new WebSocket(`${wsUrl}/ws/chat/${numericChannelId}`);
 
     newSocket.onopen = () => {
       set((state) => {
@@ -44,33 +56,28 @@ const useWebSocketStore = create<WebSocketStore>((set, get) => ({
 
       const subscribeCommand: WebSocketCommand = {
         type: 'SUBSCRIBE',
-        channelId: Number(channelId),
+        channelId: numericChannelId,
       };
       newSocket.send(JSON.stringify(subscribeCommand));
 
       apiClient.client
-        .get(`/ws/v1/channels/${Number(channelId)}/messages`)
+        .get(`/ws/v1/channels/${numericChannelId}/messages`)
         .then((response) => {
           console.log('Received messages:', response.data);
           const messages: ChatMessage[] = response.data.map((msg: any) => ({
-            messageId: msg.messageId || Date.now().toString(),
+            messageId: msg.messageId,
             channelId: msg.channelId,
             message: msg.message,
             sender: msg.sender,
             senderName: msg.senderName,
             timestamp: msg.timestamp,
             type: msg.type,
-            profile_image: msg.profile_image,
+            profile_image: msg.profile_image, // snake_case를 camelCase로 변경
           }));
 
           set((state) => {
-            // 현재 채널의 메시지 가져오기
             const currentMessages = state.messages[channelId] || [];
-
-            // 중복 제거를 위해 Map 사용
             const messageMap = new Map(currentMessages.map((msg) => [msg.messageId, msg]));
-
-            // 새 메시지 추가
             messages.forEach((msg) => {
               messageMap.set(msg.messageId, msg);
             });
@@ -86,38 +93,50 @@ const useWebSocketStore = create<WebSocketStore>((set, get) => ({
           });
         })
         .catch((error) => {
-          console.error('Failed to fetch messages:', error.response?.data || error.message);
+          console.error(
+            'Failed to fetch messages:',
+            error.response?.data?.message || error.message,
+          );
         });
     };
 
     newSocket.onmessage = (event) => {
-      const wsMessage: ChatMessage = JSON.parse(event.data);
-      console.log('Received WebSocket message:', wsMessage);
+      try {
+        const wsMessage = JSON.parse(event.data);
 
-      set((state) => {
-        // 현재 채널의 메시지 목록 가져오기
-        const currentMessages = state.messages[channelId] || [];
-
-        // messageId로 중복 체크
-        const isDuplicate = currentMessages.some((msg) => msg.messageId === wsMessage.messageId);
-
-        // 중복이 아닐 경우에만 메시지 추가
-        if (!isDuplicate) {
-          const newMessages = [...currentMessages, wsMessage].sort(
-            (a, b) => a.timestamp - b.timestamp,
+        if (wsMessage.type === 'USER_UPDATE') {
+          get().updateUserMessages(
+            channelId,
+            wsMessage.userId,
+            wsMessage.username,
+            wsMessage.profileImage,
           );
+        } else {
+          // 기존 메시지 처리 로직
+          set((state) => {
+            const currentMessages = state.messages[channelId] || [];
+            const isDuplicate = currentMessages.some(
+              (msg) => msg.messageId === wsMessage.messageId,
+            );
 
-          return {
-            messages: {
-              ...state.messages,
-              [channelId]: newMessages,
-            },
-          };
+            if (!isDuplicate) {
+              const newMessages = [...currentMessages, wsMessage].sort(
+                (a, b) => a.timestamp - b.timestamp,
+              );
+
+              return {
+                messages: {
+                  ...state.messages,
+                  [channelId]: newMessages,
+                },
+              };
+            }
+            return state;
+          });
         }
-
-        // 중복일 경우 상태 변경 없음
-        return state;
-      });
+      } catch (error) {
+        console.error('Error processing WebSocket message:', error);
+      }
     };
 
     newSocket.onclose = () => {
@@ -163,23 +182,47 @@ const useWebSocketStore = create<WebSocketStore>((set, get) => ({
   },
 
   sendMessage: (channelId: string, message: string, user: User) => {
+    const numericChannelId = Number(channelId);
+    if (isNaN(numericChannelId) || numericChannelId <= 0) {
+      console.error('Invalid channel ID:', channelId);
+      return;
+    }
+
     const ws = get().sockets[channelId];
     if (ws && ws.readyState === WebSocket.OPEN) {
       const payload = {
         type: 'SEND',
-        channelId: parseInt(channelId),
+        channelId: numericChannelId,
         payload: {
-          channelId: parseInt(channelId),
+          channelId: numericChannelId,
           message,
           id: user.id,
-          username: user.username,
-          profile_image: user.profile_image,
           type: 'TALK',
         },
       };
       console.log('Sending WebSocket payload:', payload);
       ws.send(JSON.stringify(payload));
     }
+  },
+
+  updateUserMessages: (channelId, userId, username, profileImage) => {
+    set((state) => {
+      const newMessages = { ...state.messages };
+
+      if (newMessages[channelId]) {
+        newMessages[channelId] = newMessages[channelId].map((msg) =>
+          msg.sender === userId
+            ? {
+                ...msg,
+                senderName: username,
+                profileImage: profileImage,
+              }
+            : msg,
+        );
+      }
+
+      return { messages: newMessages };
+    });
   },
 }));
 
