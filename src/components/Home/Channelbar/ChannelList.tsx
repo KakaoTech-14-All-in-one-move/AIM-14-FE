@@ -1,7 +1,7 @@
 // src/components/Home/Channelbar/ChannelList.tsx
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronDown, HeadphoneOff, MicOff, MonitorUp, Plus, CameraOff } from 'lucide-react';=
+import { ChevronDown, HeadphoneOff, MicOff, MonitorUp, Plus, CameraOff } from 'lucide-react';
 import { ChannelType } from '@/components/Home/Channelbar/types';
 import { useChannels } from '@/components/Home/Channelbar/ChannelContext';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage';
