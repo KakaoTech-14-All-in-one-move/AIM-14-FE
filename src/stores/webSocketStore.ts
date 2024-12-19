@@ -17,13 +17,18 @@ interface WebSocketStore {
   sendMessage: (channelId: string, content: string, user: User) => void;
 }
 
+const API_BASE_URL = import.meta.env.VITE_BE_SERVER_URL;
+
 const useWebSocketStore = create<WebSocketStore>((set, get) => ({
   sockets: {},
   isConnected: {},
   messages: {},
 
   connect: (channelId: string) => {
-    const newSocket = new WebSocket(`ws://localhost:8080/ws/chat/${channelId}`);
+    const wsUrl = API_BASE_URL.startsWith('https://')
+      ? API_BASE_URL.replace('https://', 'wss://')
+      : API_BASE_URL.replace('http://', 'ws://');
+    const newSocket = new WebSocket(`${wsUrl}/ws/chat/${channelId}`);
 
     newSocket.onopen = () => {
       set((state) => {
