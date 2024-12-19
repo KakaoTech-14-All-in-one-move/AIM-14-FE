@@ -1,12 +1,12 @@
 export interface ChatMessage {
   messageId: string;
-  channelId: string;
-  timestamp: number;
-  type: 'ENTER' | 'TALK' | 'LEAVE';
-  sender: string;
-  senderName: string;
+  channelId: number;
   message: string;
-  profile_image?: string;
+  sender: string; // email
+  senderName: string; // 현재 username
+  timestamp: number;
+  type: string;
+  profile_image: string; // 현재 profile image, snake_case에서 camelCase로 변경
 }
 
 export interface WebSocketCommand {
