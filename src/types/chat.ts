@@ -6,7 +6,7 @@ export interface ChatMessage {
   senderName: string; // 현재 username
   timestamp: number;
   type: string;
-  profile_image: string; // 현재 profile image, snake_case에서 camelCase로 변경
+  profile_image: string;
 }
 
 export interface WebSocketCommand {
