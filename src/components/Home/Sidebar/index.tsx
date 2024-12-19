@@ -18,11 +18,10 @@ const Sidebar: FC = () => {
   const { setCurrentChannel, setChannels } = useChannelStore();
 
   const BASE_URL = import.meta.env.VITE_BE_SERVER_URL;
-  
+
   const { connection } = useCall();
   const { currentUserChannel } = useUserChannelStore();
   const mediaManager = MediaConnectionManager.getInstance();
-  const navigate = useNavigate();
   const location = useLocation();
 
   const handleServerChange = useCallback(async (serverId: number) => {
@@ -65,7 +64,7 @@ const Sidebar: FC = () => {
     if (imageUrl.startsWith('http')) return imageUrl;
     return `${BASE_URL}${imageUrl}`;
   };
-  
+
   const selectOldestChatChannel = async (serverId: number) => {
     try {
       const response = await apiClient.client.get(`/api/v1/servers/${serverId}/channels`);
@@ -91,7 +90,7 @@ const Sidebar: FC = () => {
     setSelectedServerId(serverId);
     selectOldestChatChannel(serverId);
   };
-      
+
   const handleImageUpload = async (serverId: number, file: File) => {
     try {
       if (!user) return;
@@ -168,12 +167,12 @@ const Sidebar: FC = () => {
 
       const serverStore = useServerStore.getState();
       serverStore.addServer(newServer);
-      
+
       serverStore.setSelectedServerId(newServer.server_id);
       selectOldestChatChannel(newServer.server_id);
-      
+
       await handleServerChange(newServer.server_id);
-      
+
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || '서버 생성에 실패했습니다.';
       alert(errorMessage);
@@ -211,9 +210,9 @@ const Sidebar: FC = () => {
           setCurrentChannel(null);
           setChannels([]);
           navigate('/home');
-          
+
           await handleServerChange(remainingServers[0].server_id);
-       
+
         }
       }
     } catch (error: any) {
@@ -264,7 +263,7 @@ const Sidebar: FC = () => {
           setCurrentChannel(null);
           setChannels([]);
           navigate('/home');
-          
+
           if (user?.servers?.length! > 0) {
             const firstServer = user!.servers[0];
             handleServerChange(firstServer.server_id);
@@ -289,11 +288,11 @@ const Sidebar: FC = () => {
           }
           text={server.server_name}
           isSelected={selectedServerId === server.server_id}
-          
+
           onClick={() => handleServerSelect(server.server_id)}
-          
+
           onClick={() => handleServerChange(server.server_id)}
-          
+
           onRename={(newName) => handleRenameServer(server.server_id, newName)}
           onRemove={() => handleRemoveServer(server.server_id)}
           onImageUpload={(file) => handleImageUpload(server.server_id, file)}
