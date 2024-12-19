@@ -109,7 +109,7 @@ const useWebSocketStore = create<WebSocketStore>((set, get) => ({
             channelId,
             wsMessage.userId,
             wsMessage.username,
-            wsMessage.profileImage,
+            wsMessage.profile_image,
           );
         } else {
           // 기존 메시지 처리 로직
@@ -215,7 +215,7 @@ const useWebSocketStore = create<WebSocketStore>((set, get) => ({
             ? {
                 ...msg,
                 senderName: username,
-                profileImage: profileImage,
+                profile_image: profileImage,
               }
             : msg,
         );
