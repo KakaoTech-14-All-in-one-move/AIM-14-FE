@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { ChannelContextType, Channels, ChannelStateType, ChannelType } from './types';
+import { ChannelContextType, ChannelStateType, ChannelType } from './types';
 import { useAuthStore } from '@/stores/authStore';
 import { useServerStore } from '@/stores/serverStore';
 import { Channel } from '@/types/server';

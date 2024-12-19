@@ -25,7 +25,7 @@ export const OAuth2Callback = () => {
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
-
+        console.log('OAuth2Callback params:', params.toString());
         const accessToken = params.get('accessToken');
         const refreshToken = params.get('refreshToken');
         const serversParam = params.get('servers');
@@ -53,6 +53,7 @@ export const OAuth2Callback = () => {
             profile_image: params.get('profile_image') || '',
             servers: servers
         };
+        console.log('User info:', userInfo);
 
         setUser(userInfo);
         setServers(servers);

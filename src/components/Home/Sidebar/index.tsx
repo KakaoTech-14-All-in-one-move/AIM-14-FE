@@ -1,12 +1,15 @@
-import React, { FC } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { FC, useCallback, useEffect } from 'react';
 import { SidebarIcon } from '@/components/Home/Sidebar/SidebarIcon';
 import { HomeIcon } from '@/components/Home/Sidebar/icons/HomeIcon';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { useServerStore } from '@/stores/serverStore';
 import { useChannelStore } from '@/stores/channelStore';
 import { apiClient } from '@/api/apiClient';
 import { Channel, Server } from '@/types/server';
+import { useCall } from '@/services/call/CallProvider';
+import { MediaConnectionManager } from '@/services/call/MediaConnectionManager';
+import { useUserChannelStore } from '@/stores/userChannelStore';
 
 const Sidebar: FC = () => {
   const navigate = useNavigate();
@@ -15,13 +18,54 @@ const Sidebar: FC = () => {
   const { setCurrentChannel, setChannels } = useChannelStore();
 
   const BASE_URL = import.meta.env.VITE_BE_SERVER_URL;
+  
+  const { connection } = useCall();
+  const { currentUserChannel } = useUserChannelStore();
+  const mediaManager = MediaConnectionManager.getInstance();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleServerChange = useCallback(async (serverId: number) => {
+    if (!connection) {
+      console.error('No connection available');
+      return;
+    }
+
+    try {
+      // 현재 채널이 있다면 먼저 나가기
+      if (currentUserChannel.channelId) {
+        await mediaManager.leaveChannel();
+      }
+
+      // 새 서버 입장 요청 및 연결 업데이트
+      const success = await connection.setCurrentServerId(serverId.toString());
+      if (!success) {
+        throw new Error('Failed to connect to server');
+      }
+
+      setSelectedServerId(serverId);
+      navigate(`/channels/${serverId}`);
+
+    } catch (error) {
+      console.error('Server change failed:', error);
+      alert('서버 변경에 실패했습니다.');
+    }
+  }, [connection, currentUserChannel.channelId, mediaManager, setSelectedServerId, navigate]);
+
+  useEffect(() => {
+    const isRootPath = location.pathname === '/';
+    if (isRootPath && user?.servers?.length! > 0) {
+      const firstServer = user!.servers[0];
+      handleServerChange(firstServer.server_id);
+    }
+  }, [user?.servers, location.pathname, handleServerChange]);
 
   const getFullImageUrl = (imageUrl: string | undefined) => {
     if (!imageUrl) return undefined;
     if (imageUrl.startsWith('http')) return imageUrl;
     return `${BASE_URL}${imageUrl}`;
   };
-
+  
   const selectOldestChatChannel = async (serverId: number) => {
     try {
       const response = await apiClient.client.get(`/api/v1/servers/${serverId}/channels`);
@@ -47,6 +91,65 @@ const Sidebar: FC = () => {
     setSelectedServerId(serverId);
     selectOldestChatChannel(serverId);
   };
+      
+  const handleImageUpload = async (serverId: number, file: File) => {
+    try {
+      if (!user) return;
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await apiClient.client.post(
+        `/api/v1/servers/${serverId}/image`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        },
+      );
+
+      const { serverImageUrl } = response.data;
+
+      setUser({
+        ...user,
+        servers: user.servers.map(server =>
+          server.server_id === serverId
+            ? { ...server, server_image: BASE_URL + serverImageUrl }
+            : server,
+        ),
+      });
+
+      const serverStore = useServerStore.getState();
+      serverStore.setServers(
+        serverStore.servers.map(server =>
+          server.server_id === serverId
+            ? { ...server, server_image: BASE_URL + serverImageUrl }
+            : server,
+        ),
+      );
+
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || '서버 이미지 업로드에 실패했습니다.';
+      alert(errorMessage);
+    }
+  };
+
+  const handleInvite = async (serverId: number) => {
+    try {
+      const email = prompt('초대할 멤버의 이메일을 입력하세요:');
+      if (!email || !email.trim()) return;
+
+      await apiClient.client.post(`/api/v1/servers/${serverId}/invite`, {
+        email: email.trim(),
+      });
+
+      alert('멤버를 성공적으로 초대했습니다.');
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || '멤버 초대에 실패했습니다.';
+      alert(errorMessage);
+    }
+  };
 
   const handleAddServer = async () => {
     try {
@@ -54,19 +157,23 @@ const Sidebar: FC = () => {
       if (!name || !user) return;
 
       const response = await apiClient.client.post('/api/v1/servers', {
-        server_name: name
+        server_name: name,
       });
       const newServer: Server = response.data;
 
       setUser({
         ...user,
-        servers: [...(user.servers || []), newServer]
+        servers: [...(user.servers || []), newServer],
       });
 
       const serverStore = useServerStore.getState();
       serverStore.addServer(newServer);
+      
       serverStore.setSelectedServerId(newServer.server_id);
       selectOldestChatChannel(newServer.server_id);
+      
+      await handleServerChange(newServer.server_id);
+      
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || '서버 생성에 실패했습니다.';
       alert(errorMessage);
@@ -90,9 +197,10 @@ const Sidebar: FC = () => {
 
       setUser({
         ...user,
-        servers: user.servers.filter(server => server.server_id !== serverId)
+        servers: user.servers.filter(server => server.server_id !== serverId),
       });
 
+      // 현재 서버가 삭제된 경우 다른 서버로 이동
       if (selectedServerId === serverId) {
         const remainingServers = user.servers.filter(s => s.server_id !== serverId);
         if (remainingServers.length > 0) {
@@ -103,6 +211,9 @@ const Sidebar: FC = () => {
           setCurrentChannel(null);
           setChannels([]);
           navigate('/home');
+          
+          await handleServerChange(remainingServers[0].server_id);
+       
         }
       }
     } catch (error: any) {
@@ -116,7 +227,7 @@ const Sidebar: FC = () => {
       if (!user) return;
 
       await apiClient.client.put(`/api/v1/servers/${serverId}/name`, {
-        server_name: newName
+        server_name: newName,
       });
 
       setUser({
@@ -125,7 +236,7 @@ const Sidebar: FC = () => {
           server.server_id === serverId
             ? { ...server, server_name: newName }
             : server
-        )
+        ),
       });
 
       const serverStore = useServerStore.getState();
@@ -134,59 +245,10 @@ const Sidebar: FC = () => {
           server.server_id === serverId
             ? { ...server, server_name: newName }
             : server
-        )
+        ),
       );
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || '서버 이름 변경에 실패했습니다.';
-      alert(errorMessage);
-    }
-  };
-
-  const handleImageUpload = async (serverId: number, file: File) => {
-    try {
-      if (!user) return;
-
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await apiClient.client.post(
-        `/api/v1/servers/${serverId}/image`,
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        }
-      );
-
-      const { serverImageUrl } = response.data;
-
-      setUser({
-        ...user,
-        servers: user.servers.map(server =>
-          server.server_id === serverId
-            ? { ...server, server_image: BASE_URL + serverImageUrl }
-            : server
-        )
-      });
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || '서버 이미지 업로드에 실패했습니다.';
-      alert(errorMessage);
-    }
-  };
-
-  const handleInvite = async (serverId: number) => {
-    try {
-      const email = prompt('초대할 멤버의 이메일을 입력하세요:');
-      if (!email || !email.trim()) return;
-
-      await apiClient.client.post(`/api/v1/servers/${serverId}/invite`, {
-        email: email.trim()
-      });
-
-      alert('멤버를 성공적으로 초대했습니다.');
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || '멤버 초대에 실패했습니다.';
       alert(errorMessage);
     }
   };
@@ -202,6 +264,11 @@ const Sidebar: FC = () => {
           setCurrentChannel(null);
           setChannels([]);
           navigate('/home');
+          
+          if (user?.servers?.length! > 0) {
+            const firstServer = user!.servers[0];
+            handleServerChange(firstServer.server_id);
+          }
         }}
       />
       {user?.servers?.map((server) => (
@@ -222,7 +289,11 @@ const Sidebar: FC = () => {
           }
           text={server.server_name}
           isSelected={selectedServerId === server.server_id}
+          
           onClick={() => handleServerSelect(server.server_id)}
+          
+          onClick={() => handleServerChange(server.server_id)}
+          
           onRename={(newName) => handleRenameServer(server.server_id, newName)}
           onRemove={() => handleRemoveServer(server.server_id)}
           onImageUpload={(file) => handleImageUpload(server.server_id, file)}
@@ -240,4 +311,4 @@ const Sidebar: FC = () => {
   );
 };
 
-export default Sidebar;
+export default Sidebar
