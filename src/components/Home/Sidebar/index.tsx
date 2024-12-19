@@ -1,20 +1,51 @@
-import React from 'react';
+import React, { FC } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { SidebarIcon } from '@/components/Home/Sidebar/SidebarIcon';
 import { HomeIcon } from '@/components/Home/Sidebar/icons/HomeIcon';
 import { useAuthStore } from '@/stores/authStore';
 import { useServerStore } from '@/stores/serverStore';
+import { useChannelStore } from '@/stores/channelStore';
 import { apiClient } from '@/api/apiClient';
+import { Channel, Server } from '@/types/server';
 
-const Sidebar: React.FC = () => {
+const Sidebar: FC = () => {
+  const navigate = useNavigate();
   const { user, setUser } = useAuthStore();
   const { selectedServerId, setSelectedServerId } = useServerStore();
+  const { setCurrentChannel, setChannels } = useChannelStore();
 
-  const BASE_URL = import.meta.env.VITE_BE_SERVER_URL
+  const BASE_URL = import.meta.env.VITE_BE_SERVER_URL;
 
   const getFullImageUrl = (imageUrl: string | undefined) => {
     if (!imageUrl) return undefined;
     if (imageUrl.startsWith('http')) return imageUrl;
     return `${BASE_URL}${imageUrl}`;
+  };
+
+  const selectOldestChatChannel = async (serverId: number) => {
+    try {
+      const response = await apiClient.client.get(`/api/v1/servers/${serverId}/channels`);
+      const channels: Channel[] = response.data;
+
+      setChannels(channels);
+
+      const chatChannels = channels
+        .filter(channel => channel.channelCategory === 'CHAT')
+        .sort((a, b) => a.channelPosition - b.channelPosition);
+
+      if (chatChannels.length > 0) {
+        const oldestChannel = chatChannels[0];
+        setCurrentChannel(oldestChannel);
+        navigate(`/channels/${serverId}/${oldestChannel.channelId}`);
+      }
+    } catch (error) {
+      console.error('채널 목록을 불러오는데 실패했습니다:', error);
+    }
+  };
+
+  const handleServerSelect = (serverId: number) => {
+    setSelectedServerId(serverId);
+    selectOldestChatChannel(serverId);
   };
 
   const handleAddServer = async () => {
@@ -25,17 +56,17 @@ const Sidebar: React.FC = () => {
       const response = await apiClient.client.post('/api/v1/servers', {
         server_name: name
       });
-      const newServer = response.data;
+      const newServer: Server = response.data;
 
       setUser({
         ...user,
         servers: [...(user.servers || []), newServer]
       });
 
-      // serverStore에도 추가 
       const serverStore = useServerStore.getState();
       serverStore.addServer(newServer);
       serverStore.setSelectedServerId(newServer.server_id);
+      selectOldestChatChannel(newServer.server_id);
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || '서버 생성에 실패했습니다.';
       alert(errorMessage);
@@ -46,11 +77,9 @@ const Sidebar: React.FC = () => {
     try {
       if (!user) return;
 
-      // 서버 이름 찾기
       const serverToDelete = user.servers.find(server => server.server_id === serverId);
       if (!serverToDelete) return;
 
-      // 확인 대화상자 표시
       const isConfirmed = window.confirm(
         `'${serverToDelete.server_name}' 서버를 정말로 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`
       );
@@ -66,7 +95,15 @@ const Sidebar: React.FC = () => {
 
       if (selectedServerId === serverId) {
         const remainingServers = user.servers.filter(s => s.server_id !== serverId);
-        setSelectedServerId(remainingServers.length > 0 ? remainingServers[0].server_id : null);
+        if (remainingServers.length > 0) {
+          setSelectedServerId(remainingServers[0].server_id);
+          selectOldestChatChannel(remainingServers[0].server_id);
+        } else {
+          setSelectedServerId(null);
+          setCurrentChannel(null);
+          setChannels([]);
+          navigate('/home');
+        }
       }
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || '서버 삭제에 실패했습니다.';
@@ -160,7 +197,12 @@ const Sidebar: React.FC = () => {
         icon={<HomeIcon />}
         text="홈"
         isSelected={selectedServerId === null}
-        onClick={() => setSelectedServerId(null)}
+        onClick={() => {
+          setSelectedServerId(null);
+          setCurrentChannel(null);
+          setChannels([]);
+          navigate('/home');
+        }}
       />
       {user?.servers?.map((server) => (
         <SidebarIcon
@@ -180,7 +222,7 @@ const Sidebar: React.FC = () => {
           }
           text={server.server_name}
           isSelected={selectedServerId === server.server_id}
-          onClick={() => setSelectedServerId(server.server_id)}
+          onClick={() => handleServerSelect(server.server_id)}
           onRename={(newName) => handleRenameServer(server.server_id, newName)}
           onRemove={() => handleRemoveServer(server.server_id)}
           onImageUpload={(file) => handleImageUpload(server.server_id, file)}
