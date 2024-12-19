@@ -6,19 +6,17 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-  data: {
+  tokenInfo: {
     accessToken: string;
     refreshToken: string;
-    user: {
-      email: string;
-      username: string;
-      userId: number;
-      profile_image: string;
-      servers: Server[]; // 서버 목록 추가
-    };
   };
-  status: number;
-  message: string;
+  userInfo: {
+    email: string;
+    username: string;
+    user_id: number;
+    profile_image: string;
+    servers: Server[];
+  };
 }
 
 export interface ApiResponse<T> {
@@ -34,9 +32,11 @@ export interface RegisterRequest {
 }
 
 export interface RegisterResponse {
-  accessToken: string;
-  refreshToken: string;
-  user: {
+  tokenInfo: {
+    accessToken: string;
+    refreshToken: string;
+  };
+  userInfo: {
     email: string;
     username: string;
     userId: number;

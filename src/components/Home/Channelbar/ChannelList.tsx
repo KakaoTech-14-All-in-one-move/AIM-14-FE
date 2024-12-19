@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { CameraOff, ChevronDown, HeadphoneOff, MicOff, MonitorUp, Plus } from 'lucide-react';
+// src/components/Home/Channelbar/ChannelList.tsx
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ChevronDown, HeadphoneOff, MicOff, MonitorUp, Plus, CameraOff } from 'lucide-react';
 import { ChannelType } from '@/components/Home/Channelbar/types';
 import { useChannels } from '@/components/Home/Channelbar/ChannelContext';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage';
@@ -66,28 +67,7 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
     }
   };
 
-  const handleRenameChannel = async (channel: Channel) => {
-    const newName = prompt('새 채널 이름을 입력하세요:', channel.channelName);
-    if (!newName || newName === channel.channelName) return;
-
-    try {
-      await channelStore.updateChannelName(channel.serverId, channel.channelId, newName);
-    } catch (error: any) {
-      alert(error.response?.data?.message || '채널 이름 변경에 실패했습니다.');
-    }
-  };
-
-  const handleDeleteChannel = async (channel: Channel) => {
-    if (!confirm(`정말로 '${channel.channelName}' 채널을 삭제하시겠습니까?`)) return;
-
-    try {
-      await channelStore.deleteChannel(channel.serverId, channel.channelId);
-    } catch (error: any) {
-      alert(error.response?.data?.message || '채널 삭제에 실패했습니다.');
-    }
-  };
-
-  const handleChannelClick = useCallback(async (channel: Channel, isMemberClick: boolean = false) => {
+  const handleChannelClick = useCallback(async (channel: Channel, isMemberClick: boolean = false) => {  // Add 'async' here
     if (type === 'text') {
       navigate(`/channels/${channel.serverId}/${channel.channelId}`);
       return;
@@ -128,6 +108,29 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
     toggleChannelExpand(channel.channelName);
   }, [type, currentUserChannel.channelId, currentChannels, toggleChannelExpand, navigate]);
 
+
+  const handleRenameChannel = async (channel: Channel) => {
+    const newName = prompt('새 채널 이름을 입력하세요:', channel.channelName);
+    if (!newName || newName === channel.channelName) return;
+
+    try {
+      await channelStore.updateChannelName(channel.serverId, channel.channelId, newName);
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || '채널 이름 변경에 실패했습니다.';
+      alert(errorMessage);
+    }
+  };
+
+  const handleDeleteChannel = async (channel: Channel) => {
+    if (!confirm(`정말로 '${channel.channelName}' 채널을 삭제하시겠습니까?`)) return;
+
+    try {
+      await channelStore.deleteChannel(channel.serverId, channel.channelId);
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || '채널 삭제에 실패했습니다.';
+      alert(errorMessage);
+    }
+  };
 
   const renderChannelMembers = useCallback((channel: Channel) => {
     if (!['voice', 'video'].includes(type)) return null;

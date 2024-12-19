@@ -1,12 +1,27 @@
-import { useEffect } from 'react';
+// src/components/OAuth2Callback.tsx
+import { useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { useServerStore } from '@/stores/serverStore';
+import useWebSocketStore from '@/stores/webSocketStore';
+import { Server } from '@/types/server';
 
 export const OAuth2Callback = () => {
     const navigate = useNavigate();
     const { setTokens, setUser } = useAuthStore();
     const { setServers } = useServerStore();
+    const connectWebSocket = useWebSocketStore(state => state.connect);
+
+    const connectToAllChatChannels = useCallback((servers: Server[]) => {
+        servers.forEach(server => {
+            server.channels?.forEach(channel => {
+                if (channel.channelCategory === 'CHAT') {
+                    console.log(`Connecting to chat channel: ${channel.channelId}`);
+                    connectWebSocket(channel.channelId.toString());
+                }
+            });
+        });
+    }, [connectWebSocket]);
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
@@ -20,10 +35,8 @@ export const OAuth2Callback = () => {
             return;
         }
 
-        // Zustand store에 토큰 저장
         setTokens(accessToken, refreshToken);
 
-        // servers 파라미터가 있으면 파싱
         let servers = [];
         try {
             if (serversParam) {
@@ -33,27 +46,23 @@ export const OAuth2Callback = () => {
             console.error('Error parsing servers:', error);
         }
 
-        // 사용자 정보에 servers 포함
         const userInfo = {
             email: params.get('email') || '',
             username: params.get('username') || '',
-            userId: parseInt(params.get('userId') || '0', 10),
+            user_id: parseInt(params.get('user_id') || '0'),
             profile_image: params.get('profile_image') || '',
             servers: servers
         };
         console.log('User info:', userInfo);
 
         setUser(userInfo);
-
-        // useServerStore에 서버 정보 저장
         setServers(servers);
 
-        // CallProvider가 자동으로 인증 상태를 감지하고 웹소켓 연결을 시작함
+        // 모든 채팅 채널에 WebSocket 연결
+        connectToAllChatChannels(servers);
 
-        return () => {
-            navigate('/home', { replace: true });
-        };
-    }, [navigate, setTokens, setUser, setServers]);
+        navigate('/home', { replace: true });
+    }, [navigate, setTokens, setUser, setServers, connectToAllChatChannels]);
 
     return (
         <div className="flex items-center justify-center min-h-screen bg-discord900">

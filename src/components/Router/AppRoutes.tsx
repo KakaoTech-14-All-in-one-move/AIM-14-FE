@@ -1,3 +1,4 @@
+// src/components/Router/AppRoutes.tsx
 import React from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import Home from '@/components/Home';
@@ -12,7 +13,6 @@ import Video from '@/components/Video';
 import Feedback from '@/components/feedback';
 
 export const AppRoutes: React.FC = () => {
-  // 전역적으로 인증 상태 체크
   const isAuthenticated = () => {
     const accessToken = localStorage.getItem('accessToken');
     const refreshToken = localStorage.getItem('refreshToken');
@@ -52,10 +52,18 @@ export const AppRoutes: React.FC = () => {
           }
         />
         <Route
+          path="/channels/:serverId/:channelId"
+          element={
+            <ProtectedRoute>
+              <Home />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/record"
           element={
             <ProtectedRoute>
-              <Record/>
+              <Record />
             </ProtectedRoute>
           }
         />
@@ -63,7 +71,7 @@ export const AppRoutes: React.FC = () => {
           path="/feedback"
           element={
             <ProtectedRoute>
-              <Feedback/>
+              <Feedback />
             </ProtectedRoute>
           }
         />
@@ -71,7 +79,7 @@ export const AppRoutes: React.FC = () => {
           path="/voice/:channelId"
           element={
             <ProtectedRoute>
-              <Voice/>
+              <Voice />
             </ProtectedRoute>
           }
         />
@@ -79,15 +87,7 @@ export const AppRoutes: React.FC = () => {
           path="/video/:channelId"
           element={
             <ProtectedRoute>
-              <Video/>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/video/:channelId"
-          element={
-            <ProtectedRoute>
-              <Voice/>
+              <Video />
             </ProtectedRoute>
           }
         />

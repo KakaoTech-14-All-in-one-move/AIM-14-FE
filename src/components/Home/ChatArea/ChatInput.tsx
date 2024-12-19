@@ -1,28 +1,29 @@
-// src/components/ChatInput.tsx
+// src/components/Home/ChatArea/ChatInput.tsx
 import React, { useState } from 'react';
-import useMessageStore from '@/stores/messageStore';
+import useWebSocketStore from '@/stores/webSocketStore';
 import { useAuthStore } from '@/stores/authStore';
 
-const ChatInput: React.FC = () => {
+interface ChatInputProps {
+  channelId: string;
+}
+
+const ChatInput: React.FC<ChatInputProps> = ({ channelId }) => {
   const [message, setMessage] = useState('');
-  const addMessage = useMessageStore((state) => state.addMessage);
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const user = useAuthStore((state) => state.user);
+  const { sendMessage, isConnected } = useWebSocketStore();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (message.trim() && isAuthenticated && user) {
-      addMessage({
-        author: user.username,
-        content: message.trim(),
+    if (message.trim() && user && isConnected[channelId]) {
+      console.log('Sending message with user:', user); // 디버깅용 로그 추가
+      sendMessage(channelId, message.trim(), {
+        id: user.email,  // id 대신 email 사용
+        username: user.username,
+        profile_image: user.profile_image
       });
       setMessage('');
     }
   };
-
-  if (!isAuthenticated) {
-    return <div className="p-4 bg-discord700 text-gray-100">로그인이 필요합니다.</div>;
-  }
 
   return (
     <form onSubmit={handleSubmit} className="p-4 bg-discord500">
@@ -30,7 +31,8 @@ const ChatInput: React.FC = () => {
         type="text"
         value={message}
         onChange={(e) => setMessage(e.target.value)}
-        placeholder={`#💬-일반에 메시지 보내기`}
+        placeholder={isConnected[channelId] ? `메시지를 입력하세요` : '연결 중...'}
+        disabled={!isConnected[channelId]}
         className="w-full bg-discord700 text-gray-100 px-4 py-2 rounded focus:outline-none placeholder-gray-400"
       />
     </form>

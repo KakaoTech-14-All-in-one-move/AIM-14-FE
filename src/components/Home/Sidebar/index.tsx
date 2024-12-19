@@ -1,24 +1,28 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { FC, useCallback, useEffect } from 'react';
+import { SidebarIcon } from '@/components/Home/Sidebar/SidebarIcon';
+import { HomeIcon } from '@/components/Home/Sidebar/icons/HomeIcon';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { SidebarIcon } from './SidebarIcon';
 import { useAuthStore } from '@/stores/authStore';
 import { useServerStore } from '@/stores/serverStore';
+import { useChannelStore } from '@/stores/channelStore';
 import { apiClient } from '@/api/apiClient';
+import { Channel, Server } from '@/types/server';
 import { useCall } from '@/services/call/CallProvider';
 import { MediaConnectionManager } from '@/services/call/MediaConnectionManager';
-import { HomeIcon } from '@/components/Home/Sidebar/icons/HomeIcon';
 import { useUserChannelStore } from '@/stores/userChannelStore';
 
-const Sidebar: React.FC = () => {
+const Sidebar: FC = () => {
+  const navigate = useNavigate();
   const { user, setUser } = useAuthStore();
   const { selectedServerId, setSelectedServerId } = useServerStore();
+  const { setCurrentChannel, setChannels } = useChannelStore();
+
+  const BASE_URL = import.meta.env.VITE_BE_SERVER_URL;
+
   const { connection } = useCall();
   const { currentUserChannel } = useUserChannelStore();
   const mediaManager = MediaConnectionManager.getInstance();
-  const navigate = useNavigate();
   const location = useLocation();
-
-  const BASE_URL = import.meta.env.VITE_BE_SERVER_URL;
 
   const handleServerChange = useCallback(async (serverId: number) => {
     if (!connection) {
@@ -27,25 +31,26 @@ const Sidebar: React.FC = () => {
     }
 
     try {
-      // 현재 채널이 있다면 먼저 나가기
+      // Show loading indicator
       if (currentUserChannel.channelId) {
         await mediaManager.leaveChannel();
       }
 
-      // 새 서버 입장 요청 및 연결 업데이트
       const success = await connection.setCurrentServerId(serverId.toString());
       if (!success) {
         throw new Error('Failed to connect to server');
       }
 
       setSelectedServerId(serverId);
+      setChannels([]);  // Reset the channels to ensure fresh data
       navigate(`/channels/${serverId}`);
-
     } catch (error) {
-      console.error('Server change failed:', error);
-      alert('서버 변경에 실패했습니다.');
+      console.error('Error while changing server:', error);
+    } finally {
+      // Hide loading indicator
     }
-  }, [connection, currentUserChannel.channelId, mediaManager, setSelectedServerId, navigate]);
+  }, [connection, currentUserChannel, setSelectedServerId, setChannels, navigate]);
+
 
   useEffect(() => {
     const isRootPath = location.pathname === '/';
@@ -59,6 +64,32 @@ const Sidebar: React.FC = () => {
     if (!imageUrl) return undefined;
     if (imageUrl.startsWith('http')) return imageUrl;
     return `${BASE_URL}${imageUrl}`;
+  };
+
+  const selectOldestChatChannel = async (serverId: number) => {
+    try {
+      const response = await apiClient.client.get(`/api/v1/servers/${serverId}/channels`);
+      const channels: Channel[] = response.data;
+
+      setChannels(channels);
+
+      const chatChannels = channels
+        .filter(channel => channel.channelCategory === 'CHAT')
+        .sort((a, b) => a.channelPosition - b.channelPosition);
+
+      if (chatChannels.length > 0) {
+        const oldestChannel = chatChannels[0];
+        setCurrentChannel(oldestChannel);
+        navigate(`/channels/${serverId}/${oldestChannel.channelId}`);
+      }
+    } catch (error) {
+      console.error('채널 목록을 불러오는데 실패했습니다:', error);
+    }
+  };
+
+  const handleServerSelect = (serverId: number) => {
+    setSelectedServerId(serverId);
+    selectOldestChatChannel(serverId);
   };
 
   const handleImageUpload = async (serverId: number, file: File) => {
@@ -128,7 +159,7 @@ const Sidebar: React.FC = () => {
       const response = await apiClient.client.post('/api/v1/servers', {
         server_name: name,
       });
-      const newServer = response.data;
+      const newServer: Server = response.data;
 
       setUser({
         ...user,
@@ -137,6 +168,10 @@ const Sidebar: React.FC = () => {
 
       const serverStore = useServerStore.getState();
       serverStore.addServer(newServer);
+
+      serverStore.setSelectedServerId(newServer.server_id);
+      selectOldestChatChannel(newServer.server_id);
+
       await handleServerChange(newServer.server_id);
 
     } catch (error: any) {
@@ -169,7 +204,16 @@ const Sidebar: React.FC = () => {
       if (selectedServerId === serverId) {
         const remainingServers = user.servers.filter(s => s.server_id !== serverId);
         if (remainingServers.length > 0) {
+          setSelectedServerId(remainingServers[0].server_id);
+          selectOldestChatChannel(remainingServers[0].server_id);
+        } else {
+          setSelectedServerId(null);
+          setCurrentChannel(null);
+          setChannels([]);
+          navigate('/home');
+
           await handleServerChange(remainingServers[0].server_id);
+
         }
       }
     } catch (error: any) {
@@ -216,6 +260,11 @@ const Sidebar: React.FC = () => {
         text="홈"
         isSelected={selectedServerId === null}
         onClick={() => {
+          setSelectedServerId(null);
+          setCurrentChannel(null);
+          setChannels([]);
+          navigate('/home');
+
           if (user?.servers?.length! > 0) {
             const firstServer = user!.servers[0];
             handleServerChange(firstServer.server_id);
@@ -240,7 +289,12 @@ const Sidebar: React.FC = () => {
           }
           text={server.server_name}
           isSelected={selectedServerId === server.server_id}
-          onClick={() => handleServerChange(server.server_id)}
+
+          onClick={() => {
+            handleServerSelect(server.server_id);
+            handleServerChange(server.server_id);
+          }}
+
           onRename={(newName) => handleRenameServer(server.server_id, newName)}
           onRemove={() => handleRemoveServer(server.server_id)}
           onImageUpload={(file) => handleImageUpload(server.server_id, file)}

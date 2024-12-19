@@ -1,9 +1,14 @@
+// src/stores/channelStore.ts
 import { create } from 'zustand';
 import { channelApi } from '@/api/channelApi';
 import { useAuthStore } from '@/stores/authStore';
 import { Channel } from '@/types/server';
 
 interface ChannelStore {
+  channels: Channel[];
+  currentChannel: Channel | null;
+  setChannels: (channels: Channel[]) => void;
+  setCurrentChannel: (channel: Channel | null) => void;
   addChannel: (
     serverId: number,
     data: {
@@ -16,12 +21,22 @@ interface ChannelStore {
 }
 
 export const useChannelStore = create<ChannelStore>((set) => ({
+  channels: [],
+  currentChannel: null,
+
+  setChannels: (channels) => set({ channels }),
+  setCurrentChannel: (channel) => set({ currentChannel: channel }),
+
   addChannel: async (serverId, data) => {
     try {
       const newChannel = await channelApi.createChannel(serverId, {
         channelName: data.channelName,
         channelCategory: data.channelCategory,
       });
+
+      set((state) => ({
+        channels: [...state.channels, newChannel],
+      }));
 
       const authStore = useAuthStore.getState();
       if (authStore.user) {
@@ -48,9 +63,19 @@ export const useChannelStore = create<ChannelStore>((set) => ({
 
   updateChannelName: async (serverId, channelId, newName) => {
     try {
-      const updatedChannel = await channelApi.updateChannelName(serverId, channelId, newName);
-      const authStore = useAuthStore.getState();
+      await channelApi.updateChannelName(serverId, channelId, newName);
 
+      set((state) => ({
+        channels: state.channels.map((channel) =>
+          channel.channelId === channelId ? { ...channel, channelName: newName } : channel,
+        ),
+        currentChannel:
+          state.currentChannel?.channelId === channelId
+            ? { ...state.currentChannel, channelName: newName }
+            : state.currentChannel,
+      }));
+
+      const authStore = useAuthStore.getState();
       if (authStore.user) {
         const updatedServers = authStore.user.servers.map((server) => ({
           ...server,
@@ -73,8 +98,13 @@ export const useChannelStore = create<ChannelStore>((set) => ({
   deleteChannel: async (serverId, channelId) => {
     try {
       await channelApi.deleteChannel(serverId, channelId);
-      const authStore = useAuthStore.getState();
 
+      set((state) => ({
+        channels: state.channels.filter((channel) => channel.channelId !== channelId),
+        currentChannel: state.currentChannel?.channelId === channelId ? null : state.currentChannel,
+      }));
+
+      const authStore = useAuthStore.getState();
       if (authStore.user) {
         const updatedServers = authStore.user.servers.map((server) => ({
           ...server,
