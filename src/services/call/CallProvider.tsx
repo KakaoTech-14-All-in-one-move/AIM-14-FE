@@ -1,20 +1,100 @@
-import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
-import { CallConnection } from '@/services/call/callConnection';
-import { CallState, CallUserData } from '@/services/call/types';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { CallConnection } from './socket/callConnection';
 import { useAuthStore } from '@/stores/authStore';
-import { useVoiceChat } from '@/hooks/useVoiceChat';
+import { MediaConnectionManager } from './MediaConnectionManager';
+import { useMediaDeviceStore } from '@/stores/mediaDeviceStore';
+import { UserStateManager } from '@/services/call/UserStateManager.ts';
 
 interface CallContextType {
-  users: CallUserData[];
-  currentUser: CallUserData | null;
   connection: CallConnection | null;
-  connectionStatus: string;
+  isConnected: boolean;
 }
 
 const CallContext = createContext<CallContextType | null>(null);
 
-interface CallProviderProps {
-  children: React.ReactNode;
+export function CallProvider({ children }: { children: React.ReactNode }) {
+  const [connection, setConnection] = useState<CallConnection | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const accessToken = useAuthStore((state) => state.accessToken);
+  const mediaManager = MediaConnectionManager.getInstance();
+  const userStateManager = UserStateManager.getInstance();
+
+  useEffect(() => {
+    if (!accessToken) return;
+
+    const callConnection = CallConnection.getInstance(accessToken);
+
+    const connect = async () => {
+      try {
+        setConnection(callConnection);
+        mediaManager.setCallConnection(callConnection);
+        const connected = await callConnection.connect();
+        setIsConnected(connected);
+      } catch (error) {
+        console.error('Connection failed:', error);
+        setIsConnected(false);
+      }
+    };
+
+    connect();
+
+    return () => {
+      callConnection.disconnect();
+      mediaManager.dispose();
+      userStateManager.dispose();
+      setConnection(null);
+      setIsConnected(false);
+    };
+  }, [accessToken]);
+
+  useEffect(() => {
+    const setupDevices = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const mediaDeviceStore = useMediaDeviceStore.getState();
+
+        const audioInputs = devices.filter(device => device.kind === 'audioinput')
+          .map(device => ({ deviceId: device.deviceId, label: device.label }));
+        const audioOutputs = devices.filter(device => device.kind === 'audiooutput')
+          .map(device => ({ deviceId: device.deviceId, label: device.label }));
+        const videoInputs = devices.filter(device => device.kind === 'videoinput')
+          .map(device => ({ deviceId: device.deviceId, label: device.label }));
+
+        mediaDeviceStore.setDevices({
+          audioInput: audioInputs,
+          audioOutput: audioOutputs,
+          videoInput: videoInputs,
+        });
+
+        // 초기 장치 설정
+        if (audioInputs.length > 0) {
+          mediaDeviceStore.setSelectedDevice('audioInput', audioInputs[0].deviceId);
+        }
+        if (audioOutputs.length > 0) {
+          mediaDeviceStore.setSelectedDevice('audioOutput', audioOutputs[0].deviceId);
+        }
+        if (videoInputs.length > 0) {
+          mediaDeviceStore.setSelectedDevice('videoInput', videoInputs[0].deviceId);
+        }
+      } catch (error) {
+        console.error('Failed to setup media devices:', error);
+      }
+    };
+
+    setupDevices();
+
+    // 장치 변경 감지
+    navigator.mediaDevices.addEventListener('devicechange', setupDevices);
+    return () => {
+      navigator.mediaDevices.removeEventListener('devicechange', setupDevices);
+    };
+  }, []);
+
+  return (
+    <CallContext.Provider value={{ connection, isConnected }}>
+      {children}
+    </CallContext.Provider>
+  );
 }
 
 export function useCall() {
@@ -23,116 +103,4 @@ export function useCall() {
     throw new Error('useCall must be used within a CallProvider');
   }
   return context;
-}
-
-export function CallProvider({ children }: CallProviderProps) {
-  const [state, setState] = useState<CallState>({
-    users: [],
-    currentUser: null,
-    connectionStatus: 'DISCONNECTED'
-  });
-  const connectionRef = useRef<CallConnection | null>(null);
-  const accessToken = useAuthStore((state: { accessToken: any; }) => state.accessToken);
-  const user = useAuthStore((state: { user: any; }) => state.user);
-
-  const handleStateUpdate = useCallback((newState: CallState) => {
-    console.log('CallProvider received state update:', newState);
-
-    setState(prevState => {
-      console.log('Previous state:', prevState);
-
-      // Create a map of existing users with their profile images
-      const existingUserMap = new Map(
-        prevState.users.map(user => [user.user_id, user])
-      );
-
-      // Merge new users with existing profile images
-      const updatedUsers = newState.users.map(newUser => {
-        const existingUser = existingUserMap.get(newUser.user_id);
-        return {
-          ...newUser,
-          profile_image: existingUser?.profile_image || newUser.profile_image
-        };
-      });
-
-      // Update current user while preserving profile image
-      const updatedCurrentUser = newState.currentUser
-        ? {
-          ...newState.currentUser,
-          profile_image:
-            prevState.currentUser?.profile_image ||
-            newState.currentUser.profile_image
-        }
-        : null;
-
-      const updatedState = {
-        ...prevState,
-        users: updatedUsers,
-        currentUser: updatedCurrentUser,
-        connectionStatus: newState.connectionStatus
-      };
-
-      console.log('Updated state:', updatedState);
-      return updatedState;
-    });
-  }, []);
-
-  // VoiceChat 스토어와 동기화
-  useEffect(() => {
-    if (state.users.length >= 0) {
-      console.log('Syncing users with VoiceChat store:', state.users);
-      useVoiceChat.getState().setUsers(state.users);
-    }
-  }, [state.users]);
-
-  // WebSocket 연결 설정
-  useEffect(() => {
-    if (!accessToken || !user) return;
-
-    const connection = new CallConnection(handleStateUpdate, accessToken);
-    connectionRef.current = connection;
-
-    // 연결 시작
-    try {
-      connection.connect();
-    } catch (error) {
-      console.error('Connection failed:', error);
-    }
-
-    // 클린업
-    return () => {
-      connection.disconnect();
-      connectionRef.current = null;
-    };
-  }, [accessToken, user, handleStateUpdate]);
-
-  // 개발 환경에서 상태 변화 모니터링
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.group('CallProvider State Update');
-      console.log('Users:', state.users);
-      console.log('Current User:', state.currentUser);
-      console.log('Connection Status:', state.connectionStatus);
-      console.groupEnd();
-    }
-  }, [state]);
-
-  const contextValue = {
-    users: state.users,
-    currentUser: state.currentUser,
-    connection: connectionRef.current,
-    connectionStatus: state.connectionStatus
-  };
-
-  return (
-    <CallContext.Provider value={contextValue}>
-      {children}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="fixed bottom-2 right-2 bg-gray-800 text-white px-3 py-1 rounded-md text-sm z-50">
-          WS: {state.connectionStatus}
-          {state.users.length > 0 && ` | Users: ${state.users.length}`}
-        </div>
-      )}
-    </CallContext.Provider>
-  );
 }
