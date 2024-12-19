@@ -66,22 +66,15 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
       alert(error.response?.data?.message || '채널 생성에 실패했습니다.');
     }
   };
-  const handleChannelClick = useCallback((channel: Channel) => {
+
+  const handleChannelClick = useCallback(async (channel: Channel, isMemberClick: boolean = false) => {  // Add 'async' here
     if (type === 'text') {
       navigate(`/channels/${channel.serverId}/${channel.channelId}`);
       return;
     }
 
-    const mediaType = type as Exclude<ChannelType, 'text'>;
-    const isJoined = channelStates[mediaType]?.joined[channel.channelName] || false;
-
-    if (isJoined) {
-      toggleChannelExpand(channel.channelName);
-      return;
-    }
-
-    const hasActiveChannel = Object.entries(channelStates[mediaType]?.joined || {})
-      .some(([name, joined]) => joined);
+    const mediaType = type.toUpperCase() as MediaType;
+    if (isMemberClick) return;
 
     if (currentUserChannel.channelId) {
       const confirmSwitch = window.confirm(
@@ -112,9 +105,6 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
       return;
     }
 
-    joinChannel(mediaType, channel.channelName);
-    connection?.joinChannel(channel.channelId.toString(), mediaType.toUpperCase() as 'VOICE' | 'VIDEO');
-    navigate(`/${mediaType}/${channel.channelId}`);
     toggleChannelExpand(channel.channelName);
   }, [type, currentUserChannel.channelId, currentChannels, toggleChannelExpand, navigate]);
 
@@ -195,33 +185,27 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
     setContextMenu({ x: e.clientX, y: e.clientY, channel });
   }, []);
 
+  // 채널 상태 모니터링
   useEffect(() => {
     if (!['voice', 'video'].includes(type)) return;
 
     const activeChannelIds = Array.from(channelUsers.keys());
     const currentlyInChannel = currentUserChannel.channelId !== null;
 
-    voiceChatStore.users.forEach(user => {
-      if (user.channel_type === type.toUpperCase()) {
-        const channelId = user.channel_id.toString();
-        const currentUsers = activeChannelUsers.get(channelId) || [];
-        activeChannelUsers.set(channelId, [...currentUsers, user.user_id]);
-      }
-    });
+    setExpandedChannels(prev => {
+      const newSet = new Set(prev);
+      currentChannels.forEach(channel => {
+        const channelId = channel.channelId.toString();
+        const isActiveChannel = activeChannelIds.includes(channelId);
+        const isCurrentUserChannel = channelId === currentUserChannel.channelId;
 
-    currentChannels.forEach(channel => {
-      const hasUsers = activeChannelUsers.has(channel.channelId.toString());
-      if (hasUsers) {
-        // type이 'text'가 아님이 확인되었으므로 Exclude<ChannelType, 'text'> 타입이 됨
-        activateChannel(type as Exclude<ChannelType, 'text'>, channel.channelName);
-        setExpandedChannels(prev => {
-          const newSet = new Set(prev);
+        if (isActiveChannel || (isCurrentUserChannel && currentlyInChannel)) {
           newSet.add(channel.channelName);
-          return newSet;
-        });
-      } else {
-        deactivateChannel(type as Exclude<ChannelType, 'text'>, channel.channelName);
-      }
+        } else {
+          newSet.delete(channel.channelName);
+        }
+      });
+      return newSet;
     });
   }, [type, channelUsers, currentChannels, currentUserChannel.channelId]);
 

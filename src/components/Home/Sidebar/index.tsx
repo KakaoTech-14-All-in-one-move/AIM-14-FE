@@ -31,25 +31,26 @@ const Sidebar: FC = () => {
     }
 
     try {
-      // 현재 채널이 있다면 먼저 나가기
+      // Show loading indicator
       if (currentUserChannel.channelId) {
         await mediaManager.leaveChannel();
       }
 
-      // 새 서버 입장 요청 및 연결 업데이트
       const success = await connection.setCurrentServerId(serverId.toString());
       if (!success) {
         throw new Error('Failed to connect to server');
       }
 
       setSelectedServerId(serverId);
+      setChannels([]);  // Reset the channels to ensure fresh data
       navigate(`/channels/${serverId}`);
-
     } catch (error) {
-      console.error('Server change failed:', error);
-      alert('서버 변경에 실패했습니다.');
+      console.error('Error while changing server:', error);
+    } finally {
+      // Hide loading indicator
     }
-  }, [connection, currentUserChannel.channelId, mediaManager, setSelectedServerId, navigate]);
+  }, [connection, currentUserChannel, setSelectedServerId, setChannels, navigate]);
+
 
   useEffect(() => {
     const isRootPath = location.pathname === '/';
@@ -289,9 +290,10 @@ const Sidebar: FC = () => {
           text={server.server_name}
           isSelected={selectedServerId === server.server_id}
 
-          onClick={() => handleServerSelect(server.server_id)}
-
-          onClick={() => handleServerChange(server.server_id)}
+          onClick={() => {
+            handleServerSelect(server.server_id);
+            handleServerChange(server.server_id);
+          }}
 
           onRename={(newName) => handleRenameServer(server.server_id, newName)}
           onRemove={() => handleRemoveServer(server.server_id)}
