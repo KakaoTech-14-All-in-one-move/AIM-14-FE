@@ -1,6 +1,8 @@
 import axios, { AxiosInstance } from 'axios';
 import { useAuthStore } from '@/stores/authStore';
 
+const API_BASE_URL = import.meta.env.VITE_BE_SERVER_URL;
+
 export class ApiClient {
   public readonly client: AxiosInstance;
   public readonly publicClient: AxiosInstance;
@@ -159,4 +161,4 @@ export class ApiClient {
   }
 }
 
-export const apiClient = new ApiClient('http://localhost:8080');
+export const apiClient = new ApiClient(API_BASE_URL);
