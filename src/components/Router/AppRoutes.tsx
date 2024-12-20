@@ -1,4 +1,3 @@
-// src/components/Router/AppRoutes.tsx
 import React from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import Home from '@/components/Home';
@@ -11,6 +10,7 @@ import Record from '@/components/Record';
 import Voice from '@/components/Voice';
 import Video from '@/components/Video';
 import Feedback from '@/components/feedback';
+import Health from '@/api/Health.tsx';
 
 export const AppRoutes: React.FC = () => {
   const isAuthenticated = () => {
@@ -23,6 +23,10 @@ export const AppRoutes: React.FC = () => {
     <div className="min-h-screen bg-discord900">
       <AuthEventHandler />
       <Routes>
+        <Route
+          path="/health"
+          element={<Health />}
+        />
         <Route
           path="/login"
           element={
