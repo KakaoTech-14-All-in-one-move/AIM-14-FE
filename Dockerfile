@@ -7,14 +7,11 @@ COPY . .
 RUN npm ci
 RUN npm run build
 
-# 실행 환경
-FROM node:18-alpine
-WORKDIR /app
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/package-lock.json ./
-# vite를 포함한 의존성 설치
-RUN npm install vite
-# Vite preview 서버 실행
-CMD ["npx", "vite", "preview", "--host", "0.0.0.0", "--port", "80"]
+# 운영 환경
+FROM nginx:alpine
+# nginx 설정 파일 복사
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+# 빌드 결과물을 nginx의 서비스 디렉토리로 복사
+COPY --from=builder /app/dist /usr/share/nginx/html
 EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
