@@ -122,9 +122,21 @@ export class CallConnection {
     },
   };
 
+  private reconnectCount = 0;
+  private readonly MAX_RECONNECT_ATTEMPTS = 3;
+
   async connect(): Promise<boolean> {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      return true;  // 이미 연결된 경우 즉시 반환
+    }
+
     if (this.connectionPromise) {
       return this.connectionPromise;
+    }
+
+    if (this.reconnectCount >= this.MAX_RECONNECT_ATTEMPTS) {
+      console.error('Max reconnection attempts reached');
+      return false;
     }
 
     this.connectionPromise = new Promise(async (resolve) => {
@@ -133,10 +145,16 @@ export class CallConnection {
         if (!response.data.url) throw new Error('WebSocket URL not received');
 
         const connected = await this.setupWebSocket(response.data.url);
+        if (connected) {
+          this.reconnectCount = 0;  // 성공적인 연결 시 카운트 리셋
+        } else {
+          this.reconnectCount++;
+        }
         this.connectionPromise = null;
         resolve(connected);
       } catch (error) {
         console.error('Connection failed:', error);
+        this.reconnectCount++;
         this.connectionPromise = null;
         resolve(false);
       }

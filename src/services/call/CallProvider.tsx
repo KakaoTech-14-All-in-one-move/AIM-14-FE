@@ -22,23 +22,32 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!accessToken) return;
 
+    let mounted = true;  // 컴포넌트 마운트 상태 추적
     const callConnection = CallConnection.getInstance(accessToken);
 
     const connect = async () => {
       try {
+        if (!mounted) return;  // 컴포넌트가 언마운트되었다면 중단
+
         setConnection(callConnection);
         mediaManager.setCallConnection(callConnection);
         const connected = await callConnection.connect();
-        setIsConnected(connected);
+
+        if (mounted) {  // 상태 업데이트 전에 마운트 상태 확인
+          setIsConnected(connected);
+        }
       } catch (error) {
-        console.error('Connection failed:', error);
-        setIsConnected(false);
+        if (mounted) {
+          console.error('Connection failed:', error);
+          setIsConnected(false);
+        }
       }
     };
 
     connect();
 
     return () => {
+      mounted = false;  // 클린업 시 마운트 상태 변경
       callConnection.disconnect();
       mediaManager.dispose();
       userStateManager.dispose();
