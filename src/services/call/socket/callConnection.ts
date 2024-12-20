@@ -16,12 +16,13 @@ interface ErrorData {
 export class CallConnection {
   private static instance: CallConnection | null = null;
   private ws: WebSocket | null = null;
-  private heartbeatInterval: NodeJS.Timeout | null = null;
   private reconnectTimeout: NodeJS.Timeout | null = null;
   private currentServerId: string | null = null;
   private readonly accessToken: string;
   private connectionPromise: Promise<boolean> | null = null;
   private userStateManager: UserStateManager;
+  private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  private heartbeatIntervalTime: number = 0;
 
   private constructor(accessToken: string) {
     this.accessToken = accessToken;
@@ -37,9 +38,36 @@ export class CallConnection {
 
   private messageHandlers: MessageHandlerMap = {
     [OP_CODES.INIT_ACK]: (data: any) => {
-      if (data?.heartbeat_interval) {
-        this.setupHeartbeat(data.heartbeat_interval);
+      if (!data?.heartbeat_interval) {
+        console.error('No heartbeat interval received in INIT_ACK');
+        return;
       }
+
+      // heartbeat_interval이 0이나 음수값인지 체크
+      if (data.heartbeat_interval <= 0) {
+        console.error('Invalid heartbeat interval received:', data.heartbeat_interval);
+        return;
+      }
+
+      // 밀리초 변환을 더 명확하게
+      let intervalMs: number;
+      if (typeof data.heartbeat_interval === 'number') {
+        // 이미 밀리초인지 체크 (너무 작은 값이면 초단위로 가정)
+        if (data.heartbeat_interval < 100) { // 100ms 미만이면 초단위로 가정
+          intervalMs = data.heartbeat_interval * 1000;
+        } else {
+          intervalMs = data.heartbeat_interval;
+        }
+      } else {
+        intervalMs = parseInt(data.heartbeat_interval, 10);
+        if (isNaN(intervalMs)) {
+          console.error('Invalid heartbeat interval format:', data.heartbeat_interval);
+          return;
+        }
+      }
+
+      console.log('Setting up heartbeat with interval:', intervalMs / 1000, 's');
+      this.setupHeartbeat(intervalMs);
     },
 
     [OP_CODES.SERVER_ACK]: (data: any) => {
@@ -163,6 +191,37 @@ export class CallConnection {
     return this.connectionPromise;
   }
 
+  private setupHeartbeat(interval: number) {
+    // 이전 heartbeat interval이 있다면 제거
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+
+    // // 즉시 첫 번째 heartbeat 전송
+    // if (this.isConnected()) {
+    //   console.log('Sending initial heartbeat...', new Date().toISOString());
+    //   this.sendOp(OP_CODES.HEARTBEAT);
+    // }
+
+    // 서버에서 받은 interval 그대로 사용 (5초를 빼지 않음)
+    this.heartbeatIntervalTime = interval;
+
+    // 새로운 interval 설정 (더 짧은 간격으로)
+    this.heartbeatInterval = setInterval(() => {
+      if (this.isConnected()) {
+        console.log('Sending heartbeat...', new Date().toISOString());
+        this.sendOp(OP_CODES.HEARTBEAT);
+      } else {
+        if (this.heartbeatInterval) {
+          clearInterval(this.heartbeatInterval);
+          this.heartbeatInterval = null;
+        }
+        this.scheduleReconnect();
+      }
+    }, Math.floor(interval * 0.9)); // interval의 90%로 설정하여 여유 시간 확보
+  }
+
   private setupWebSocket(url: string): Promise<boolean> {
     return new Promise((resolve) => {
       let isResolved = false;
@@ -181,6 +240,12 @@ export class CallConnection {
         isResolved = true;
         clearTimeout(timeoutId);
         this.sendOp(OP_CODES.INIT, { token: this.accessToken });
+
+        // 저장된 heartbeat 간격이 있다면 재설정
+        if (this.heartbeatIntervalTime > 0) {
+          this.setupHeartbeat(this.heartbeatIntervalTime);
+        }
+
         resolve(true);
       });
 
@@ -304,18 +369,6 @@ export class CallConnection {
       channel_id: currentUserChannel.channelId,
       ...updates,
     });
-  }
-
-  private setupHeartbeat(interval: number) {
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-    }
-
-    this.heartbeatInterval = setInterval(() => {
-      if (this.isConnected()) {
-        this.sendOp(OP_CODES.HEARTBEAT);
-      }
-    }, interval);
   }
 
   private scheduleReconnect() {
