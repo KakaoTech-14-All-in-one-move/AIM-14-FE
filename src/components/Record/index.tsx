@@ -538,6 +538,7 @@ const Index = () => {
             onFeedbackClick={handleFeedbackClick}
             recordedFile={new Blob(recordedChunks, { type: isCameraOn ? 'video/webm' : 'audio/webm' })}
             attachedFile={attachedFile}
+            cleanupMediaStreams={cleanupMediaStreams}
           />
         </div>
       </div>
