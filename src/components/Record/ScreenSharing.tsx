@@ -14,6 +14,7 @@ const ScreenSharing = ({ stream }: { stream: MediaStream | null }) => {
       <video
         ref={videoRef}
         autoPlay
+        muted
         className="w-full h-full object-cover rounded-lg" // 화면 공유 영상 비율
       />
     </div>
