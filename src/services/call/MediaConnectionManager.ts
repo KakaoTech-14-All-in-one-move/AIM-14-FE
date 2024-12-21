@@ -74,6 +74,7 @@ export class MediaConnectionManager {
       }
 
       // 오디오 스트림 획득
+      let audioStream: MediaStream | null = null;
       console.log('Getting audio stream...');
       try {
         const constraints = {
@@ -85,20 +86,20 @@ export class MediaConnectionManager {
           video: false,
         };
 
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        if (!stream) {
+        audioStream = await navigator.mediaDevices.getUserMedia(constraints);
+        if (!audioStream) {
           console.error('Failed to get audio stream - stream is null');
           return false;
         }
 
-        const audioTracks = stream.getAudioTracks();
+        const audioTracks = audioStream.getAudioTracks();
         if (audioTracks.length === 0) {
           console.error('Failed to get audio stream - no audio tracks');
           return false;
         }
 
         console.log('Successfully got audio stream with tracks:', audioTracks.length);
-        this.mediaServer.replaceStream(stream);
+        await this.mediaServer.replaceStream(audioStream);
       } catch (error: any) {
         console.error('Failed to get initial audio stream:', error);
         let errorMessage = '오디오 스트림을 가져오는데 실패했습니다.';
@@ -145,17 +146,33 @@ export class MediaConnectionManager {
 
       // 채널 및 사용자 상태 설정
       try {
+        // 초기 미디어 상태 설정
+        const initialMediaState = {
+          stream: audioStream,
+          screenStream: null,
+          isMuted: false,
+          isDeafened: false,
+          isCameraOn: false,
+          isScreenSharing: false
+        };
+
+        // 스토어 상태 업데이트
         useUserChannelStore.getState().setCurrentUserChannel(channelId, type);
+
+        // UserStateManager를 통한 상태 업데이트
         this.userStateManager.handleUserJoin(channelId, {
           user_id: userId,
           username: currentUser.username,
           profile_image: currentUser.profile_image,
           channel_id: channelId,
-          muted: false,
-          deafened: false,
-          camera_on: false,
-          screen_sharing: false,
+          muted: initialMediaState.isMuted,
+          deafened: initialMediaState.isDeafened,
+          camera_on: initialMediaState.isCameraOn,
+          screen_sharing: initialMediaState.isScreenSharing,
         });
+
+        // 미디어 상태 업데이트
+        this.userStateManager.handleUserStateUpdate(channelId, userId, initialMediaState);
       } catch (error) {
         console.error('Error setting user state:', error);
         return false;
@@ -170,60 +187,76 @@ export class MediaConnectionManager {
       return false;
     }
   }
+
   async leaveChannel() {
     try {
       const currentChannel = useUserChannelStore.getState().currentUserChannel;
       if (!currentChannel.channelId) return;
 
-      // 1. 모든 활성 미디어 트랙을 찾아서 정리
-      const cleanupAllMediaTracks = () => {
-        // 현재 채널의 모든 사용자의 스트림 정리
-        const channelUsers =
-          useUserChannelStore.getState().channelUsers.get(currentChannel.channelId!) || [];
-        channelUsers.forEach((user) => {
-          // 일반 스트림 정리
-          if (user.mediaState.stream) {
-            user.mediaState.stream.getTracks().forEach((track) => {
-              track.enabled = false;
-              track.stop();
-            });
-          }
-          // 스크린 쉐어 스트림 정리
-          if (user.mediaState.screenStream) {
-            user.mediaState.screenStream.getTracks().forEach((track) => {
-              track.enabled = false;
-              track.stop();
-            });
-          }
-        });
-      };
+      const currentUser = useAuthStore.getState().user;
+      if (!currentUser) return;
 
-      // 2. 먼저 모든 미디어 트랙 정리
-      cleanupAllMediaTracks();
+      const userId = currentUser.user_id.toString();
 
-      // 3. MediaServer 연결 정리
-      this.mediaServer.disconnect();
-
-      // 4. 소켓 연결 정리
-      MediaConnectionManager.getCallConnection()?.leaveChannel();
-
-      // 5. 상태 정리
-      const userState = useUserChannelStore
+      // 1. 현재 사용자의 미디어 상태를 가져옴
+      const currentUserState = useUserChannelStore
         .getState()
         .channelUsers.get(currentChannel.channelId)
-        ?.find((user) => user.userId === useAuthStore.getState().user?.email);
+        ?.find(user => user.userId === userId);
 
-      if (userState) {
-        this.userStateManager.handleUserLeave(
+      if (currentUserState) {
+        // 2. UserStateManager를 통해 미디어 상태 초기화
+        const clearMediaState = {
+          stream: null,
+          screenStream: null,
+          isMuted: true,
+          isDeafened: false,
+          isCameraOn: false,
+          isScreenSharing: false
+        };
+
+        this.userStateManager.handleUserStateUpdate(
           currentChannel.channelId,
-          useAuthStore.getState().user?.email || '',
+          userId,
+          clearMediaState
         );
       }
 
-      // 6. 채널 정리
+      // 3. 모든 활성 미디어 트랙을 찾아서 정리
+      const cleanupAllMediaTracks = () => {
+        if (currentUserState?.mediaState.stream) {
+          currentUserState.mediaState.stream.getTracks().forEach((track) => {
+            track.enabled = false;
+            track.stop();
+          });
+        }
+        if (currentUserState?.mediaState.screenStream) {
+          currentUserState.mediaState.screenStream.getTracks().forEach((track) => {
+            track.enabled = false;
+            track.stop();
+          });
+        }
+      };
+
+      // 4. 먼저 모든 미디어 트랙 정리
+      cleanupAllMediaTracks();
+
+      // 5. MediaServer 연결 정리
+      this.mediaServer.disconnect();
+
+      // 6. 소켓 연결 정리
+      MediaConnectionManager.getCallConnection()?.leaveChannel();
+
+      // 7. UserStateManager를 통해 사용자 퇴장 처리
+      this.userStateManager.handleUserLeave(
+        currentChannel.channelId,
+        userId
+      );
+
+      // 8. 채널 상태 초기화
       useUserChannelStore.getState().setCurrentUserChannel(null, null);
 
-      // 7. 한번 더 실행하여 누락된 트랙이 없도록 보장
+      // 9. 한번 더 실행하여 누락된 트랙이 없도록 보장
       setTimeout(cleanupAllMediaTracks, 200);
 
       this.notifyStateUpdate(null);
