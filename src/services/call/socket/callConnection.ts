@@ -314,17 +314,17 @@ export class CallConnection {
     this.scheduleReconnect();
   };
 
-  async setCurrentServerId(serverId: string) {
+  async setCurrentServerId(serverId: string): Promise<boolean> {
     this.currentServerId = serverId;
     return this.updateServerConnection();
   }
 
-  private async updateServerConnection(): Promise<unknown> {
+  private async updateServerConnection(): Promise<boolean> {
     if (!this.isConnected() || !this.currentServerId) {
       return false;
     }
 
-    return new Promise((resolve) => {
+    return new Promise<boolean>((resolve) => {
       this.sendOp(OP_CODES.SERVER, {
         server_id: this.currentServerId,
       });

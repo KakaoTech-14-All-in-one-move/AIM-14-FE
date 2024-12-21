@@ -24,6 +24,7 @@ const Sidebar: FC = () => {
   const mediaManager = MediaConnectionManager.getInstance();
   const location = useLocation();
 
+  // handleServerChange 함수 수정
   const handleServerChange = useCallback(async (serverId: number) => {
     if (!connection) {
       console.error('No connection available');
@@ -31,23 +32,46 @@ const Sidebar: FC = () => {
     }
 
     try {
-      // Show loading indicator
-      if (currentUserChannel.channelId) {
+      // 1. 현재 채널이 있다면 먼저 떠나기
+      if (currentUserChannel?.channelId) {
         await mediaManager.leaveChannel();
       }
 
-      const success = await connection.setCurrentServerId(serverId.toString());
-      if (!success) {
-        throw new Error('Failed to connect to server');
+      // 2. 연결 시도 전에 상태 업데이트
+      setSelectedServerId(serverId);
+      setChannels([]); // 채널 목록 초기화
+
+      // 3. 서버 연결 시도 (재시도 로직 추가)
+      let attempts = 0;
+      const maxAttempts = 3;
+      let success = false;
+
+      while (attempts < maxAttempts && !success) {
+        try {
+          success = await connection.setCurrentServerId(serverId.toString());
+          if (success) break;
+        } catch (e) {
+          attempts++;
+          if (attempts === maxAttempts) throw e;
+          // 재시도 전 잠시 대기
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
       }
 
-      setSelectedServerId(serverId);
-      setChannels([]);  // Reset the channels to ensure fresh data
+      if (!success) {
+        throw new Error('Failed to connect to server after multiple attempts');
+      }
+
+      // 4. 연결 성공 시 네비게이션
       navigate(`/channels/${serverId}`);
+
     } catch (error) {
       console.error('Error while changing server:', error);
-    } finally {
-      // Hide loading indicator
+      // 실패 시 이전 상태로 롤백
+      setSelectedServerId(null);
+      setChannels([]);
+      // 사용자에게 에러 알림
+      alert('서버 연결에 실패했습니다. 잠시 후 다시 시도해주세요.');
     }
   }, [connection, currentUserChannel, setSelectedServerId, setChannels, navigate]);
 
