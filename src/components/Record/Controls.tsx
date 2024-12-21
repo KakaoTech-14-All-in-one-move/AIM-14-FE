@@ -93,7 +93,12 @@ const Controls = ({
       {/* Camera On/Off Button */}
       <button
         onClick={toggleCamera}
-        className="bg-white p-2 rounded-full"
+        disabled={isRecording}
+        className={`p-2 rounded-full ${
+          isRecording
+            ? 'bg-gray-400 cursor-not-allowed'
+            : 'bg-white hover:bg-gray-100'
+        }`}
       >
         {isCameraOn ? <CameraOnIcon /> : <MicIcon />}
       </button>
