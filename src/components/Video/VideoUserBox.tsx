@@ -13,14 +13,14 @@ interface VideoUserBoxProps {
 }
 
 export const VideoUserBox = React.memo<VideoUserBoxProps>(({
-                                                             user,
-                                                             isScreenShare = false,
-                                                             totalUsers,
-                                                             onMaximize,
-                                                             isMaximized = false
-                                                           }) => {
+  user,
+  isScreenShare = false,
+  totalUsers,
+  onMaximize,
+  isMaximized = false
+}) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const BASE_URL = import.meta.env.VITE_BE_SERVER_URL;
+  const BASE_URL = import.meta.env.VITE_S3_URL;
   const currentUser = useAuthStore(state => state.user);
   const isCurrentUser = currentUser?.email === user.userId;
 

@@ -2,7 +2,7 @@ import React from 'react';
 import { Upload } from 'lucide-react';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage';
 
-const BASE_URL = import.meta.env.VITE_BE_SERVER_URL
+const BASE_URL = import.meta.env.VITE_S3_URL
 
 interface ProfileSectionProps {
     user: any;

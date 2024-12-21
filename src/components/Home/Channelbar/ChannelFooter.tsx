@@ -7,7 +7,7 @@ import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage';
 const ChannelFooter: React.FC = () => {
   const user = useAuthStore(state => state.user);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const BASE_URL = import.meta.env.VITE_BE_SERVER_URL
+  const BASE_URL = import.meta.env.VITE_S3_URL;
 
   if (!user) return null;
 
