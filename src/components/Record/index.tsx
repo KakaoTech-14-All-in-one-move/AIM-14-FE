@@ -514,10 +514,12 @@ const Index = () => {
           </div>
 
           {/* 파일 업로드 영역 */}
-          <div
-            className={`flex-[0.3] relative transition-all duration-500 rounded-b-lg
-                      flex items-center justify-center mt-2 ${getFileUploadBoxClassName()}`}>
-            <FileUploadBox handleFileUpload={(file) => setAttachedFile(file || undefined)} />
+          <div className={`flex-[0.3] relative transition-all duration-500 rounded-b-lg
+                flex items-center justify-center mt-2 ${getFileUploadBoxClassName()}`}>
+            <FileUploadBox
+              handleFileUpload={(file) => setAttachedFile(file || undefined)}
+              disabled={isCameraOn}
+            />
           </div>
         </div>
       </div>

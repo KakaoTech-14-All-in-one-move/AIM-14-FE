@@ -3,9 +3,10 @@ import { FaFileUpload, FaCheckCircle, FaTrashAlt } from 'react-icons/fa';
 
 interface FileUploadBoxProps {
   handleFileUpload: (file: File) => void;
+  disabled?: boolean;
 }
 
-const FileUploadBox: React.FC<FileUploadBoxProps> = ({ handleFileUpload }) => {
+const FileUploadBox: React.FC<FileUploadBoxProps> = ({ handleFileUpload, disabled = false }) => {
   const [isDragActive, setIsDragActive] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -14,7 +15,9 @@ const FileUploadBox: React.FC<FileUploadBoxProps> = ({ handleFileUpload }) => {
 
   const onDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    setIsDragActive(true);
+    if (!disabled) {
+      setIsDragActive(true);
+    }
   };
 
   const onDragLeave = () => setIsDragActive(false);
@@ -22,15 +25,21 @@ const FileUploadBox: React.FC<FileUploadBoxProps> = ({ handleFileUpload }) => {
   const onDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragActive(false);
-    const file = e.dataTransfer.files[0];
-    if (file) simulateUpload(file);
+    if (!disabled) {
+      const file = e.dataTransfer.files[0];
+      if (file) simulateUpload(file);
+    }
   };
 
-  const handleFileInputClick = () => fileInputRef.current?.click();
+  const handleFileInputClick = () => {
+    if (!disabled) {
+      fileInputRef.current?.click();
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) simulateUpload(file);
+    if (file && !disabled) simulateUpload(file);
   };
 
   const simulateUpload = (file: File) => {
@@ -52,17 +61,21 @@ const FileUploadBox: React.FC<FileUploadBoxProps> = ({ handleFileUpload }) => {
   };
 
   const handleFileDelete = () => {
-    setUploadedFile(null);
-    setUploadProgress(0);
-    setIsUploadComplete(false);
+    if (!disabled) {
+      setUploadedFile(null);
+      setUploadProgress(0);
+      setIsUploadComplete(false);
+    }
   };
 
   return (
     <div
       style={{
         border: `1px solid ${isDragActive ? '#FEE500' : '#4A5568'}`,
+        opacity: disabled ? '0.5' : '1',
       }}
-      className="w-full h-full bg-[#232428] rounded-lg mx-auto flex justify-center items-center flex-col cursor-pointer transition-all duration-300"
+      className={`w-full h-full bg-[#232428] rounded-lg mx-auto flex justify-center items-center flex-col 
+        ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'} transition-all duration-300`}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
@@ -76,29 +89,38 @@ const FileUploadBox: React.FC<FileUploadBoxProps> = ({ handleFileUpload }) => {
         {isUploadComplete && uploadedFile ? (
           <FaCheckCircle
             size={50}
-            color="#FEE500"
+            color={disabled ? "#666666" : "#FEE500"}
             className="mx-auto absolute -top-12 left-1/2 transform -translate-x-1/2"
           />
         ) : (
-          <FaFileUpload size={50} color="#007bff" className="mx-auto" />
+          <FaFileUpload
+            size={50}
+            color={disabled ? "#666666" : "#007bff"}
+            className="mx-auto"
+          />
         )}
 
         {uploadedFile ? (
           <div className="flex items-center mt-4">
             <p className="text-white font-semibold mr-2">{uploadedFile.name}</p>
-            <button
-              className="text-red-500 hover:text-red-700 transition-colors"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleFileDelete();
-              }}
-            >
-              <FaTrashAlt size={20} />
-            </button>
+            {!disabled && (
+              <button
+                className="text-red-500 hover:text-red-700 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleFileDelete();
+                }}
+              >
+                <FaTrashAlt size={20} />
+              </button>
+            )}
           </div>
         ) : (
           <h2 className="mt-4 text-white font-semibold">
-            Drag and drop your file here or click to upload
+            {disabled
+              ? "File upload is not available in video recording mode."
+              : "Drag and drop your file here or click to upload"
+            }
           </h2>
         )}
       </div>
@@ -117,6 +139,7 @@ const FileUploadBox: React.FC<FileUploadBoxProps> = ({ handleFileUpload }) => {
         ref={fileInputRef}
         onChange={handleFileChange}
         style={{ display: 'none' }}
+        disabled={disabled}
       />
     </div>
   );
