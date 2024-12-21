@@ -1,4 +1,3 @@
-import { MediaType } from '../types';
 import { useUserChannelStore } from '@/stores/userChannelStore';
 import { CallConnection } from '../socket/callConnection';
 import { useAuthStore } from '@/stores/authStore.ts';
@@ -24,7 +23,8 @@ export class MediaServerConnection {
     }
   > = new Map();
 
-  private constructor() {}
+  private constructor() {
+  }
 
   static getInstance(): MediaServerConnection {
     if (!this.instance) {
@@ -115,149 +115,152 @@ export class MediaServerConnection {
   private setupPeerConnectionHandlers(channelId: string) {
     if (!this.peerConnection) return;
 
-    // 트랙 이벤트 핸들러
+    // Kurento의 경우 ontrack은 다른 참가자들의 스트림을 수신할 때 발생
     this.peerConnection.ontrack = (event) => {
       const { streams, track } = event;
-      if (streams.length === 0) return;
-
-      const stream = streams[0];
-
-      // 현재 사용자 정보 가져오기
-      const currentUser = useAuthStore.getState().user;
-      if (!currentUser?.user_id) {
-        console.error('Current user not found');
+      if (!streams.length) {
+        console.warn('Received track without stream');
         return;
       }
 
-      const userId = currentUser.user_id.toString();
-      const isScreenShare = track.label.includes('screen');
+      const stream = streams[0];
+      console.log('Received remote stream:', stream.id);
 
-      // 스트림 업데이트 전에 사용자 상태 확인
-      const users = useUserChannelStore.getState().channelUsers.get(channelId);
-      if (!users?.find(u => u.userId === userId)) {
-        console.warn(`User ${userId} not found in channel ${channelId}. Adding user state.`);
-        // 필요한 경우 사용자 상태 추가
-        useUserChannelStore.getState().addChannelUser(channelId, {
-          userId: userId,
-          username: currentUser.username || '',
-          channelId: channelId,
-          mediaState: {
-            isMuted: false,
-            isDeafened: false,
-            isCameraOn: false,
-            isScreenSharing: false,
-            isSpeaking: false,
-            stream: null,
-            screenStream: null
-          }
-        });
+      // Kurento에서는 streamId 형식이 [ENDPOINT_ID]_[USER_ID] 형태일 수 있음
+      const streamData = this.parseKurentoStreamId(stream.id);
+      if (!streamData) {
+        console.error('Invalid stream ID format from Kurento');
+        return;
       }
 
-      // 스트림 업데이트
-      useUserChannelStore
-        .getState()
-        .updateUserMediaState(
+      const { userId, endpointId } = streamData;
+      console.log(`Processing stream for user ${userId} from endpoint ${endpointId}`);
+
+      // 채널 사용자 확인
+      const users = useUserChannelStore.getState().channelUsers.get(channelId);
+      const userExists = users?.some(u => u.userId === userId);
+
+      if (!userExists) {
+        console.warn(`User ${userId} not yet in store. Caching stream...`);
+        // 필요한 경우 스트림을 임시 저장하는 로직 추가
+        return;
+      }
+
+      try {
+        // Kurento의 경우 스크린쉐어는 별도의 엔드포인트로 처리될 수 있음
+        const isScreenShare = endpointId.includes('screenshare');
+
+        useUserChannelStore.getState().updateUserMediaState(
           channelId,
           userId,
           isScreenShare ? { screenStream: stream } : { stream },
         );
 
-      console.log(`Updated ${isScreenShare ? 'screen share' : 'media'} stream for user:`, userId);
+        if (track.kind === 'audio' && !isScreenShare) {
+          this.setupRemoteAudioDetection(stream, userId);
+        }
 
-      // 오디오 트랙인 경우에만 음성 감지 설정
-      if (track.kind === 'audio' && !isScreenShare) {
-        this.setupRemoteAudioDetection(stream, userId);
+        console.log(`Updated ${isScreenShare ? 'screen share' : 'media'} stream for user: ${userId}`);
+      } catch (error) {
+        console.error('Error updating media state:', error);
       }
     };
 
-    // ICE candidate 처리
-    let iceCandidatesCount = 0;
+    // Kurento의 ICE candidate 처리
     this.peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
-        iceCandidatesCount++;
-        console.log('New ICE candidate:', iceCandidatesCount);
-
+        // Kurento로 ICE candidate 전송
         this.callConnection?.sendOp(OP_CODES.ON_ICE_CANDIDATE, {
           candidate: event.candidate.toJSON(),
           sdp_mid: event.candidate.sdpMid,
           sdp_m_line_index: event.candidate.sdpMLineIndex,
         });
-      } else {
-        console.log(`ICE gathering completed. Total candidates: ${iceCandidatesCount}`);
       }
     };
 
-    // WebRTC 연결 상태 모니터링
+    // Kurento와의 연결 상태 모니터링
     this.peerConnection.onconnectionstatechange = () => {
       const state = this.peerConnection?.connectionState;
-      console.log(`WebRTC Connection State → ${state}`);
+      console.log(`Kurento Connection State → ${state}`);
 
       switch (state) {
         case 'connected':
-          console.log('✓ WebRTC connection established');
+          console.log('✓ Connected to Kurento Media Server');
           this.connectionState.isConnecting = false;
           break;
         case 'disconnected':
-          console.warn('WebRTC connection disconnected - attempting to recover');
-          // 연결 복구 시도 로직을 여기에 추가할 수 있습니다
-          break;
         case 'failed':
-          console.error('WebRTC connection failed');
-          this.reset();
+          console.warn('Kurento connection issue - attempting recovery');
+          this.attemptKurentoReconnection();
           break;
         case 'closed':
-          console.log('WebRTC connection closed');
+          console.log('Kurento connection closed');
           this.reset();
           break;
       }
     };
 
-    // ICE 연결 상태 모니터링
+    // ICE 연결 상태 처리
     this.peerConnection.oniceconnectionstatechange = () => {
       const state = this.peerConnection?.iceConnectionState;
-      console.log(`ICE Connection State → ${state}`);
+      console.log(`ICE Connection State with Kurento → ${state}`);
 
       if (state === 'failed') {
-        console.warn('ICE connection failed - attempting to restart ICE');
-        this.peerConnection?.restartIce();
+        console.warn('ICE connection with Kurento failed - attempting restart');
+        this.restartKurentoConnection();
       }
     };
 
-    // 협상 필요 이벤트 처리
+    // Kurento의 경우 협상은 서버 주도로 이루어질 수 있음
     this.peerConnection.onnegotiationneeded = async () => {
-      console.log('Negotiation needed event triggered');
-
-      // 이미 연결 시도 중이면 무시
+      console.log('Negotiation needed with Kurento');
       if (!this.connectionState.isConnecting) {
         try {
           this.connectionState.isConnecting = true;
           await this.connect();
         } catch (error) {
-          console.error('Error during renegotiation:', error);
+          console.error('Error during Kurento negotiation:', error);
           this.connectionState.isConnecting = false;
         }
-      } else {
-        console.log('Connection already in progress, skipping negotiation');
       }
     };
+  }
 
-    // ICE gathering 상태 모니터링
-    this.peerConnection.onicegatheringstatechange = () => {
-      const state = this.peerConnection?.iceGatheringState;
-      console.log(`ICE Gathering State → ${state}`);
-    };
+  private parseKurentoStreamId(streamId: string): { userId: string; endpointId: string } | null {
+    // Kurento의 streamId 형식에 맞게 파싱
+    // 예: "endpoint123_user456" => { endpointId: "endpoint123", userId: "user456" }
+    const parts = streamId.split('_');
+    if (parts.length !== 2) return null;
 
-    // 연결 데이터 채널 설정 (옵션)
-    this.peerConnection.ondatachannel = (event) => {
-      console.log('Data channel received:', event.channel.label);
-      // 데이터 채널 처리 로직을 여기에 추가할 수 있습니다
+    return {
+      endpointId: parts[0],
+      userId: parts[1],
     };
+  }
 
-    // 상태 변경 시 에러 처리
-    this.peerConnection.onerror = (error) => {
-      console.error('PeerConnection error:', error);
-      // 에러 복구 로직을 여기에 추가할 수 있습니다
-    };
+  private async attemptKurentoReconnection() {
+    try {
+      // 기존 연결 정리
+      await this.cleanupExistingConnection();
+
+      // 새로운 연결 시도
+      await this.prepareConnection(useUserChannelStore.getState().currentUserChannel.channelId);
+      await this.connect();
+    } catch (error) {
+      console.error('Failed to reconnect to Kurento:', error);
+    }
+  }
+
+  private async restartKurentoConnection() {
+    try {
+      if (this.peerConnection) {
+        await this.peerConnection.restartIce();
+        console.log('ICE restart initiated with Kurento');
+      }
+    } catch (error) {
+      console.error('Failed to restart Kurento ICE:', error);
+      await this.attemptKurentoReconnection();
+    }
   }
 
   private setupLocalAudioDetection(stream: MediaStream) {
@@ -327,7 +330,7 @@ export class MediaServerConnection {
                 useUserChannelStore.getState().updateUserMediaState(
                   currentChannelId,
                   uid,
-                  { isSpeaking }
+                  { isSpeaking },
                 );
               }
             } catch (error) {
