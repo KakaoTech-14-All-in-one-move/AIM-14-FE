@@ -55,15 +55,19 @@ export class MediaConnectionManager {
       const userId = currentUser.user_id.toString();
       console.log('Joining channel for user:', userId);
 
+      // 진행 상황 추적을 위한 로깅 추가
+      console.log('Step 1: Checking current channel state');
       const currentChannel = useUserChannelStore.getState().currentUserChannel;
       if (currentChannel.channelId) {
+        console.log('Leaving current channel before joining new one');
         await this.leaveChannel();
       }
 
       // 권한 체크 먼저 수행
+      console.log('Step 2: Checking microphone permissions');
       try {
-        // 권한 상태 확인
         const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+        console.log('Current microphone permission status:', permissionStatus.state);
 
         if (permissionStatus.state === 'denied') {
           throw new Error('마이크 권한이 거부되었습니다. 브라우저 설정에서 권한을 허용해주세요.');
@@ -71,7 +75,8 @@ export class MediaConnectionManager {
 
         // 권한이 prompt 상태일 때는 미리 권한 요청
         if (permissionStatus.state === 'prompt') {
-          const stream = await navigator.mediaDevices.getUserMedia({
+          console.log('Requesting microphone permission');
+          const testStream = await navigator.mediaDevices.getUserMedia({
             audio: {
               echoCancellation: true,
               noiseSuppression: true,
@@ -79,9 +84,11 @@ export class MediaConnectionManager {
             },
             video: false
           });
-          stream.getTracks().forEach(track => track.stop()); // 테스트 스트림 정리
+          testStream.getTracks().forEach(track => track.stop()); // 테스트 스트림 정리
+          console.log('Microphone permission granted');
         }
       } catch (error: any) {
+        console.error('Permission check failed:', error);
         if (error.name === 'NotAllowedError') {
           alert('마이크 접근이 거부되었습니다. 음성 채팅을 위해서는 마이크 권한이 필요합니다.');
           return false;
@@ -89,27 +96,36 @@ export class MediaConnectionManager {
           alert(error.message);
           return false;
         }
+        // 다른 종류의 에러는 계속 진행
       }
 
-      // CallConnection을 통한 채널 입장
-      const success = await MediaConnectionManager.getCallConnection()!.joinChannel(channelId, type);
-      if (!success) {
-        console.error('Failed to join channel via CallConnection');
+      console.log('Step 3: Attempting to join channel via CallConnection');
+      try {
+        const success = await MediaConnectionManager.getCallConnection()!.joinChannel(channelId, type);
+        if (!success) {
+          console.error('Failed to join channel via CallConnection');
+          return false;
+        }
+        console.log('Successfully joined channel via CallConnection');
+      } catch (error) {
+        console.error('Error during CallConnection joinChannel:', error);
         return false;
       }
 
       // WebRTC 연결 준비
-      console.log('Preparing WebRTC connection...');
+      console.log('Step 4: Preparing WebRTC connection');
       try {
         await this.mediaServer.prepareConnection(channelId);
+        console.log('WebRTC connection prepared successfully');
       } catch (error) {
         console.error('Failed to prepare WebRTC connection:', error);
+        await this.handleFailedJoin();
         return false;
       }
 
       // 오디오 스트림 획득
+      console.log('Step 5: Getting audio stream');
       let audioStream: MediaStream | null = null;
-      console.log('Getting audio stream...');
       try {
         audioStream = await navigator.mediaDevices.getUserMedia({
           audio: {
@@ -127,7 +143,6 @@ export class MediaConnectionManager {
         console.log('Successfully got audio stream');
         await this.mediaServer.replaceStream(audioStream);
       } catch (error: any) {
-        // 자세한 에러 메시지 처리
         let errorMessage = '마이크 연결에 실패했습니다.';
         if (error.name === 'NotAllowedError') {
           errorMessage = '마이크 접근이 거부되었습니다. 브라우저 설정에서 권한을 허용해주세요.';
@@ -138,19 +153,24 @@ export class MediaConnectionManager {
         }
 
         alert(errorMessage);
-        console.error('Failed to get initial audio stream:', error);
+        console.error('Error getting audio stream:', error);
+        await this.handleFailedJoin();
         return false;
       }
 
       // WebRTC 연결 설정
+      console.log('Step 6: Establishing WebRTC connection');
       try {
         await this.mediaServer.connect();
+        console.log('WebRTC connection established successfully');
       } catch (error) {
         console.error('Failed to establish WebRTC connection:', error);
+        await this.handleFailedJoin();
         return false;
       }
 
       try {
+        console.log('Step 7: Setting up initial media state');
         // 초기 미디어 상태 설정 - 카메라는 항상 꺼진 상태로 시작
         const initialMediaState = {
           stream: audioStream,
@@ -184,12 +204,30 @@ export class MediaConnectionManager {
         return true;
       } catch (error) {
         console.error('Error setting up user state:', error);
+        await this.handleFailedJoin();
         return false;
       }
     } catch (error) {
       console.error('Error joining channel:', error);
-      await this.leaveChannel();
+      await this.handleFailedJoin();
       return false;
+    }
+  }
+
+  private async handleFailedJoin() {
+    console.log('Cleaning up after failed join attempt');
+    await this.leaveChannel();
+
+    // 필요한 경우 추가적인 정리 작업 수행
+    try {
+      const currentStream = this.mediaServer.getLocalStream();
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => {
+          track.stop();
+        });
+      }
+    } catch (error) {
+      console.error('Error during cleanup:', error);
     }
   }
 
