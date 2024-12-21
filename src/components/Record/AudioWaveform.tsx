@@ -5,7 +5,7 @@ interface AudioWaveformProps {
   isRecording: boolean;
   isScreenSharingExpanded: number;
   isCameraExpanded: number;
-  audioStream: MediaStream | null;  // 새로 추가된 prop
+  audioStream: MediaStream | null;
 }
 
 const AudioWaveform = ({ isRecording, isScreenSharingExpanded, isCameraExpanded, audioStream }: AudioWaveformProps) => {
