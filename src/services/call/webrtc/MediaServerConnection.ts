@@ -546,13 +546,6 @@ export class MediaServerConnection {
         },
       });
 
-      // 기존 오디오 스트림 사용
-      const audioTrack = this.localStream?.getAudioTracks()[0];
-      if (audioTrack && !screenStream.getAudioTracks().length) {
-        // 기존 오디오 트랙을 그대로 사용 (클론하지 않음)
-        screenStream.addTrack(audioTrack);
-      }
-
       // 화면 공유가 취소되었을 때의 처리
       screenStream.getVideoTracks()[0].onended = () => {
         const currentUser = useAuthStore.getState().user;
@@ -580,10 +573,26 @@ export class MediaServerConnection {
         }
       };
 
+      // 새로운 결합된 스트림 생성
+      const combinedStream = new MediaStream();
+
+      // 기존 오디오 스트림 유지
+      const currentStream = this.getLocalStream();
+      if (currentStream) {
+        currentStream.getAudioTracks().forEach(track => {
+          combinedStream.addTrack(track);
+        });
+      }
+
+      // 새로운 화면 공유 비디오 트랙 추가
+      screenStream.getVideoTracks().forEach(track => {
+        combinedStream.addTrack(track);
+      });
+
       // WebRTC 연결에 트랙 추가
       if (this.peerConnection) {
         const videoTrack = screenStream.getVideoTracks()[0];
-        this.peerConnection.addTrack(videoTrack, screenStream);
+        this.peerConnection.addTrack(videoTrack, combinedStream);
 
         // 화면 공유 스트림 품질 최적화 설정
         const sender = this.peerConnection.getSenders().find((s) => s.track === videoTrack);
@@ -596,8 +605,8 @@ export class MediaServerConnection {
           await sender.setParameters(params);
         }
 
-        // localStream 업데이트 (기존 오디오 트랙 유지)
-        this.localStream = screenStream;
+        // localStream 업데이트
+        this.localStream = combinedStream;
       }
 
       return screenStream;
