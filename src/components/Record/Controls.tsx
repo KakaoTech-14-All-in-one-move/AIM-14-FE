@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import * as apiService from '@/services/record/apiService';
+import { apiService } from '@/services/record/apiService.ts';
 import StopIcon from '@/common/icons/stop';
 import CameraOnIcon from '@/common/icons/camera-on';
 import RecordIcon from '@/common/icons/record';
@@ -24,7 +24,6 @@ interface ControlsProps {
   downloadRecording: () => void;
   recordedFile: Blob | null;
   attachedFile?: File;
-  onFeedbackClick: (recordedFile: Blob, attachedFile?: File) => void;
   cleanupMediaStreams: () => void;
 }
 
@@ -40,6 +39,7 @@ const Controls = ({
                     isRecordingComplete,
                     downloadRecording,
                     recordedFile,
+                    attachedFile,
                     cleanupMediaStreams,
                   }: ControlsProps) => {
   const [isUploading, setIsUploading] = useState(false);
@@ -58,10 +58,16 @@ const Controls = ({
 
       cleanupMediaStreams();
 
-      // apiService로 접근하도록 수정
-      const videoId = await apiService.uploadVideo(recordedFile);
+      const uploadResponse = attachedFile
+        ? await apiService.uploadVoiceWithScript(recordedFile, await attachedFile.text())
+        : await apiService.uploadVideoForAnalysis(recordedFile);
 
-      navigate('/feedback', { state: { videoId } });
+      navigate('/feedback', {
+        state: {
+          videoId: uploadResponse.video_id,
+          isVoice: !!attachedFile  // 음성 분석인지 여부
+        }
+      });
 
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to upload video');
@@ -93,7 +99,12 @@ const Controls = ({
       {/* Camera On/Off Button */}
       <button
         onClick={toggleCamera}
-        className="bg-white p-2 rounded-full"
+        disabled={isRecording}
+        className={`p-2 rounded-full ${
+          isRecording
+            ? 'bg-gray-400 cursor-not-allowed'
+            : 'bg-white hover:bg-gray-100'
+        }`}
       >
         {isCameraOn ? <CameraOnIcon /> : <MicIcon />}
       </button>

@@ -61,14 +61,14 @@ export class UserStateManager {
 
   // 채널 입장 이벤트 처리
   handleUserJoin(channelId: string, userData: UserData) {
-    console.log('UserStateManager handling user join:', { channelId, userData });
+    // console.log('UserStateManager handling user join:', { channelId, userData });
 
     const channelUser = this.convertUserData({
       ...userData,
       channel_id: channelId,
     });
 
-    console.log('Converted channel user:', channelUser);
+    // console.log('Converted channel user:', channelUser);
     useUserChannelStore.getState().addChannelUser(channelId, channelUser);
     this.notifyStateUpdate(channelId, userData.user_id);
   }
@@ -81,7 +81,7 @@ export class UserStateManager {
 
   // 유저 상태 업데이트 처리
   handleUserStateUpdate(channelId: string, userId: string, updates: any) {
-    console.log('Handling user state update:', { channelId, userId, updates });
+    // console.log('Handling user state update:', { channelId, userId, updates });
 
     // 상태 업데이트 전에 현재 상태 확인
     const currentUsers = useUserChannelStore.getState().channelUsers.get(channelId);
@@ -105,13 +105,13 @@ export class UserStateManager {
     });
 
     // 상태 업데이트 후 로그
-    console.log('User state updated:', {
-      channelId,
-      userId,
-      updates,
-      hasStream: !!updates.stream,
-      hasScreenStream: !!updates.screenStream,
-    });
+    // console.log('User state updated:', {
+    //   channelId,
+    //   userId,
+    //   updates,
+    //   hasStream: !!updates.stream,
+    //   hasScreenStream: !!updates.screenStream,
+    // });
   }
 
   // 스트림 업데이트 처리

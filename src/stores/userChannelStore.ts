@@ -56,17 +56,17 @@ export const useUserChannelStore = create<UserChannelState>((set) => ({
   }),
 
   addChannelUser: (channelId, user) => set(state => {
-    console.log('Adding user to channel store:', { channelId, user });
-    console.log('Current channel users:', state.channelUsers);
+    // console.log('Adding user to channel store:', { channelId, user });
+    // console.log('Current channel users:', state.channelUsers);
 
     const newChannelUsers = new Map(state.channelUsers);
     const currentUsers = newChannelUsers.get(channelId) || [];
 
     if (!currentUsers.find(u => u.userId === user.userId)) {
       newChannelUsers.set(channelId, [...currentUsers, user]);
-      console.log('Updated channel users:', newChannelUsers);
+      // console.log('Updated channel users:', newChannelUsers);
     } else {
-      console.log('User already exists in channel');
+      // console.log('User already exists in channel');
     }
 
     return { channelUsers: newChannelUsers };

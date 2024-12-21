@@ -94,7 +94,7 @@ export class CallConnection {
 
     [OP_CODES.ENTER_CHANNEL_EVENT]: (data: any) => {
       if (!data?.channel_id || !data?.user_id) return;
-      console.log('Socket ENTER_CHANNEL_EVENT received:', data);
+      // console.log('Socket ENTER_CHANNEL_EVENT received:', data);
 
       const userData = {
         user_id: data.user_id,
@@ -108,14 +108,14 @@ export class CallConnection {
         screen_sharing: data.screen_sharing ?? false,
       };
 
-      console.log('Processed userData for channel join:', userData);
+      // console.log('Processed userData for channel join:', userData);
       this.userStateManager.handleUserJoin(data.channel_id.toString(), userData);
     },
 
     [OP_CODES.LEAVE_CHANNEL_EVENT]: (data: any) => {
       if (!data?.channel_id || !data?.user_id) return;
 
-      console.log('Leave channel event received:', data);
+      // console.log('Leave channel event received:', data);
       const channelId = data.channel_id.toString();
 
       this.userStateManager.handleUserLeave(channelId, data.user_id);
@@ -210,7 +210,7 @@ export class CallConnection {
     // 새로운 interval 설정 (더 짧은 간격으로)
     this.heartbeatInterval = setInterval(() => {
       if (this.isConnected()) {
-        console.log('Sending heartbeat...', new Date().toISOString());
+        // console.log('Sending heartbeat...', new Date().toISOString());
         this.sendOp(OP_CODES.HEARTBEAT);
       } else {
         if (this.heartbeatInterval) {
@@ -319,7 +319,7 @@ export class CallConnection {
     return this.updateServerConnection();
   }
 
-  private async updateServerConnection(): Promise<boolean> {
+  private async updateServerConnection(): Promise<unknown> {
     if (!this.isConnected() || !this.currentServerId) {
       return false;
     }
@@ -339,7 +339,7 @@ export class CallConnection {
     }
 
     return new Promise((resolve) => {
-      console.log('SEND CHANNEL ENTER');
+      // console.log('SEND CHANNEL ENTER');
       this.sendOp(OP_CODES.ENTER_CHANNEL, {
         server_id: this.currentServerId,
         channel_id: channelId,

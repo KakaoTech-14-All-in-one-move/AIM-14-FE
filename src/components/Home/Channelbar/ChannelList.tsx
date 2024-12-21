@@ -104,7 +104,7 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
       // 채널 입장 시도 중임을 표시
       setJoiningChannel(channel.channelId.toString());
 
-      console.log('Attempting to enter channel:', channel.channelId.toString());
+      // console.log('Attempting to enter channel:', channel.channelId.toString());
       const success = await ChannelNavigator.getInstance().handleChannelEnter(
         channel.channelId.toString(),
         mediaType
@@ -116,7 +116,7 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
         return;
       }
 
-      console.log('Successfully entered channel');
+      // console.log('Successfully entered channel');
       toggleChannelExpand(channel.channelName);
 
     } catch (error) {

@@ -218,7 +218,7 @@ export class MediaServerConnection {
     try {
       // 현재 유저 정보 가져오기
       const currentUser = useAuthStore.getState().user;
-      console.log('Current user in setupLocalAudioDetection:', currentUser);
+      // console.log('Current user in setupLocalAudioDetection:', currentUser);
 
       // user 객체와 user_id 존재 여부 확인
       if (!currentUser || typeof currentUser.user_id === 'undefined') {
@@ -227,7 +227,7 @@ export class MediaServerConnection {
       }
 
       const userId = currentUser.user_id.toString();
-      console.log('Using user ID:', userId);
+      // console.log('Using user ID:', userId);
 
       // 스트림 유효성 검사
       if (!stream || !stream.getAudioTracks().length) {
@@ -242,9 +242,8 @@ export class MediaServerConnection {
       const source = audioContext.createMediaStreamSource(stream);
       const analyser = audioContext.createAnalyser();
 
-      // 오디오 처리 파이프라인 설정
+      // 오디오 처리 파이프라인 설정 - analyser에만 연결
       source.connect(analyser);
-      source.connect(audioContext.destination);
 
       // FFT 설정
       analyser.fftSize = 256;
@@ -360,10 +359,8 @@ export class MediaServerConnection {
       const source = audioContext.createMediaStreamSource(stream);
       const analyser = audioContext.createAnalyser();
 
-      // 오디오 처리 파이프라인 설정
+      // 오디오 처리 파이프라인 설정 - analyser에만 연결
       source.connect(analyser);
-      // destination에 연결하여 오디오가 실제로 흐르도록 함
-      source.connect(audioContext.destination);
 
       // FFT 크기와 평활화 상수 설정
       analyser.fftSize = 256; // 더 세밀한 주파수 분석을 위해 증가
@@ -426,43 +423,8 @@ export class MediaServerConnection {
     }
   }
 
-  async updateLocalStream(type: MediaType): Promise<MediaStream | null> {
-    try {
-      // 현재 사용자와 채널 ID 가져오기
-      const currentUser = useAuthStore.getState().user;
-      const currentChannelId = useUserChannelStore.getState().currentUserChannel.channelId;
-
-      if (!currentUser?.email || !currentChannelId) return null;
-
-      // 현재 사용자의 미디어 상태 확인
-      const channelUsers = useUserChannelStore.getState().channelUsers.get(currentChannelId) || [];
-      const userState = channelUsers.find((user) => user.userId === currentUser.user_id.toString());
-      const isCameraOn = userState?.mediaState.isCameraOn ?? false;
-
-      // 미디어 제약 조건 설정
-      const constraints: MediaStreamConstraints = {
-        audio: true, // 오디오는 항상 필요
-        video:
-          type === 'VIDEO' && isCameraOn
-            ? {
-                width: { ideal: 1280 },
-                height: { ideal: 720 },
-              }
-            : false,
-      };
-
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-
-      // 오디오 감지 설정 및 스트림 교체
-      this.setupLocalAudioDetection(stream);
-      this.replaceStream(stream);
-      this.localStream = stream;
-
-      return stream;
-    } catch (error) {
-      console.error('Error getting user media:', error);
-      return null;
-    }
+  getLocalStream(): MediaStream | null {
+    return this.localStream;
   }
 
   replaceStream(newStream: MediaStream) {
