@@ -17,7 +17,7 @@ const Sidebar: FC = () => {
   const { selectedServerId, setSelectedServerId } = useServerStore();
   const { setCurrentChannel, setChannels } = useChannelStore();
 
-  const BASE_URL = import.meta.env.VITE_BE_SERVER_URL;
+  const BASE_URL = import.meta.env.VITE_S3_URL;
 
   const { connection } = useCall();
   const { currentUserChannel } = useUserChannelStore();
