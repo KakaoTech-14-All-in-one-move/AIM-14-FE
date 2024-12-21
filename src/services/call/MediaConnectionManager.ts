@@ -399,24 +399,51 @@ export class MediaConnectionManager {
 
   // 카메라 상태 처리를 위한 헬퍼 메소드
   private async handleCameraState(isCameraOn: boolean) {
-    if (isCameraOn) {
-      const videoStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          frameRate: { ideal: 30 },
-        },
-      });
-      await this.mediaServer.replaceStream(videoStream);
-      return { stream: videoStream };
-    } else {
-      const audioOnlyStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: false,
-      });
-      await this.mediaServer.replaceStream(audioOnlyStream);
-      return { stream: audioOnlyStream };
+    try {
+      if (isCameraOn) {
+        // 비디오 스트림만 따로 요청
+        const videoStream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 30 },
+          },
+        });
+
+        // 기존 오디오 트랙이 있는 새 스트림 생성
+        const combinedStream = new MediaStream();
+
+        // 기존 스트림에서 오디오 트랙 가져오기
+        const currentStream = this.mediaServer.getLocalStream();
+        if (currentStream) {
+          currentStream.getAudioTracks().forEach(track => {
+            combinedStream.addTrack(track);
+          });
+        }
+
+        // 새 비디오 트랙 추가
+        videoStream.getVideoTracks().forEach(track => {
+          combinedStream.addTrack(track);
+        });
+
+        await this.mediaServer.replaceStream(combinedStream);
+        return { stream: combinedStream };
+      } else {
+        // 카메라를 끄는 경우, 기존 스트림에서 비디오 트랙만 제거
+        const currentStream = this.mediaServer.getLocalStream();
+        if (currentStream) {
+          const audioOnlyStream = new MediaStream();
+          currentStream.getAudioTracks().forEach(track => {
+            audioOnlyStream.addTrack(track);
+          });
+          await this.mediaServer.replaceStream(audioOnlyStream);
+          return { stream: audioOnlyStream };
+        }
+      }
+    } catch (error) {
+      console.error('Error handling camera state:', error);
+      throw error;
     }
   }
 

@@ -1,6 +1,6 @@
 import { HeadphoneOff, MicOff } from 'lucide-react';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage';
-import React, { useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { ChannelUser } from '@/stores/userChannelStore';
 
 interface UserBoxProps {
@@ -10,10 +10,10 @@ interface UserBoxProps {
 }
 
 export const UserBox: React.FC<UserBoxProps> = React.memo(({
-  user,
-  isScreenShare = false,
-  totalUsers
-}) => {
+                                                             user,
+                                                             isScreenShare = false,
+                                                             totalUsers,
+                                                           }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const BASE_URL = import.meta.env.VITE_S3_URL;
 
@@ -76,16 +76,6 @@ export const UserBox: React.FC<UserBoxProps> = React.memo(({
       className={`relative w-full aspect-video bg-gray-900 rounded-xl overflow-hidden shadow-lg transition-all duration-200 
         ${user.mediaState.isSpeaking && !user.mediaState.isMuted ? 'ring-2 ring-green-500' : ''}`}
     >
-      {showVideo && (
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          className={`w-full h-full ${isScreenShare ? 'object-contain' : 'object-cover'}`}
-        />
-      )}
-
       {(!showVideo && !isScreenShare) && (
         <div className="absolute inset-0 flex items-center justify-center">
           {user.profileImage ? (
@@ -94,7 +84,7 @@ export const UserBox: React.FC<UserBoxProps> = React.memo(({
               alt={user.username}
               style={{
                 width: `${sizes.profileSize * 4}px`,
-                height: `${sizes.profileSize * 4}px`
+                height: `${sizes.profileSize * 4}px`,
               }}
               className="rounded-full"
             />
