@@ -83,7 +83,7 @@ export class MediaConnectionManager {
             noiseSuppression: true,
             autoGainControl: true,
           },
-          video: false,
+          video: false,  // 초기에는 비디오를 끈 상태로 시작
         });
 
         if (!audioStream || audioStream.getAudioTracks().length === 0) {
@@ -106,18 +106,18 @@ export class MediaConnectionManager {
       }
 
       try {
+        // 초기 미디어 상태 설정 - 카메라는 항상 꺼진 상태로 시작
         const initialMediaState = {
           stream: audioStream,
           screenStream: null,
           isMuted: false,
           isDeafened: false,
-          isCameraOn: false,
+          isCameraOn: false,  // 카메라 초기 상태를 false로 설정
           isScreenSharing: false
         };
 
         useUserChannelStore.getState().setCurrentUserChannel(channelId, type);
 
-        // UserStateManager를 통한 상태 업데이트
         this.userStateManager.handleUserJoin(channelId, {
           user_id: userId,
           username: currentUser.username,
@@ -125,7 +125,7 @@ export class MediaConnectionManager {
           channel_id: channelId,
           muted: initialMediaState.isMuted,
           deafened: initialMediaState.isDeafened,
-          camera_on: initialMediaState.isCameraOn,
+          camera_on: initialMediaState.isCameraOn,  // false로 설정된 값이 전달됨
           screen_sharing: initialMediaState.isScreenSharing,
         });
 
