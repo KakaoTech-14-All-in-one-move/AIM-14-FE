@@ -41,30 +41,31 @@ export class MediaConnectionManager {
 
   async joinChannel(channelId: string, type: MediaType): Promise<boolean> {
     try {
-      // CallConnection 확인
       if (!MediaConnectionManager.getCallConnection()) {
         console.error('No CallConnection available');
         return false;
       }
 
-      // 현재 채널 확인 및 정리
+      const currentUser = useAuthStore.getState().user;
+      if (!currentUser?.user_id) {
+        console.error('Invalid user data:', currentUser);
+        return false;
+      }
+
+      const userId = currentUser.user_id.toString();
+      console.log('Joining channel for user:', userId);
+
       const currentChannel = useUserChannelStore.getState().currentUserChannel;
       if (currentChannel.channelId) {
         await this.leaveChannel();
       }
 
-      // CallConnection을 통한 채널 참가
-      // console.log('Attempting to join channel via CallConnection...');
-      const success = await MediaConnectionManager.getCallConnection()!.joinChannel(
-        channelId,
-        type,
-      );
+      const success = await MediaConnectionManager.getCallConnection()!.joinChannel(channelId, type);
       if (!success) {
         console.error('Failed to join channel via CallConnection');
         return false;
       }
 
-      // WebRTC 연결 준비
       console.log('Preparing WebRTC connection...');
       try {
         await this.mediaServer.prepareConnection(channelId);
@@ -73,58 +74,30 @@ export class MediaConnectionManager {
         return false;
       }
 
-      // 오디오 스트림 획득
       let audioStream: MediaStream | null = null;
       console.log('Getting audio stream...');
       try {
-        const constraints = {
+        audioStream = await navigator.mediaDevices.getUserMedia({
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
           },
           video: false,
-        };
+        });
 
-        audioStream = await navigator.mediaDevices.getUserMedia(constraints);
-        if (!audioStream) {
-          console.error('Failed to get audio stream - stream is null');
+        if (!audioStream || audioStream.getAudioTracks().length === 0) {
+          console.error('Failed to get audio stream');
           return false;
         }
 
-        const audioTracks = audioStream.getAudioTracks();
-        if (audioTracks.length === 0) {
-          console.error('Failed to get audio stream - no audio tracks');
-          return false;
-        }
-
-        console.log('Successfully got audio stream with tracks:', audioTracks.length);
+        console.log('Successfully got audio stream');
         await this.mediaServer.replaceStream(audioStream);
       } catch (error: any) {
         console.error('Failed to get initial audio stream:', error);
-        let errorMessage = '오디오 스트림을 가져오는데 실패했습니다.';
-
-        if (error instanceof DOMException) {
-          switch (error.name) {
-            case 'NotAllowedError':
-              errorMessage =
-                '마이크 접근 권한이 필요합니다. 브라우저 설정에서 권한을 허용해주세요.';
-              break;
-            case 'NotFoundError':
-              errorMessage = '마이크를 찾을 수 없습니다. 마이크가 연결되어 있는지 확인해주세요.';
-              break;
-            case 'NotReadableError':
-              errorMessage = '마이크에 접근할 수 없습니다. 다른 앱에서 사용 중일 수 있습니다.';
-              break;
-          }
-        }
-
-        alert(errorMessage);
         return false;
       }
 
-      // WebRTC 연결 수립
-      console.log('Establishing WebRTC connection...');
       try {
         await this.mediaServer.connect();
       } catch (error) {
@@ -132,21 +105,7 @@ export class MediaConnectionManager {
         return false;
       }
 
-      // 현재 사용자 정보 확인
-      const currentUser = useAuthStore.getState().user;
-      // console.log('Current user data:', currentUser);
-
-      if (!currentUser || !currentUser.user_id) {
-        console.error('No current user found or invalid user data');
-        return false;
-      }
-
-      const userId = currentUser.user_id.toString();
-      // console.log('User ID:', userId);
-
-      // 채널 및 사용자 상태 설정
       try {
-        // 초기 미디어 상태 설정
         const initialMediaState = {
           stream: audioStream,
           screenStream: null,
@@ -156,7 +115,6 @@ export class MediaConnectionManager {
           isScreenSharing: false
         };
 
-        // 스토어 상태 업데이트
         useUserChannelStore.getState().setCurrentUserChannel(channelId, type);
 
         // UserStateManager를 통한 상태 업데이트
@@ -171,16 +129,15 @@ export class MediaConnectionManager {
           screen_sharing: initialMediaState.isScreenSharing,
         });
 
-        // 미디어 상태 업데이트
         this.userStateManager.handleUserStateUpdate(channelId, userId, initialMediaState);
+
+        console.log('Successfully joined channel:', channelId);
+        this.notifyStateUpdate(channelId);
+        return true;
       } catch (error) {
-        console.error('Error setting user state:', error);
+        console.error('Error setting up user state:', error);
         return false;
       }
-
-      // console.log('Successfully joined channel:', channelId);
-      this.notifyStateUpdate(channelId);
-      return true;
     } catch (error) {
       console.error('Error joining channel:', error);
       await this.leaveChannel();

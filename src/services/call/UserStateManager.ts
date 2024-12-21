@@ -14,9 +14,11 @@ interface UserData {
 export class UserStateManager {
   private static instance: UserStateManager | null = null;
   private stateUpdateCallbacks: Set<(channelId: string, userId: string) => void>;
+  private joinedUsers: Set<string>; // 채널별 사용자 추적을 위한 Set
 
   private constructor() {
     this.stateUpdateCallbacks = new Set();
+    this.joinedUsers = new Set();
   }
 
   static getInstance(): UserStateManager {
@@ -26,20 +28,23 @@ export class UserStateManager {
     return this.instance;
   }
 
-  // 서버 응답 처리 (초기 상태 설정)
   handleServerState(channelUsers: UserData[]) {
-    // console.log('UserStateManager received users:', channelUsers);
-    // 기존 상태 초기화
+    console.log('Handling server state with users:', channelUsers);
     const channelUsersMap = new Map<string, ChannelUser[]>();
 
-    // 채널별로 유저 그룹화 및 상태 변환
+    // 기존의 joined users 초기화
+    this.joinedUsers.clear();
+
     channelUsers.forEach(userData => {
-      if (!userData.channel_id) return;
+      if (!userData.channel_id || !userData.user_id) {
+        console.warn('Invalid user data:', userData);
+        return;
+      }
 
       const channelId = userData.channel_id;
       const users = channelUsersMap.get(channelId) || [];
 
-      // 이미 존재하는 유저의 스트림 정보 보존
+      // 현재 채널 상태 가져오기
       const existingUser = useUserChannelStore.getState().channelUsers
         .get(channelId)?.find(u => u.userId === userData.user_id);
 
@@ -51,80 +56,149 @@ export class UserStateManager {
 
       users.push(convertedUser);
       channelUsersMap.set(channelId, users);
+
+      // joined users에 추가
+      this.joinedUsers.add(`${channelId}:${userData.user_id}`);
     });
 
-    // 각 채널별로 상태 업데이트
     channelUsersMap.forEach((users, channelId) => {
       useUserChannelStore.getState().setChannelUsers(channelId, users);
+      console.log(`Updated channel ${channelId} with ${users.length} users`);
     });
   }
 
-  // 채널 입장 이벤트 처리
   handleUserJoin(channelId: string, userData: UserData) {
-    // console.log('UserStateManager handling user join:', { channelId, userData });
+    console.log('Handling user join:', { channelId, userData });
 
-    const channelUser = this.convertUserData({
-      ...userData,
-      channel_id: channelId,
-    });
-
-    // console.log('Converted channel user:', channelUser);
-    useUserChannelStore.getState().addChannelUser(channelId, channelUser);
-    this.notifyStateUpdate(channelId, userData.user_id);
-  }
-
-  // 채널 퇴장 이벤트 처리
-  handleUserLeave(channelId: string, userId: string) {
-    useUserChannelStore.getState().removeChannelUser(channelId, userId);
-    this.notifyStateUpdate(channelId, userId);
-  }
-
-  // 유저 상태 업데이트 처리
-  handleUserStateUpdate(channelId: string, userId: string, updates: any) {
-    // console.log('Handling user state update:', { channelId, userId, updates });
-
-    // 상태 업데이트 전에 현재 상태 확인
-    const currentUsers = useUserChannelStore.getState().channelUsers.get(channelId);
-    if (!currentUsers) {
-      console.error('No users found for channel:', channelId);
+    if (!userData.user_id || !channelId) {
+      console.error('Invalid user data or channel ID:', { userData, channelId });
       return;
     }
 
-    // 현재 사용자의 상태를 찾아서 스트림 정보 보존
-    const currentUser = currentUsers.find(user => user.userId === userId);
-    const currentStream = currentUser?.mediaState.stream;
-    const currentScreenStream = currentUser?.mediaState.screenStream;
+    const userKey = `${channelId}:${userData.user_id}`;
+    if (this.joinedUsers.has(userKey)) {
+      console.log(`User ${userData.user_id} already exists in channel ${channelId}`);
+      return;
+    }
 
-    useUserChannelStore.getState().updateUserMediaState(channelId, userId, {
-      isMuted: updates.muted !== undefined ? updates.muted : false,
-      isDeafened: updates.deafened !== undefined ? updates.deafened : false,
-      isCameraOn: updates.camera_on !== undefined ? updates.camera_on : false,
-      isScreenSharing: updates.screen_sharing !== undefined ? updates.screen_sharing : false,
-      stream: updates.stream || currentStream, // 기존 스트림 보존
-      screenStream: updates.screenStream || currentScreenStream, // 화면 공유 스트림 보존
-    });
+    try {
+      const channelUser = this.convertUserData({
+        ...userData,
+        channel_id: channelId,
+      });
 
-    // 상태 업데이트 후 로그
-    // console.log('User state updated:', {
-    //   channelId,
-    //   userId,
-    //   updates,
-    //   hasStream: !!updates.stream,
-    //   hasScreenStream: !!updates.screenStream,
-    // });
+      useUserChannelStore.getState().addChannelUser(channelId, channelUser);
+      this.joinedUsers.add(userKey);
+      this.notifyStateUpdate(channelId, userData.user_id);
+      console.log(`User ${userData.user_id} successfully joined channel ${channelId}`);
+    } catch (error) {
+      console.error('Error in handleUserJoin:', error);
+    }
   }
 
-  // 스트림 업데이트 처리
+  handleUserLeave(channelId: string, userId: string) {
+    console.log('Handling user leave:', { channelId, userId });
+
+    if (!userId || !channelId) {
+      console.error('Invalid user ID or channel ID:', { userId, channelId });
+      return;
+    }
+
+    try {
+      const userKey = `${channelId}:${userId}`;
+      this.joinedUsers.delete(userKey);
+
+      useUserChannelStore.getState().removeChannelUser(channelId, userId);
+      this.notifyStateUpdate(channelId, userId);
+      console.log(`User ${userId} successfully left channel ${channelId}`);
+    } catch (error) {
+      console.error('Error in handleUserLeave:', error);
+    }
+  }
+
+  handleUserStateUpdate(channelId: string, userId: string, updates: any) {
+    console.log('Handling user state update:', { channelId, userId, updates });
+
+    if (!userId || !channelId) {
+      console.error('Invalid user ID or channel ID:', { userId, channelId });
+      return;
+    }
+
+    try {
+      // 현재 채널 상태 확인
+      const currentUsers = useUserChannelStore.getState().channelUsers.get(channelId);
+
+      // 채널이 없는 경우 생성
+      if (!currentUsers) {
+        console.warn(`Channel ${channelId} not found, initializing channel`);
+        useUserChannelStore.getState().setChannelUsers(channelId, []);
+      }
+
+      // 현재 사용자 찾기
+      const currentUser = currentUsers?.find(user => user.userId === userId);
+
+      // 사용자가 없는 경우 새로 추가
+      if (!currentUser) {
+        console.warn(`User ${userId} not found in channel ${channelId}, adding new user state`);
+        // 현재 인증된 사용자 정보 가져오기
+        const authUser = useAuthStore.getState().user;
+
+        if (authUser && authUser.user_id.toString() === userId) {
+          this.handleUserJoin(channelId, {
+            user_id: userId,
+            username: authUser.username,
+            channel_id: channelId,
+            muted: false,
+            deafened: false,
+            camera_on: false,
+            screen_sharing: false
+          });
+        }
+      }
+
+      // 상태 업데이트 적용
+      const updatedMediaState = {
+        isMuted: updates.muted ?? currentUser?.mediaState.isMuted ?? false,
+        isDeafened: updates.deafened ?? currentUser?.mediaState.isDeafened ?? false,
+        isCameraOn: updates.camera_on ?? currentUser?.mediaState.isCameraOn ?? false,
+        isScreenSharing: updates.screen_sharing ?? currentUser?.mediaState.isScreenSharing ?? false,
+        stream: updates.stream ?? currentUser?.mediaState.stream ?? null,
+        screenStream: updates.screenStream ?? currentUser?.mediaState.screenStream ?? null,
+        isSpeaking: updates.isSpeaking ?? currentUser?.mediaState.isSpeaking ?? false,
+      };
+
+      useUserChannelStore.getState().updateUserMediaState(channelId, userId, updatedMediaState);
+      this.notifyStateUpdate(channelId, userId);
+
+      console.log('User state updated successfully:', {
+        channelId,
+        userId,
+        updatedState: {
+          ...updatedMediaState,
+          hasStream: !!updatedMediaState.stream,
+          hasScreenStream: !!updatedMediaState.screenStream,
+        }
+      });
+    } catch (error) {
+      console.error('Error in handleUserStateUpdate:', error);
+    }
+  }
+
   updateUserStream(channelId: string, userId: string, stream: MediaStream | null, isScreenShare: boolean = false) {
-    const update = isScreenShare ? { screenStream: stream } : { stream };
-    useUserChannelStore.getState().updateUserMediaState(channelId, userId, update);
-    this.notifyStateUpdate(channelId, userId);
-  }
+    if (!userId || !channelId) {
+      console.error('Invalid user ID or channel ID:', { userId, channelId });
+      return;
+    }
 
-  // 상태 변경 알림 구독
-  onStateUpdate(callback: (channelId: string, userId: string) => void) {
-    this.stateUpdateCallbacks.add(callback);
-    return () => this.stateUpdateCallbacks.delete(callback);
+    try {
+      const update = isScreenShare ? { screenStream: stream } : { stream };
+      console.log(`Updating ${isScreenShare ? 'screen share' : 'media'} stream for user ${userId}`);
+
+      useUserChannelStore.getState().updateUserMediaState(channelId, userId, update);
+      this.notifyStateUpdate(channelId, userId);
+    } catch (error) {
+      console.error('Error in updateUserStream:', error);
+    }
   }
 
   private notifyStateUpdate(channelId: string, userId: string) {
@@ -132,6 +206,10 @@ export class UserStateManager {
   }
 
   private convertUserData(userData: UserData): ChannelUser {
+    if (!userData.user_id || !userData.channel_id) {
+      throw new Error('Invalid user data: missing required fields');
+    }
+
     return {
       userId: userData.user_id,
       username: userData.username,
@@ -140,7 +218,7 @@ export class UserStateManager {
       mediaState: {
         isMuted: userData.muted,
         isDeafened: userData.deafened,
-        isCameraOn: false,
+        isCameraOn: userData.camera_on,
         isScreenSharing: userData.screen_sharing,
         isSpeaking: false,
         stream: null,
@@ -151,6 +229,7 @@ export class UserStateManager {
 
   dispose() {
     this.stateUpdateCallbacks.clear();
+    this.joinedUsers.clear();
     UserStateManager.instance = null;
   }
 }

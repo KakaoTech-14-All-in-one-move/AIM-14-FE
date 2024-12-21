@@ -115,15 +115,43 @@ export class MediaServerConnection {
   private setupPeerConnectionHandlers(channelId: string) {
     if (!this.peerConnection) return;
 
-    // 기존 트랙 이벤트 핸들러
+    // 트랙 이벤트 핸들러
     this.peerConnection.ontrack = (event) => {
       const { streams, track } = event;
       if (streams.length === 0) return;
 
       const stream = streams[0];
-      const metadata = track.id.split('_');
-      const userId = metadata[0];
-      const isScreenShare = metadata[1] === 'screen';
+
+      // 현재 사용자 정보 가져오기
+      const currentUser = useAuthStore.getState().user;
+      if (!currentUser?.user_id) {
+        console.error('Current user not found');
+        return;
+      }
+
+      const userId = currentUser.user_id.toString();
+      const isScreenShare = track.label.includes('screen');
+
+      // 스트림 업데이트 전에 사용자 상태 확인
+      const users = useUserChannelStore.getState().channelUsers.get(channelId);
+      if (!users?.find(u => u.userId === userId)) {
+        console.warn(`User ${userId} not found in channel ${channelId}. Adding user state.`);
+        // 필요한 경우 사용자 상태 추가
+        useUserChannelStore.getState().addChannelUser(channelId, {
+          userId: userId,
+          username: currentUser.username || '',
+          channelId: channelId,
+          mediaState: {
+            isMuted: false,
+            isDeafened: false,
+            isCameraOn: false,
+            isScreenSharing: false,
+            isSpeaking: false,
+            stream: null,
+            screenStream: null
+          }
+        });
+      }
 
       // 스트림 업데이트
       useUserChannelStore
@@ -133,6 +161,8 @@ export class MediaServerConnection {
           userId,
           isScreenShare ? { screenStream: stream } : { stream },
         );
+
+      console.log(`Updated ${isScreenShare ? 'screen share' : 'media'} stream for user:`, userId);
 
       // 오디오 트랙인 경우에만 음성 감지 설정
       if (track.kind === 'audio' && !isScreenShare) {
@@ -145,6 +175,7 @@ export class MediaServerConnection {
     this.peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
         iceCandidatesCount++;
+        console.log('New ICE candidate:', iceCandidatesCount);
 
         this.callConnection?.sendOp(OP_CODES.ON_ICE_CANDIDATE, {
           candidate: event.candidate.toJSON(),
@@ -152,8 +183,7 @@ export class MediaServerConnection {
           sdp_m_line_index: event.candidate.sdpMLineIndex,
         });
       } else {
-        // null candidate는 ICE gathering 완료를 의미
-        // console.log(`ICE gathering completed. Total candidates: ${iceCandidatesCount}`);
+        console.log(`ICE gathering completed. Total candidates: ${iceCandidatesCount}`);
       }
     };
 
@@ -169,12 +199,11 @@ export class MediaServerConnection {
           break;
         case 'disconnected':
           console.warn('WebRTC connection disconnected - attempting to recover');
-          // 필요한 경우 재연결 로직 추가
+          // 연결 복구 시도 로직을 여기에 추가할 수 있습니다
           break;
         case 'failed':
           console.error('WebRTC connection failed');
           this.reset();
-          // 연결 실패 처리 (예: UI 업데이트, 재연결 시도 등)
           break;
         case 'closed':
           console.log('WebRTC connection closed');
@@ -195,7 +224,9 @@ export class MediaServerConnection {
     };
 
     // 협상 필요 이벤트 처리
-    this.peerConnection!.onnegotiationneeded = async () => {
+    this.peerConnection.onnegotiationneeded = async () => {
+      console.log('Negotiation needed event triggered');
+
       // 이미 연결 시도 중이면 무시
       if (!this.connectionState.isConnecting) {
         try {
@@ -205,29 +236,40 @@ export class MediaServerConnection {
           console.error('Error during renegotiation:', error);
           this.connectionState.isConnecting = false;
         }
+      } else {
+        console.log('Connection already in progress, skipping negotiation');
       }
     };
 
     // ICE gathering 상태 모니터링
     this.peerConnection.onicegatheringstatechange = () => {
-      console.log(`ICE Gathering State → ${this.peerConnection?.iceGatheringState}`);
+      const state = this.peerConnection?.iceGatheringState;
+      console.log(`ICE Gathering State → ${state}`);
+    };
+
+    // 연결 데이터 채널 설정 (옵션)
+    this.peerConnection.ondatachannel = (event) => {
+      console.log('Data channel received:', event.channel.label);
+      // 데이터 채널 처리 로직을 여기에 추가할 수 있습니다
+    };
+
+    // 상태 변경 시 에러 처리
+    this.peerConnection.onerror = (error) => {
+      console.error('PeerConnection error:', error);
+      // 에러 복구 로직을 여기에 추가할 수 있습니다
     };
   }
 
   private setupLocalAudioDetection(stream: MediaStream) {
     try {
-      // 현재 유저 정보 가져오기
       const currentUser = useAuthStore.getState().user;
-      // console.log('Current user in setupLocalAudioDetection:', currentUser);
-
-      // user 객체와 user_id 존재 여부 확인
-      if (!currentUser || typeof currentUser.user_id === 'undefined') {
+      if (!currentUser?.user_id) {
         console.error('Invalid user data:', currentUser);
         return;
       }
 
       const userId = currentUser.user_id.toString();
-      // console.log('Using user ID:', userId);
+      console.log('Setting up local audio detection for user:', userId);
 
       // 스트림 유효성 검사
       if (!stream || !stream.getAudioTracks().length) {
@@ -242,7 +284,7 @@ export class MediaServerConnection {
       const source = audioContext.createMediaStreamSource(stream);
       const analyser = audioContext.createAnalyser();
 
-      // 오디오 처리 파이프라인 설정 - analyser에만 연결
+      // 오디오 처리 파이프라인 설정
       source.connect(analyser);
 
       // FFT 설정
@@ -250,15 +292,12 @@ export class MediaServerConnection {
       analyser.smoothingTimeConstant = 0.3;
 
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-      // Map에 저장
       this.audioContextMap.set(userId, {
         context: audioContext,
         analyser,
         dataArray,
       });
 
-      // 음성 감지 인터벌 설정
       if (!this.audioDetectionInterval) {
         this.audioDetectionInterval = window.setInterval(() => {
           this.audioContextMap.forEach((audio, uid) => {
@@ -266,27 +305,30 @@ export class MediaServerConnection {
               const { analyser, dataArray } = audio;
               analyser.getByteFrequencyData(dataArray);
 
-              // 음성 감지 로직
               const sum = dataArray.reduce((a, b) => a + b, 0);
               const average = sum / dataArray.length;
               const isSpeaking = average > 15;
 
               const currentChannelId = useUserChannelStore.getState().currentUserChannel.channelId;
-              if (!currentChannelId) return;
+              if (!currentChannelId) {
+                console.warn('No current channel ID found');
+                return;
+              }
 
               const users = useUserChannelStore.getState().channelUsers.get(currentChannelId);
               const userState = users?.find((user) => user.userId === uid);
 
               if (!userState) {
-                console.warn('User state not found for:', uid);
+                console.warn(`User state not found for: ${uid} in channel: ${currentChannelId}`);
                 return;
               }
 
-              // 상태가 변경됐을 때만 업데이트
               if (userState.mediaState.isSpeaking !== isSpeaking) {
-                useUserChannelStore
-                  .getState()
-                  .updateUserMediaState(currentChannelId, uid, { isSpeaking });
+                useUserChannelStore.getState().updateUserMediaState(
+                  currentChannelId,
+                  uid,
+                  { isSpeaking }
+                );
               }
             } catch (error) {
               console.error('Error in audio detection interval for user:', uid, error);
