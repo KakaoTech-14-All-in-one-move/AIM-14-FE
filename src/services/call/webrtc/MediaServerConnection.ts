@@ -442,6 +442,58 @@ export class MediaServerConnection {
     }
   }
 
+  async handleCameraState(isCameraOn: boolean) {
+    try {
+      if (isCameraOn) {
+        // 비디오 스트림만 따로 요청
+        const videoStream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 30 }
+          }
+        });
+
+        // 기존 오디오 트랙이 있는 새 스트림 생성
+        const combinedStream = new MediaStream();
+
+        // 기존 스트림에서 오디오 트랙 가져오기
+        const currentStream = this.getLocalStream();
+        if (currentStream) {
+          currentStream.getAudioTracks().forEach(track => {
+            combinedStream.addTrack(track);
+          });
+        }
+
+        // 새 비디오 트랙 추가
+        videoStream.getVideoTracks().forEach(track => {
+          combinedStream.addTrack(track);
+        });
+
+        await this.replaceStream(combinedStream);
+        return { stream: combinedStream };
+      } else {
+        // 카메라를 끄는 경우, 새로운 오디오 스트림 생성
+        const audioStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          },
+          video: false
+        });
+
+        await this.replaceStream(audioStream);
+        return { stream: audioStream };
+      }
+    } catch (error) {
+      console.error('Error handling camera state:', error);
+      throw error;
+    }
+  }
+
+
   async toggleAudio(enabled: boolean) {
     if (this.localStream) {
       this.localStream.getAudioTracks().forEach(track => {
