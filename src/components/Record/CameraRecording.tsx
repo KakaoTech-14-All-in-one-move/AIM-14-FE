@@ -14,6 +14,7 @@ const CameraRecording = ({ stream }: { stream: MediaStream | null }) => {
       <video
         ref={videoRef}
         autoPlay
+        muted
         className="w-full h-full object-cover rounded-lg"
       />
     </div>
