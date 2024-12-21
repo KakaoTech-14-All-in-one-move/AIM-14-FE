@@ -20,8 +20,6 @@ interface AuthState {
   clearAuth: () => void;
 }
 
-const BASE_URL = '';
-
 export const useAuthStore = create<AuthState>((set) => ({
   accessToken: localStorage.getItem('accessToken'),
   refreshToken: localStorage.getItem('refreshToken'),
@@ -44,7 +42,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       profile_image: user.profile_image
         ? user.profile_image.startsWith('http')
           ? user.profile_image
-          : `${BASE_URL}${user.profile_image}`
+          : `${user.profile_image}`
         : '',
       servers: user.servers || [],
     };
@@ -58,9 +56,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
       const updatedUser = {
         ...state.user,
-        profile_image: profileImageUrl.startsWith('http')
-          ? profileImageUrl
-          : `${BASE_URL}${profileImageUrl}`,
+        profile_image: profileImageUrl.startsWith('http') ? profileImageUrl : `${profileImageUrl}`,
       };
       localStorage.setItem('user', JSON.stringify(updatedUser));
 
