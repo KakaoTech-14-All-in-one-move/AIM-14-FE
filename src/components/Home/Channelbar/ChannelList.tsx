@@ -25,7 +25,7 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
   const channelStore = useChannelStore();
   const { user } = useAuthStore();
   const { currentUserChannel, channelUsers } = useUserChannelStore();
-  const BASE_URL = import.meta.env.VITE_BE_SERVER_URL;
+  const BASE_URL = import.meta.env.VITE_S3_URL;
 
   const {
     channels,
