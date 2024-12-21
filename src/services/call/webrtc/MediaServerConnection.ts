@@ -218,7 +218,7 @@ export class MediaServerConnection {
     try {
       // 현재 유저 정보 가져오기
       const currentUser = useAuthStore.getState().user;
-      console.log('Current user in setupLocalAudioDetection:', currentUser);
+      // console.log('Current user in setupLocalAudioDetection:', currentUser);
 
       // user 객체와 user_id 존재 여부 확인
       if (!currentUser || typeof currentUser.user_id === 'undefined') {
@@ -227,7 +227,7 @@ export class MediaServerConnection {
       }
 
       const userId = currentUser.user_id.toString();
-      console.log('Using user ID:', userId);
+      // console.log('Using user ID:', userId);
 
       // 스트림 유효성 검사
       if (!stream || !stream.getAudioTracks().length) {

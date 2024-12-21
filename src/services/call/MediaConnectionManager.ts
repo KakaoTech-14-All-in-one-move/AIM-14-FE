@@ -54,7 +54,7 @@ export class MediaConnectionManager {
       }
 
       // CallConnection을 통한 채널 참가
-      console.log('Attempting to join channel via CallConnection...');
+      // console.log('Attempting to join channel via CallConnection...');
       const success = await MediaConnectionManager.getCallConnection()!.joinChannel(
         channelId,
         type,
@@ -134,7 +134,7 @@ export class MediaConnectionManager {
 
       // 현재 사용자 정보 확인
       const currentUser = useAuthStore.getState().user;
-      console.log('Current user data:', currentUser);
+      // console.log('Current user data:', currentUser);
 
       if (!currentUser || !currentUser.user_id) {
         console.error('No current user found or invalid user data');
@@ -142,7 +142,7 @@ export class MediaConnectionManager {
       }
 
       const userId = currentUser.user_id.toString();
-      console.log('User ID:', userId);
+      // console.log('User ID:', userId);
 
       // 채널 및 사용자 상태 설정
       try {
@@ -178,7 +178,7 @@ export class MediaConnectionManager {
         return false;
       }
 
-      console.log('Successfully joined channel:', channelId);
+      // console.log('Successfully joined channel:', channelId);
       this.notifyStateUpdate(channelId);
       return true;
     } catch (error) {
