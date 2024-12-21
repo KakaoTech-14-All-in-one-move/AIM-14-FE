@@ -24,7 +24,8 @@ interface ControlsProps {
   downloadRecording: () => void;
   recordedFile: Blob | null;
   attachedFile?: File;
-  onFeedbackClick: (recordedFile: Blob, attachedFile?: File) => void;  // 추가된 prop
+  onFeedbackClick: (recordedFile: Blob, attachedFile?: File) => void;
+  cleanupMediaStreams: () => void;
 }
 
 const Controls = ({
@@ -39,6 +40,7 @@ const Controls = ({
                     isRecordingComplete,
                     downloadRecording,
                     recordedFile,
+                    cleanupMediaStreams,
                   }: ControlsProps) => {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +55,8 @@ const Controls = ({
     try {
       setIsUploading(true);
       setError(null);
+
+      cleanupMediaStreams();
 
       // apiService로 접근하도록 수정
       const videoId = await apiService.uploadVideo(recordedFile);
@@ -70,7 +74,10 @@ const Controls = ({
   return (
     <div className="w-full h-16 bg-[#1E1F22] flex justify-center items-center space-x-6">
       <button
-        onClick={() => navigate('/')}
+        onClick={() => {
+          cleanupMediaStreams();
+          navigate('/')}
+        }
         className="bg-white p-2 rounded-full"
       >
         <HomeIcon />

@@ -5,22 +5,23 @@ interface AudioWaveformProps {
   isRecording: boolean;
   isScreenSharingExpanded: number;
   isCameraExpanded: number;
+  audioStream: MediaStream | null;  // 새로 추가된 prop
 }
 
-const AudioWaveform = ({ isRecording, isScreenSharingExpanded, isCameraExpanded }: AudioWaveformProps) => {
+const AudioWaveform = ({ isRecording, isScreenSharingExpanded, isCameraExpanded, audioStream }: AudioWaveformProps) => {
   const [frequencies, setFrequencies] = useState<number[]>(new Array(64).fill(0));
 
   useEffect(() => {
+    if (!audioStream) return;
+
     let audioContext: AudioContext | null = null;
-    let currentStream: MediaStream | null = null;
     let animationFrameId: number;
 
-    const handleSuccess = async (stream: MediaStream) => {
-      currentStream = stream;  // 스트림 저장
+    const initializeAudioAnalyzer = () => {
       audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const analyser = audioContext.createAnalyser();
       analyser.fftSize = 128;
-      const microphone = audioContext.createMediaStreamSource(stream);
+      const microphone = audioContext.createMediaStreamSource(audioStream);
       microphone.connect(analyser);
 
       const bufferLength = analyser.frequencyBinCount;
@@ -35,61 +36,48 @@ const AudioWaveform = ({ isRecording, isScreenSharingExpanded, isCameraExpanded 
       updateWaveform();
     };
 
-    navigator.mediaDevices
-      .getUserMedia({ audio: true })
-      .then(handleSuccess)
-      .catch((err) => console.error("Error accessing microphone:", err));
+    initializeAudioAnalyzer();
 
     return () => {
-      // 모든 리소스 정리
       if (animationFrameId) {
         cancelAnimationFrame(animationFrameId);
       }
       if (audioContext) {
         audioContext.close();
       }
-      if (currentStream) {
-        currentStream.getTracks().forEach(track => {
-          track.stop();
-        });
-      }
     };
-  }, []);
+  }, [audioStream]);
 
-  // 파형 크기 설정: isCameraExpanded에 따라 다르게 설정
+  // 파형 크기 설정
   const getBarSize = () => {
     switch (isCameraExpanded) {
       case 1:
-        return { width: '5px', maxHeight: '150px' }; // 카메라가 1일 때
+        return { width: '5px', maxHeight: '150px' };
       case 2:
-        return { width: '7px', maxHeight: '180px' }; // 카메라가 2일 때
+        return { width: '7px', maxHeight: '180px' };
       default:
-        return { width: '3px', maxHeight: '120px' }; // 기본 크기
+        return { width: '3px', maxHeight: '120px' };
     }
   };
 
   const { width, maxHeight } = getBarSize();
 
-  // isCameraExpanded에 따른 margin-bottom 설정
   const getMicStyle = () => ({
     marginBottom: isCameraExpanded === 2 ? '160px' : isCameraExpanded === 1 ? '80px' : '10px',
   });
 
   return (
     <div className="flex flex-col items-center justify-center h-full w-full">
-      {/* isScreenSharingExpanded가 2일 때 BigMicIcon만 중앙에 표시 */}
       {isScreenSharingExpanded === 2 ? (
         <div className="flex items-center justify-center h-full" style={getMicStyle()}>
           <BigMicIcon size={10} />
         </div>
       ) : (
         <>
-          {/* Mic Icon with adjusted position */}
           <div style={getMicStyle()} className="flex items-center justify-center">
             <BigMicIcon />
           </div>
 
-          {/* Waveform */}
           <div className="flex justify-center items-end space-x-1 h-full w-full max-h-40 mt-4">
             {frequencies.slice(0, 32).map((value, index) => (
               <div

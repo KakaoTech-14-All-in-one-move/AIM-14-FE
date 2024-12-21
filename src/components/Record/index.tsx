@@ -409,7 +409,9 @@ const Index = () => {
           ) : (
             <div className="flex items-center justify-center text-white h-full relative">
               <AudioWaveform isRecording={isRecording}
-                             isScreenSharingExpanded={isScreenSharingExpanded} isCameraExpanded={isCameraExpanded} />
+                             isScreenSharingExpanded={isScreenSharingExpanded}
+                             isCameraExpanded={isCameraExpanded}
+                             audioStream={cameraStream} />
               {isRecording && (
                 <div className="absolute top-4 left-4 flex items-center">
                   <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse mr-2" />
@@ -538,6 +540,7 @@ const Index = () => {
             onFeedbackClick={handleFeedbackClick}
             recordedFile={new Blob(recordedChunks, { type: isCameraOn ? 'video/webm' : 'audio/webm' })}
             attachedFile={attachedFile}
+            cleanupMediaStreams={cleanupMediaStreams}
           />
         </div>
       </div>

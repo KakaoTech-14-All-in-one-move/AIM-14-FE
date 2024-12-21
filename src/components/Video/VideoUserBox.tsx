@@ -229,6 +229,7 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({
           ref={videoRef}
           autoPlay
           playsInline
+          muted
           className={`w-full h-full ${isScreenShare ? 'object-contain' : 'object-cover'}`}
         />
       ) : (

@@ -81,6 +81,7 @@ export const UserBox: React.FC<UserBoxProps> = React.memo(({
           ref={videoRef}
           autoPlay
           playsInline
+          muted
           className={`w-full h-full ${isScreenShare ? 'object-contain' : 'object-cover'}`}
         />
       )}
