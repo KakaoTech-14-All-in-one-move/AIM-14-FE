@@ -247,8 +247,6 @@ export class MediaConnectionManager {
 
       if (!currentUserState) return;
 
-      console.log('Current user state before update:', currentUserState);
-
       // 서버에 전송할 업데이트 준비
       const serverUpdates = {
         muted: 'isMuted' in updates ? updates.isMuted : currentUserState.mediaState.isMuted,
@@ -262,36 +260,28 @@ export class MediaConnectionManager {
             : currentUserState.mediaState.isScreenSharing,
       };
 
+      // 상태 업데이트를 위한 배치 작업
+      const mediaStateUpdates: Partial<MediaState> = {};
+
       // 화면 공유 상태 변경 처리
       if ('isScreenSharing' in updates) {
         try {
-          if (updates.isScreenSharing) {
+          if (updates.isScreenSharing === true) {
+            // 카메라가 켜져있으면 먼저 끄기
             if (currentUserState.mediaState.isCameraOn) {
-              await this.updateMediaState({ isCameraOn: false });
-              // 상태가 적용될 시간을 주기 위해 잠시 대기
-              await new Promise((resolve) => setTimeout(resolve, 100));
+              mediaStateUpdates.isCameraOn = false;
+              await this.handleCameraState(false);
             }
 
             // 화면 공유 시작
             const stream = await this.mediaServer.startScreenShare();
 
-            // NotAllowedError나 stream이 null인 경우 화면 공유를 시작하지 않음
             if (!stream) {
-              // 상태 롤백 및 early return
-              this.userStateManager.handleUserStateUpdate(
+              await this.rollbackScreenShareState(
                 currentUserChannel.channelId,
                 currentUser.user_id.toString(),
-                {
-                  ...serverUpdates,
-                  isScreenSharing: false,
-                  screenStream: null,
-                },
+                serverUpdates,
               );
-              // 서버에도 취소 상태 전송
-              MediaConnectionManager.getCallConnection()?.updateState({
-                ...serverUpdates,
-                screen_sharing: false,
-              });
               return;
             }
 
@@ -300,28 +290,21 @@ export class MediaConnectionManager {
               this.updateMediaState({ isScreenSharing: false });
             };
 
-            this.userStateManager.handleUserStateUpdate(
-              currentUserChannel.channelId,
-              currentUser.user_id.toString(),
-              {
-                ...serverUpdates,
-                screenStream: stream,
-              },
-            );
+            mediaStateUpdates.screenStream = stream;
+            mediaStateUpdates.isScreenSharing = true;
           } else {
             // 화면 공유 중지
             await this.mediaServer.stopScreenShare();
-            this.userStateManager.handleUserStateUpdate(
-              currentUserChannel.channelId,
-              currentUser.user_id.toString(),
-              {
-                ...serverUpdates,
-                screenStream: null,
-              },
-            );
+            mediaStateUpdates.screenStream = null;
+            mediaStateUpdates.isScreenSharing = false;
           }
         } catch (error) {
           console.error('Error in screen share:', error);
+          await this.rollbackScreenShareState(
+            currentUserChannel.channelId,
+            currentUser.user_id.toString(),
+            serverUpdates,
+          );
           throw error;
         }
       }
@@ -329,56 +312,15 @@ export class MediaConnectionManager {
       // 카메라 상태 변경 처리
       if ('isCameraOn' in updates) {
         try {
-          if (updates.isCameraOn) {
-            // 비디오 스트림 요청
-            const videoStream = await navigator.mediaDevices.getUserMedia({
-              audio: true,
-              video: {
-                width: { ideal: 1280 },
-                height: { ideal: 720 },
-                frameRate: { ideal: 30 },
-              },
-            });
-
-            // 스트림을 MediaServer에 전달
-            this.mediaServer.replaceStream(videoStream);
-
-            // 상태 업데이트
-            this.userStateManager.handleUserStateUpdate(
-              currentUserChannel.channelId,
-              currentUser.user_id.toString(),
-              {
-                ...serverUpdates,
-                stream: videoStream,
-              },
-            );
-          } else {
-            // 카메라를 끄는 경우 오디오만 있는 스트림으로 변경
-            const audioOnlyStream = await navigator.mediaDevices.getUserMedia({
-              audio: true,
-              video: false,
-            });
-
-            this.mediaServer.replaceStream(audioOnlyStream);
-            this.userStateManager.handleUserStateUpdate(
-              currentUserChannel.channelId,
-              currentUser.user_id.toString(),
-              {
-                ...serverUpdates,
-                stream: audioOnlyStream,
-              },
-            );
-          }
+          const streamUpdate = await this.handleCameraState(updates.isCameraOn);
+          mediaStateUpdates.stream = streamUpdate.stream;
+          mediaStateUpdates.isCameraOn = updates.isCameraOn;
         } catch (error) {
           console.error('Failed to toggle camera:', error);
-          // 카메라 상태 변경 실패 시 롤백
-          this.userStateManager.handleUserStateUpdate(
+          await this.rollbackCameraState(
             currentUserChannel.channelId,
             currentUser.user_id.toString(),
-            {
-              ...serverUpdates,
-              isCameraOn: !updates.isCameraOn,
-            },
+            updates.isCameraOn,
           );
           return;
         }
@@ -393,15 +335,78 @@ export class MediaConnectionManager {
         if (channelUser?.mediaState.stream) {
           if ('isMuted' in updates) {
             await this.mediaServer.toggleAudio(!updates.isMuted);
+            mediaStateUpdates.isMuted = updates.isMuted;
+          }
+          if ('isDeafened' in updates) {
+            mediaStateUpdates.isDeafened = updates.isDeafened;
           }
         }
       }
 
+      // 모든 상태 변경을 한 번에 적용
+      const finalState = {
+        ...serverUpdates,
+        ...mediaStateUpdates,
+      };
+
+      // 로컬 상태 업데이트
+      this.userStateManager.handleUserStateUpdate(
+        currentUserChannel.channelId,
+        currentUser.user_id.toString(),
+        finalState,
+      );
+
       // 서버에 상태 업데이트 전송
-      MediaConnectionManager.getCallConnection()?.updateState(serverUpdates);
+      await MediaConnectionManager.getCallConnection()?.updateState(serverUpdates);
     } catch (error) {
       console.error('Error updating media state:', error);
+      throw error;
     }
+  }
+
+  // 카메라 상태 처리를 위한 헬퍼 메소드
+  private async handleCameraState(isCameraOn: boolean) {
+    if (isCameraOn) {
+      const videoStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { ideal: 30 },
+        },
+      });
+      await this.mediaServer.replaceStream(videoStream);
+      return { stream: videoStream };
+    } else {
+      const audioOnlyStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: false,
+      });
+      await this.mediaServer.replaceStream(audioOnlyStream);
+      return { stream: audioOnlyStream };
+    }
+  }
+
+  // 화면 공유 상태 롤백
+  private async rollbackScreenShareState(channelId: string, userId: string, serverUpdates: any) {
+    const rollbackState = {
+      ...serverUpdates,
+      isScreenSharing: false,
+      screenStream: null,
+    };
+    this.userStateManager.handleUserStateUpdate(channelId, userId, rollbackState);
+    await MediaConnectionManager.getCallConnection()?.updateState({
+      ...serverUpdates,
+      screen_sharing: false,
+    });
+  }
+
+  // 카메라 상태 롤백
+  private async rollbackCameraState(channelId: string, userId: string, isCameraOn: boolean) {
+    const rollbackState = {
+      isCameraOn: !isCameraOn,
+    };
+    this.userStateManager.handleUserStateUpdate(channelId, userId, rollbackState);
   }
 
   dispose() {
