@@ -10,12 +10,12 @@ interface UserBoxProps {
 }
 
 export const UserBox: React.FC<UserBoxProps> = React.memo(({
-                                                             user,
-                                                             isScreenShare = false,
-                                                             totalUsers
-                                                           }) => {
+  user,
+  isScreenShare = false,
+  totalUsers
+}) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const BASE_URL = import.meta.env.VITE_BE_SERVER_URL;
+  const BASE_URL = import.meta.env.VITE_S3_URL;
 
   // totalUsers에 따른 크기 조정 값 계산
   const sizes = useMemo(() => {
