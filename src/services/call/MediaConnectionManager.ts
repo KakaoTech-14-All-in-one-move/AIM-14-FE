@@ -65,38 +65,10 @@ export class MediaConnectionManager {
 
       // 권한 체크 먼저 수행
       console.log('Step 2: Checking microphone permissions');
-      try {
-        const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-        console.log('Current microphone permission status:', permissionStatus.state);
-
-        if (permissionStatus.state === 'denied') {
-          throw new Error('마이크 권한이 거부되었습니다. 브라우저 설정에서 권한을 허용해주세요.');
-        }
-
-        // 권한이 prompt 상태일 때는 미리 권한 요청
-        if (permissionStatus.state === 'prompt') {
-          console.log('Requesting microphone permission');
-          const testStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-            },
-            video: false
-          });
-          testStream.getTracks().forEach(track => track.stop()); // 테스트 스트림 정리
-          console.log('Microphone permission granted');
-        }
-      } catch (error: any) {
-        console.error('Permission check failed:', error);
-        if (error.name === 'NotAllowedError') {
-          alert('마이크 접근이 거부되었습니다. 음성 채팅을 위해서는 마이크 권한이 필요합니다.');
-          return false;
-        } else if (error.message.includes('마이크 권한')) {
-          alert(error.message);
-          return false;
-        }
-        // 다른 종류의 에러는 계속 진행
+      const hasPermission = await this.checkMicrophonePermission();
+      if (!hasPermission) {
+        console.log('Failed to get microphone permission');
+        return false;
       }
 
       console.log('Step 3: Attempting to join channel via CallConnection');
@@ -210,6 +182,53 @@ export class MediaConnectionManager {
     } catch (error) {
       console.error('Error joining channel:', error);
       await this.handleFailedJoin();
+      return false;
+    }
+  }
+
+  private async checkMicrophonePermission(): Promise<boolean> {
+    console.log('Checking microphone permissions');
+    try {
+      // 먼저 navigator.permissions로 현재 권한 상태 확인
+      const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+      console.log('Current microphone permission status:', permissionStatus.state);
+
+      if (permissionStatus.state === 'denied') {
+        alert('마이크 권한이 거부되었습니다. 브라우저 설정에서 권한을 허용해주세요.');
+        return false;
+      }
+
+      // 권한이 granted가 아닌 경우 직접 getUserMedia 호출하여 권한 요청
+      if (permissionStatus.state !== 'granted') {
+        console.log('Requesting microphone permission explicitly');
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+          video: false
+        });
+
+        // 테스트 스트림 정리
+        stream.getTracks().forEach(track => track.stop());
+        console.log('Microphone permission granted successfully');
+        return true;
+      }
+
+      return true;
+    } catch (error: any) {
+      console.error('Permission check failed:', error);
+
+      // 사용자가 이해하기 쉬운 오류 메시지 표시
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        alert('마이크 접근이 거부되었습니다. 음성 채팅을 위해서는 마이크 권한이 필요합니다.');
+      } else if (error.name === 'NotFoundError') {
+        alert('마이크를 찾을 수 없습니다. 마이크가 제대로 연결되어 있는지 확인해주세요.');
+      } else {
+        alert('마이크 권한 확인 중 오류가 발생했습니다. 브라우저 설정을 확인해주세요.');
+      }
+
       return false;
     }
   }
