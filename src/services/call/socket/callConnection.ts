@@ -23,6 +23,8 @@ export class CallConnection {
   private userStateManager: UserStateManager;
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
   private heartbeatIntervalTime: number = 0;
+  private readonly INITIAL_CONNECTION_TIMEOUT = 30000; // 30초로 증가
+  private readonly MAX_RECONNECT_DELAY = 60000;
 
   private constructor(accessToken: string) {
     this.accessToken = accessToken;
@@ -226,32 +228,49 @@ export class CallConnection {
     return new Promise((resolve) => {
       let isResolved = false;
 
-      this.ws = new WebSocket(url);
+      if (this.ws) {
+        this.cleanup();
+      }
 
+      try {
+        this.ws = new WebSocket(url);
+      } catch (error) {
+        console.error('WebSocket creation failed:', error);
+        resolve(false);
+        return;
+      }
+
+      // 초기 연결 타임아웃을 30초로 설정
       const timeoutId = setTimeout(() => {
         if (!isResolved) {
-          console.error('WebSocket connection timed out');
+          console.error('WebSocket connection timed out after', this.INITIAL_CONNECTION_TIMEOUT / 1000, 'seconds');
           this.cleanup();
           resolve(false);
         }
-      }, 5000);
+      }, this.INITIAL_CONNECTION_TIMEOUT);
 
       this.ws.addEventListener('open', () => {
         isResolved = true;
         clearTimeout(timeoutId);
-        this.sendOp(OP_CODES.INIT, { token: this.accessToken });
 
-        // 저장된 heartbeat 간격이 있다면 재설정
-        if (this.heartbeatIntervalTime > 0) {
-          this.setupHeartbeat(this.heartbeatIntervalTime);
+        if (this.isConnected()) {
+          console.log('WebSocket connected successfully');
+          this.sendOp(OP_CODES.INIT, { token: this.accessToken });
+
+          if (this.heartbeatIntervalTime > 0) {
+            this.setupHeartbeat(this.heartbeatIntervalTime);
+          }
+          resolve(true);
+        } else {
+          console.error('WebSocket connected but not in OPEN state');
+          this.cleanup();
+          resolve(false);
         }
-
-        resolve(true);
       });
 
-      this.ws.addEventListener('message', this.handleMessage);
-      this.ws.addEventListener('close', this.handleClose);
-      this.ws.addEventListener('error', () => {
+      // 에러 처리 개선
+      this.ws.addEventListener('error', (error) => {
+        console.error('WebSocket error:', error);
         if (!isResolved) {
           isResolved = true;
           clearTimeout(timeoutId);
@@ -259,7 +278,42 @@ export class CallConnection {
           resolve(false);
         }
       });
+
+      this.ws.addEventListener('message', this.handleMessage);
+      this.ws.addEventListener('close', this.handleClose);
     });
+  }
+
+  // 재연결 로직 개선
+  private scheduleReconnect() {
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+
+    // 재연결 시도 간격을 점진적으로 증가 (최대 60초)
+    const delay = Math.min(
+      RECONNECT_DELAY * Math.pow(2, this.reconnectCount),  // 지수 백오프
+      this.MAX_RECONNECT_DELAY
+    );
+
+    this.reconnectTimeout = setTimeout(async () => {
+      console.log(`Attempting reconnection... (attempt ${this.reconnectCount + 1}, delay: ${delay/1000}s)`);
+      const success = await this.connect();
+
+      if (success) {
+        console.log('Reconnection successful');
+        this.reconnectCount = 0;
+
+        if (this.currentServerId) {
+          await this.setCurrentServerId(this.currentServerId);
+        }
+      } else {
+        console.log(`Reconnection attempt ${this.reconnectCount + 1} failed`);
+      }
+
+      this.reconnectTimeout = null;
+    }, delay);
   }
 
   private handleMessage = (event: MessageEvent) => {
@@ -369,16 +423,6 @@ export class CallConnection {
       channel_id: currentUserChannel.channelId,
       ...updates,
     });
-  }
-
-  private scheduleReconnect() {
-    if (this.reconnectTimeout) return;
-
-    this.reconnectTimeout = setTimeout(() => {
-      console.log('Attempting reconnection...');
-      this.connect();
-      this.reconnectTimeout = null;
-    }, RECONNECT_DELAY);
   }
 
   private cleanup() {
