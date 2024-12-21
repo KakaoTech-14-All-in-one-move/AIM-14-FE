@@ -15,14 +15,16 @@ export class MediaServerConnection {
     isRemoteDescriptionSet: false,
     isConnecting: false,
   };
-  private audioContextMap: Map<string, {
-    context: AudioContext;
-    analyser: AnalyserNode;
-    dataArray: Uint8Array;
-  }> = new Map();
+  private audioContextMap: Map<
+    string,
+    {
+      context: AudioContext;
+      analyser: AnalyserNode;
+      dataArray: Uint8Array;
+    }
+  > = new Map();
 
-  private constructor() {
-  }
+  private constructor() {}
 
   static getInstance(): MediaServerConnection {
     if (!this.instance) {
@@ -53,12 +55,12 @@ export class MediaServerConnection {
       const videoTracks = this.localStream.getVideoTracks();
 
       // 오디오 트랙 먼저 추가
-      audioTracks.forEach(track => {
+      audioTracks.forEach((track) => {
         this.peerConnection?.addTrack(track, this.localStream!);
       });
 
       // 비디오 트랙 나중에 추가
-      videoTracks.forEach(track => {
+      videoTracks.forEach((track) => {
         this.peerConnection?.addTrack(track, this.localStream!);
       });
     }
@@ -80,7 +82,7 @@ export class MediaServerConnection {
     this.reset();
 
     // 약간의 딜레이를 주어 리소스가 완전히 정리되도록 함
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
 
   async connect() {
@@ -124,11 +126,13 @@ export class MediaServerConnection {
       const isScreenShare = metadata[1] === 'screen';
 
       // 스트림 업데이트
-      useUserChannelStore.getState().updateUserMediaState(
-        channelId,
-        userId,
-        isScreenShare ? { screenStream: stream } : { stream },
-      );
+      useUserChannelStore
+        .getState()
+        .updateUserMediaState(
+          channelId,
+          userId,
+          isScreenShare ? { screenStream: stream } : { stream },
+        );
 
       // 오디오 트랙인 경우에만 음성 감지 설정
       if (track.kind === 'audio' && !isScreenShare) {
@@ -211,13 +215,29 @@ export class MediaServerConnection {
   }
 
   private setupLocalAudioDetection(stream: MediaStream) {
-    const currentUser = useAuthStore.getState().user;
-    if (!currentUser?.email) return;
-
-    // 기존 오디오 감지 정리 (있다면)
-    this.cleanupAudioDetection(currentUser.userId.toString());
-
     try {
+      // 현재 유저 정보 가져오기
+      const currentUser = useAuthStore.getState().user;
+      console.log('Current user in setupLocalAudioDetection:', currentUser);
+
+      // user 객체와 user_id 존재 여부 확인
+      if (!currentUser || typeof currentUser.user_id === 'undefined') {
+        console.error('Invalid user data:', currentUser);
+        return;
+      }
+
+      const userId = currentUser.user_id.toString();
+      console.log('Using user ID:', userId);
+
+      // 스트림 유효성 검사
+      if (!stream || !stream.getAudioTracks().length) {
+        console.error('Invalid audio stream');
+        return;
+      }
+
+      // 기존 오디오 감지 정리
+      this.cleanupAudioDetection(userId);
+
       const audioContext = new AudioContext();
       const source = audioContext.createMediaStreamSource(stream);
       const analyser = audioContext.createAnalyser();
@@ -231,37 +251,49 @@ export class MediaServerConnection {
       analyser.smoothingTimeConstant = 0.3;
 
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      this.audioContextMap.set(currentUser.userId.toString(), { context: audioContext, analyser, dataArray });
+
+      // Map에 저장
+      this.audioContextMap.set(userId, {
+        context: audioContext,
+        analyser,
+        dataArray,
+      });
 
       // 음성 감지 인터벌 설정
       if (!this.audioDetectionInterval) {
         this.audioDetectionInterval = window.setInterval(() => {
           this.audioContextMap.forEach((audio, uid) => {
-            const { analyser, dataArray } = audio;
-            analyser.getByteFrequencyData(dataArray);
+            try {
+              const { analyser, dataArray } = audio;
+              analyser.getByteFrequencyData(dataArray);
 
-            // 음성 감지 로직
-            const sum = dataArray.reduce((a, b) => a + b, 0);
-            const average = sum / dataArray.length;
-            const isSpeaking = average > 15; // 임계값 15로 설정
+              // 음성 감지 로직
+              const sum = dataArray.reduce((a, b) => a + b, 0);
+              const average = sum / dataArray.length;
+              const isSpeaking = average > 15;
 
-            const currentChannelId = useUserChannelStore.getState().currentUserChannel.channelId;
-            if (!currentChannelId) return;
+              const currentChannelId = useUserChannelStore.getState().currentUserChannel.channelId;
+              if (!currentChannelId) return;
 
-            const currentState = useUserChannelStore.getState()
-              .channelUsers.get(currentChannelId)
-              ?.find(user => user.userId === uid)?.mediaState.isSpeaking;
+              const users = useUserChannelStore.getState().channelUsers.get(currentChannelId);
+              const userState = users?.find((user) => user.userId === uid);
 
-            // 상태가 변경됐을 때만 업데이트
-            if (currentState !== isSpeaking) {
-              useUserChannelStore.getState().updateUserMediaState(
-                currentChannelId,
-                uid,
-                { isSpeaking },
-              );
+              if (!userState) {
+                console.warn('User state not found for:', uid);
+                return;
+              }
+
+              // 상태가 변경됐을 때만 업데이트
+              if (userState.mediaState.isSpeaking !== isSpeaking) {
+                useUserChannelStore
+                  .getState()
+                  .updateUserMediaState(currentChannelId, uid, { isSpeaking });
+              }
+            } catch (error) {
+              console.error('Error in audio detection interval for user:', uid, error);
             }
           });
-        }, 50); // 50ms 간격으로 체크
+        }, 50);
       }
     } catch (error) {
       console.error('Failed to setup audio detection:', error);
@@ -279,10 +311,12 @@ export class MediaServerConnection {
     }
 
     try {
-      await this.peerConnection.setRemoteDescription(new RTCSessionDescription({
-        type: 'answer',
-        sdp,
-      }));
+      await this.peerConnection.setRemoteDescription(
+        new RTCSessionDescription({
+          type: 'answer',
+          sdp,
+        }),
+      );
 
       this.connectionState.isRemoteDescriptionSet = true;
 
@@ -353,16 +387,15 @@ export class MediaServerConnection {
             const currentChannelId = useUserChannelStore.getState().currentUserChannel.channelId;
             if (!currentChannelId) return;
 
-            const currentState = useUserChannelStore.getState()
+            const currentState = useUserChannelStore
+              .getState()
               .channelUsers.get(currentChannelId)
-              ?.find(user => user.userId === uid)?.mediaState.isSpeaking;
+              ?.find((user) => user.userId === uid)?.mediaState.isSpeaking;
 
             if (currentState !== isSpeaking) {
-              useUserChannelStore.getState().updateUserMediaState(
-                currentChannelId,
-                uid,
-                { isSpeaking },
-              );
+              useUserChannelStore
+                .getState()
+                .updateUserMediaState(currentChannelId, uid, { isSpeaking });
             }
           });
         }, 50);
@@ -371,7 +404,6 @@ export class MediaServerConnection {
       console.error('Failed to setup audio detection:', error);
     }
   }
-
 
   private cleanupAudioDetection(userId?: string) {
     if (userId) {
@@ -383,7 +415,7 @@ export class MediaServerConnection {
       }
     } else {
       // 모든 오디오 컨텍스트 정리
-      this.audioContextMap.forEach(audio => audio.context.close());
+      this.audioContextMap.forEach((audio) => audio.context.close());
       this.audioContextMap.clear();
     }
 
@@ -404,16 +436,19 @@ export class MediaServerConnection {
 
       // 현재 사용자의 미디어 상태 확인
       const channelUsers = useUserChannelStore.getState().channelUsers.get(currentChannelId) || [];
-      const userState = channelUsers.find(user => user.userId === currentUser.userId.toString());
+      const userState = channelUsers.find((user) => user.userId === currentUser.user_id.toString());
       const isCameraOn = userState?.mediaState.isCameraOn ?? false;
 
       // 미디어 제약 조건 설정
       const constraints: MediaStreamConstraints = {
         audio: true, // 오디오는 항상 필요
-        video: type === 'VIDEO' && isCameraOn ? {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        } : false,
+        video:
+          type === 'VIDEO' && isCameraOn
+            ? {
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+              }
+            : false,
       };
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -433,8 +468,8 @@ export class MediaServerConnection {
   replaceStream(newStream: MediaStream) {
     // 기존 트랙 중지 및 제거
     if (this.localStream) {
-      this.localStream.getTracks().forEach(track => {
-        track.stop();  // 모든 트랙 확실히 중지
+      this.localStream.getTracks().forEach((track) => {
+        track.stop(); // 모든 트랙 확실히 중지
       });
     }
 
@@ -450,18 +485,18 @@ export class MediaServerConnection {
     // 피어 커넥션의 기존 sender 제거 및 새로운 트랙 추가
     if (this.peerConnection) {
       const senders = this.peerConnection.getSenders();
-      senders.forEach(sender => {
+      senders.forEach((sender) => {
         this.peerConnection?.removeTrack(sender);
       });
 
       // 새 트랙 추가 (오디오 트랙 먼저)
-      audioTracks.forEach(track => {
+      audioTracks.forEach((track) => {
         this.peerConnection?.addTrack(track, newStream);
       });
 
       // 비디오 트랙 추가
       const videoTracks = newStream.getVideoTracks();
-      videoTracks.forEach(track => {
+      videoTracks.forEach((track) => {
         this.peerConnection?.addTrack(track, newStream);
       });
     }
@@ -469,7 +504,7 @@ export class MediaServerConnection {
 
   async toggleAudio(enabled: boolean) {
     if (this.localStream) {
-      this.localStream.getAudioTracks().forEach(track => {
+      this.localStream.getAudioTracks().forEach((track) => {
         track.enabled = enabled;
       });
     }
@@ -477,7 +512,7 @@ export class MediaServerConnection {
 
   async toggleVideo(enabled: boolean) {
     if (this.localStream) {
-      this.localStream.getVideoTracks().forEach(track => {
+      this.localStream.getVideoTracks().forEach((track) => {
         track.enabled = enabled;
       });
     }
@@ -488,9 +523,7 @@ export class MediaServerConnection {
       // 기존 비디오 트랙 정리
       if (this.peerConnection) {
         const senders = this.peerConnection.getSenders();
-        const videoSenders = senders.filter(sender =>
-          sender.track?.kind === 'video'
-        );
+        const videoSenders = senders.filter((sender) => sender.track?.kind === 'video');
 
         for (const sender of videoSenders) {
           if (sender.track) {
@@ -505,8 +538,8 @@ export class MediaServerConnection {
         video: {
           width: { ideal: 1920 },
           height: { ideal: 1080 },
-          frameRate: { ideal: 30 }
-        }
+          frameRate: { ideal: 30 },
+        },
       });
 
       // 기존 오디오 스트림 사용
@@ -522,21 +555,18 @@ export class MediaServerConnection {
         const currentChannelId = useUserChannelStore.getState().currentUserChannel.channelId;
 
         if (currentUser?.email && currentChannelId) {
-          useUserChannelStore.getState().updateUserMediaState(
-            currentChannelId,
-            currentUser.userId.toString(),
-            {
+          useUserChannelStore
+            .getState()
+            .updateUserMediaState(currentChannelId, currentUser.user_id.toString(), {
               isScreenSharing: false,
-              screenStream: null
-            }
-          );
+              screenStream: null,
+            });
 
           // 화면 공유 트랙만 제거
           if (this.peerConnection) {
             const senders = this.peerConnection.getSenders();
-            const screenSender = senders.find(sender =>
-              sender.track?.kind === 'video' &&
-              sender.track.label.includes('screen')
+            const screenSender = senders.find(
+              (sender) => sender.track?.kind === 'video' && sender.track.label.includes('screen'),
             );
             if (screenSender) {
               screenSender.track?.stop();
@@ -552,7 +582,7 @@ export class MediaServerConnection {
         this.peerConnection.addTrack(videoTrack, screenStream);
 
         // 화면 공유 스트림 품질 최적화 설정
-        const sender = this.peerConnection.getSenders().find(s => s.track === videoTrack);
+        const sender = this.peerConnection.getSenders().find((s) => s.track === videoTrack);
         if (sender) {
           const params = sender.getParameters();
           if (!params.encodings) {
@@ -568,8 +598,10 @@ export class MediaServerConnection {
 
       return screenStream;
     } catch (error) {
-      if (error instanceof Error &&
-        (error.name === 'NotAllowedError' || error.name === 'AbortError')) {
+      if (
+        error instanceof Error &&
+        (error.name === 'NotAllowedError' || error.name === 'AbortError')
+      ) {
         return null;
       }
       console.error('Error starting screen share:', error);
@@ -583,10 +615,11 @@ export class MediaServerConnection {
     try {
       // 화면 공유 비디오 트랙만 찾아서 제거
       const senders = this.peerConnection.getSenders();
-      const screenSenders = senders.filter(sender =>
-        sender.track?.kind === 'video' &&
-        sender.track.readyState === 'live' &&
-        sender.track.label.includes('screen')
+      const screenSenders = senders.filter(
+        (sender) =>
+          sender.track?.kind === 'video' &&
+          sender.track.readyState === 'live' &&
+          sender.track.label.includes('screen'),
       );
 
       // 화면 공유 트랙만 제거
@@ -600,7 +633,7 @@ export class MediaServerConnection {
       // 기존 localStream에서 비디오 트랙만 제거
       if (this.localStream) {
         const videoTracks = this.localStream.getVideoTracks();
-        videoTracks.forEach(track => {
+        videoTracks.forEach((track) => {
           track.stop();
           this.localStream?.removeTrack(track);
         });
@@ -619,16 +652,16 @@ export class MediaServerConnection {
     const cleanupMediaTracks = () => {
       // localStream 정리
       if (this.localStream) {
-        this.localStream.getTracks().forEach(track => {
-          track.enabled = false;  // 먼저 비활성화
-          track.stop();  // 그 다음 정지
+        this.localStream.getTracks().forEach((track) => {
+          track.enabled = false; // 먼저 비활성화
+          track.stop(); // 그 다음 정지
         });
         this.localStream = null;
       }
 
       // PeerConnection의 모든 트랙 정리
       if (this.peerConnection) {
-        this.peerConnection.getSenders().forEach(sender => {
+        this.peerConnection.getSenders().forEach((sender) => {
           if (sender.track) {
             sender.track.enabled = false;
             sender.track.stop();
@@ -636,7 +669,7 @@ export class MediaServerConnection {
         });
 
         // 모든 트랜시버 정지
-        this.peerConnection.getTransceivers().forEach(transceiver => {
+        this.peerConnection.getTransceivers().forEach((transceiver) => {
           transceiver.stop();
         });
 

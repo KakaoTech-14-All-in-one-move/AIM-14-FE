@@ -27,7 +27,6 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
   const { currentUserChannel, channelUsers } = useUserChannelStore();
   const BASE_URL = import.meta.env.VITE_BE_SERVER_URL;
 
-
   const {
     channels,
     openSections,
@@ -36,6 +35,7 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; channel: Channel } | null>(null);
   const [expandedChannels, setExpandedChannels] = useState<Set<string>>(new Set());
+  const [joiningChannel, setJoiningChannel] = useState<string | null>(null);
 
   const currentChannels = useMemo(() => channels[type] || [], [channels, type]);
 
@@ -67,46 +67,65 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
     }
   };
 
-  const handleChannelClick = useCallback(async (channel: Channel, isMemberClick: boolean = false) => {  // Add 'async' here
-    if (type === 'text') {
-      navigate(`/channels/${channel.serverId}/${channel.channelId}`);
-      return;
-    }
-
-    const mediaType = type.toUpperCase() as MediaType;
-    if (isMemberClick) return;
-
-    if (currentUserChannel.channelId) {
-      const confirmSwitch = window.confirm(
-        `현재 ${type === 'voice' ? '음성' : '화상'} 채널에 접속 중입니다.\n통화를 종료하고 이동하시겠습니까?`,
-      );
-      if (!confirmSwitch) return;
-
-      // 현재 채널에서 나가기 전에 확장 상태 제거
-      const currentChannel = currentChannels.find(c => c.channelId.toString() === currentUserChannel.channelId);
-      if (currentChannel) {
-        setExpandedChannels(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(currentChannel.channelName);
-          return newSet;
-        });
+  const handleChannelClick = useCallback(async (channel: Channel, isMemberClick: boolean = false) => {
+    try {
+      // 이미 채널 입장 시도 중이면 무시
+      if (joiningChannel === channel.channelId.toString()) {
+        return;
       }
 
-      await ChannelNavigator.getInstance().handleChannelLeave();
+      if (type === 'text') {
+        navigate(`/channels/${channel.serverId}/${channel.channelId}`);
+        return;
+      }
+
+      const mediaType = type.toUpperCase() as MediaType;
+      if (isMemberClick) return;
+
+      if (currentUserChannel.channelId) {
+        const confirmSwitch = window.confirm(
+          `현재 ${type === 'voice' ? '음성' : '화상'} 채널에 접속 중입니다.\n통화를 종료하고 이동하시겠습니까?`,
+        );
+        if (!confirmSwitch) return;
+
+        // 현재 채널에서 나가기 전에 확장 상태 제거
+        const currentChannel = currentChannels.find(c => c.channelId.toString() === currentUserChannel.channelId);
+        if (currentChannel) {
+          setExpandedChannels(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(currentChannel.channelName);
+            return newSet;
+          });
+        }
+
+        await ChannelNavigator.getInstance().handleChannelLeave();
+      }
+
+      // 채널 입장 시도 중임을 표시
+      setJoiningChannel(channel.channelId.toString());
+
+      console.log('Attempting to enter channel:', channel.channelId.toString());
+      const success = await ChannelNavigator.getInstance().handleChannelEnter(
+        channel.channelId.toString(),
+        mediaType
+      );
+
+      if (!success) {
+        console.error('Failed to enter channel');
+        alert(`${type === 'voice' ? '음성' : '화상'} 채널 접속에 실패했습니다.`);
+        return;
+      }
+
+      console.log('Successfully entered channel');
+      toggleChannelExpand(channel.channelName);
+
+    } catch (error) {
+      console.error('Error in handleChannelClick:', error);
+      alert('채널 접속 중 오류가 발생했습니다.');
+    } finally {
+      setJoiningChannel(null);
     }
-
-    const success = await ChannelNavigator.getInstance().handleChannelEnter(
-      channel.channelId.toString(),
-      mediaType
-    );
-
-    if (!success) {
-      alert(`${type === 'voice' ? '음성' : '화상'} 채널 접속에 실패했습니다.`);
-      return;
-    }
-
-    toggleChannelExpand(channel.channelName);
-  }, [type, currentUserChannel.channelId, currentChannels, toggleChannelExpand, navigate]);
+  }, [type, currentUserChannel.channelId, currentChannels, toggleChannelExpand, navigate, joiningChannel]);
 
 
   const handleRenameChannel = async (channel: Channel) => {

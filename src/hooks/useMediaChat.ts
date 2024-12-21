@@ -10,12 +10,13 @@ export function useMediaChat() {
   const mediaDeviceStore = useMediaDeviceStore();
   const { updateMediaState, leaveChannel } = useMediaConnection();
   const mediaServer = MediaServerConnection.getInstance();
-  const currentUser = useAuthStore(state => state.user);
+  const currentUser = useAuthStore((state) => state.user);
 
   const getCurrentUserState = useCallback(() => {
     if (!currentUser?.email || !userChannelStore.currentUserChannel.channelId) return null;
-    const channelUsers = userChannelStore.channelUsers.get(userChannelStore.currentUserChannel.channelId) || [];
-    return channelUsers.find(user => user.userId === currentUser.userId.toString());
+    const channelUsers =
+      userChannelStore.channelUsers.get(userChannelStore.currentUserChannel.channelId) || [];
+    return channelUsers.find((user) => user.userId === currentUser.user_id.toString());
   }, [currentUser, userChannelStore.currentUserChannel.channelId, userChannelStore.channelUsers]);
 
   const toggleMute = useCallback(async () => {
@@ -69,27 +70,32 @@ export function useMediaChat() {
     }
   }, [getCurrentUserState, mediaServer, updateMediaState]);
 
-  const changeAudioInput = useCallback(async (deviceId: string) => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { deviceId: { exact: deviceId } },
-      });
-      mediaDeviceStore.setSelectedDevice('audioInput', deviceId);
+  const changeAudioInput = useCallback(
+    async (deviceId: string) => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: { deviceId: { exact: deviceId } },
+        });
+        mediaDeviceStore.setSelectedDevice('audioInput', deviceId);
 
-      const currentState = getCurrentUserState();
-      if (currentState) {
-        updateMediaState({ stream });
+        const currentState = getCurrentUserState();
+        if (currentState) {
+          updateMediaState({ stream });
+        }
+      } catch (error) {
+        console.error('Failed to change audio input:', error);
       }
-    } catch (error) {
-      console.error('Failed to change audio input:', error);
-    }
-  }, [getCurrentUserState, updateMediaState]);
+    },
+    [getCurrentUserState, updateMediaState],
+  );
 
   const changeAudioOutput = useCallback(async (deviceId: string) => {
     try {
-      const mediaElements = document.querySelectorAll<HTMLMediaElement>('.remote-audio, .remote-video');
+      const mediaElements = document.querySelectorAll<HTMLMediaElement>(
+        '.remote-audio, .remote-video',
+      );
       await Promise.all(
-        Array.from(mediaElements).map(element =>
+        Array.from(mediaElements).map((element) =>
           // @ts-ignore: setSinkId exists but TypeScript doesn't know about it
           element.setSinkId(deviceId),
         ),
@@ -111,7 +117,8 @@ export function useMediaChat() {
     speaking: currentState?.mediaState.isSpeaking ?? false,
 
     // 현재 채널 사용자들
-    channelUsers: userChannelStore.channelUsers.get(userChannelStore.currentUserChannel.channelId ?? '') ?? [],
+    channelUsers:
+      userChannelStore.channelUsers.get(userChannelStore.currentUserChannel.channelId ?? '') ?? [],
     currentChannelId: userChannelStore.currentUserChannel.channelId,
 
     // 액션
@@ -121,6 +128,6 @@ export function useMediaChat() {
     toggleScreenShare,
     changeAudioInput,
     changeAudioOutput,
-    leaveChannel,  // 추가
+    leaveChannel, // 추가
   };
 }
