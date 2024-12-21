@@ -38,14 +38,14 @@ const Message: React.FC<MessageProps> = React.memo(
         if (user?.profile_image) {
           return user.profile_image.startsWith('http')
             ? user.profile_image
-            : `${import.meta.env.VITE_BE_SERVER_URL}${user.profile_image}`;
+            : `${import.meta.env.VITE_S3_URL}${user.profile_image}`;
         }
         return generateProfileImageUrl(user?.username || 'User', 40);
       }
       if (profile_image) {
         return profile_image.startsWith('http')
           ? profile_image
-          : `${import.meta.env.VITE_BE_SERVER_URL}${profile_image}`;
+          : `${import.meta.env.VITE_S3_URL}${profile_image}`;
       }
       return generateProfileImageUrl((author || 'Anonymous').split('(')[0], 40);
     }, [isCurrentUser, user, profile_image, author]);
