@@ -140,17 +140,19 @@ export class MediaConnectionManager {
       // 7. WebRTC 연결
       console.log('Establishing WebRTC connections');
       try {
-        // if (import.meta.env.VITE_ENV === 'dev') {
-        //   // 개발 환경에서는 WebRTC 연결 스킵
-        //   console.log('Development environment: Skipping WebRTC connections');
-        // } else {
-        //   await this.mediaServer.connectToAllUsers(channelId, audioStream);
-        // }
+        const currentUserId = useAuthStore.getState().user?.user_id.toString();
+        if (!currentUserId) {
+          throw new Error('User ID not found');
+        }
+
+        // 먼저 자신의 publisher connection 생성
+        await this.mediaServer.prepareConnection(channelId, currentUserId, audioStream);
+
+        // 그 다음 다른 참가자들과의 connection 생성
         await this.mediaServer.connectToAllUsers(channelId, audioStream);
         console.log('WebRTC connections established successfully');
       } catch (error) {
         if (import.meta.env.VITE_ENV === 'dev') {
-          // 개발 환경에서는 에러 무시하고 계속 진행
           console.log('Development environment: Ignoring WebRTC connection error');
         } else {
           console.error('Failed to establish WebRTC connections:', error);

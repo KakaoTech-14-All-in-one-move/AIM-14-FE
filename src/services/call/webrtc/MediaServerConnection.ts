@@ -21,6 +21,7 @@ export class MediaServerConnection {
     isConnecting: boolean;
     isNegotiating: boolean;
     pendingOffer: boolean;
+    isInitiator: boolean
   }> = new Map();
 
   private audioContextMap: Map<string, {
@@ -93,15 +94,14 @@ export class MediaServerConnection {
   }
 
   async prepareConnection(channelId: string, remotePeerId: string, stream?: MediaStream) {
-    // 현재 채널 상태 확인
-    console.log("Prepare Connection", channelId, remotePeerId, stream);
+    const currentUserId = useAuthStore.getState().user?.user_id.toString();
+    console.log("Prepare Connection", currentUserId, channelId, remotePeerId, stream);
     const currentChannel = useUserChannelStore.getState().currentUserChannel;
     if (!currentChannel.channelId || currentChannel.channelId !== channelId) {
       console.warn('Must join channel before establishing WebRTC connection');
       return;
     }
 
-    // 채널의 유저 목록 확인
     const channelUsers = useUserChannelStore.getState().channelUsers.get(channelId);
     if (!channelUsers?.some(user => user.userId === remotePeerId)) {
       console.warn('Remote peer is not in the channel');
@@ -109,15 +109,12 @@ export class MediaServerConnection {
     }
 
     await this.ensureCallConnection();
-    const currentUserId = useAuthStore.getState().user?.user_id.toString();
 
-    // 자기 자신과의 연결 시도 방지
     if (remotePeerId === currentUserId) {
-      console.log('Preventing self-connection attempt');
-      return;
+      console.log('Creating publisher connection for self');
     }
 
-    // 이미 연결이 있는 경우 처리
+    // 기존 연결 정리
     if (this.peerConnections.has(remotePeerId)) {
       console.log('Connection already exists, cleaning up first');
       await this.cleanupExistingConnection(remotePeerId);
@@ -125,12 +122,13 @@ export class MediaServerConnection {
 
     console.log('Preparing connection for peer:', remotePeerId);
 
-    // 초기 상태 설정
+    // 새로운 상태 관리 구조
     this.connectionStates.set(remotePeerId, {
       isRemoteDescriptionSet: false,
       isConnecting: true,
       isNegotiating: false,
       pendingOffer: false,
+      isInitiator: true
     });
 
     const peerConnection = new RTCPeerConnection({
@@ -142,10 +140,8 @@ export class MediaServerConnection {
     });
 
     console.log('NEW RTCPeerConnection', peerConnection);
-
     this.peerConnections.set(remotePeerId, peerConnection);
 
-    // 스트림 추가
     if (stream) {
       console.log('Adding stream to peer connection:', {
         remotePeerId,
@@ -159,20 +155,19 @@ export class MediaServerConnection {
       this.localStream = stream;
     }
 
-    // 이벤트 핸들러 설정
     await this.setupPeerConnectionHandlers(channelId, currentUserId!, remotePeerId);
 
     // Offer 생성 및 전송
-    const offerOptions = {
-      offerToReceiveAudio: true,
-      offerToReceiveVideo: true,
-      voiceActivityDetection: false,
-    };
-
     const connectionState = this.connectionStates.get(remotePeerId);
     if (!connectionState?.pendingOffer) {
       connectionState!.pendingOffer = true;
       try {
+        const offerOptions = {
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: true,
+          voiceActivityDetection: false,
+        };
+
         const offer = await peerConnection.createOffer(offerOptions);
         console.log('Created offer:', {
           type: offer.type,
@@ -185,7 +180,7 @@ export class MediaServerConnection {
         console.log("OP_CODES.RECEIVE_VIDEO - prepareConnection");
         this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
           sdp_offer: offer.sdp,
-          sender_id: currentUserId,
+          sender_id: remotePeerId,
         });
       } catch (error) {
         console.error('Error creating offer:', error);
@@ -207,43 +202,71 @@ export class MediaServerConnection {
     const peerConnection = this.peerConnections.get(remotePeerId);
     if (!peerConnection) return;
 
-    peerConnection.onicecandidate = (event) => {
-      if (event.candidate) {
-        console.log('Sending ICE candidate:', event.candidate);
-        this.callConnection?.sendOp(OP_CODES.ON_ICE_CANDIDATE, {
-          candidate: event.candidate.toJSON(),
-          sdp_mid: event.candidate.sdpMid,
-          sdp_m_line_index: event.candidate.sdpMLineIndex,
-          remote_peer_id: remotePeerId,
-        });
-      }
-    };
+    // 연결 상태 관리를 위한 새로운 변수 추가
+    let isReconnecting = false;
+    let reconnectionTimer: NodeJS.Timeout | null = null;
 
-    peerConnection.oniceconnectionstatechange = () => {
-      const state = peerConnection.iceConnectionState;
-      console.log(`ICE connection state for ${remotePeerId}: ${state}`);
-      console.log(`Connection state: ${peerConnection.connectionState}`);
+    peerConnection.onconnectionstatechange = () => {
+      const state = peerConnection.connectionState;
+      console.log(`Connection state for ${remotePeerId}: ${state}`);
+
+      // 현재 연결 상태 가져오기
+      const connectionState = this.connectionStates.get(remotePeerId);
+      if (!connectionState) return;
 
       switch (state) {
-        case 'failed':
-          if (peerConnection.connectionState !== 'failed') {
-            console.warn(`ICE connection failed for ${remotePeerId} - attempting restart`);
-            peerConnection.restartIce();
-          }
-          break;
-        case 'disconnected':
-          if (peerConnection.connectionState === 'connected') {
-            console.log('Temporary disconnection detected, waiting before reconnection attempt');
-            setTimeout(() => {
-              if (peerConnection.iceConnectionState === 'disconnected' &&
-                peerConnection.connectionState !== 'connected') {
-                this.attemptReconnection(remotePeerId, channelId);
-              }
-            }, this.ICE_RECONNECTION_TIMEOUT);
-          }
-          break;
         case 'connected':
-          console.log(`ICE Connection established with ${remotePeerId}`);
+          console.log(`Successfully connected to peer ${remotePeerId}`);
+          // 재연결 관련 상태 초기화
+          isReconnecting = false;
+          if (reconnectionTimer) {
+            clearTimeout(reconnectionTimer);
+            reconnectionTimer = null;
+          }
+          connectionState.isConnecting = false;
+          this.reconnectionAttempts.set(remotePeerId, 0);
+          break;
+
+        case 'failed':
+        case 'disconnected':
+          // 이미 재연결 시도 중이면 추가 시도 방지
+          if (isReconnecting) {
+            console.log('Reconnection already in progress, skipping additional attempt');
+            return;
+          }
+
+          const attempts = this.reconnectionAttempts.get(remotePeerId) || 0;
+          if (attempts >= this.MAX_RECONNECTION_ATTEMPTS) {
+            console.error(`Max reconnection attempts reached for ${remotePeerId}`);
+            this.cleanupExistingConnection(remotePeerId);
+            return;
+          }
+
+          // 재연결 시도 전 상태 업데이트
+          isReconnecting = true;
+          console.warn(`Connection issue with ${remotePeerId} (attempt ${attempts + 1}/${this.MAX_RECONNECTION_ATTEMPTS})`);
+
+          // 재연결 시도 전 짧은 지연 시간 추가
+          reconnectionTimer = setTimeout(async () => {
+            try {
+              await this.attemptReconnection(remotePeerId, channelId);
+            } finally {
+              // 재연결 시도 완료 후 상태 업데이트
+              isReconnecting = false;
+              reconnectionTimer = null;
+            }
+          }, this.ICE_RECONNECTION_TIMEOUT);
+          break;
+
+        case 'closed':
+          console.log(`Connection closed for ${remotePeerId}`);
+          // 재연결 관련 상태 정리
+          if (reconnectionTimer) {
+            clearTimeout(reconnectionTimer);
+            reconnectionTimer = null;
+          }
+          isReconnecting = false;
+          this.resetConnectionState(remotePeerId);
           break;
       }
     };
@@ -255,53 +278,23 @@ export class MediaServerConnection {
         streams: event.streams.length,
       });
 
-      const track = event.track;
-      const streams = event.streams;
-
-      console.log('Track received detailed:', {
-        kind: event.track.kind,
-        id: event.track.id,
-        readyState: event.track.readyState,
-        enabled: event.track.enabled,
-        muted: event.track.muted,
-        streams: event.streams.map(stream => ({
-          id: stream.id,
-          active: stream.active,
-          tracks: stream.getTracks().length,
-        })),
-      });
-
-      // 스트림 처리 전
-      console.log('Processing stream before update:', {
-        streamId: stream.id,
-        active: stream.active,
-        trackStates: stream.getTracks().map(track => ({
-          kind: track.kind,
-          readyState: track.readyState,
-          enabled: track.enabled,
-        })),
-      });
-
-      // useUserChannelStore 업데이트 전
-      console.log('Current store state before update:', {
-        channelId,
-        userId: streamData.userId,
-        currentState: useUserChannelStore.getState().channelUsers.get(channelId),
-      });
-
-      if (!streams.length) {
+      if (!event.streams.length) {
         console.warn('No streams received with track');
         return;
       }
 
-      const stream = streams[0];
+      const track = event.track;
+      const stream = event.streams[0];
 
-      // 스트림 ID 검증 추가
-      console.log('Stream details:', {
-        id: stream.id,
-        tracks: stream.getTracks().length,
-        audio: stream.getAudioTracks().length,
-        video: stream.getVideoTracks().length,
+      console.log('Track received detailed:', {
+        kind: track.kind,
+        id: track.id,
+        readyState: track.readyState,
+        enabled: track.enabled,
+        muted: track.muted,
+        streamId: stream.id,
+        streamActive: stream.active,
+        streamTracks: stream.getTracks().length,
       });
 
       // Kurento에서 오는 스트림 ID 파싱
@@ -314,13 +307,70 @@ export class MediaServerConnection {
         };
       }
 
-      // 상태 업데이트 전 스트림 유효성 확인
+      // 현재 채널 상태 확인
+      const currentChannelUsers = useUserChannelStore.getState().channelUsers.get(channelId);
+      const currentUser = currentChannelUsers?.find(user => user.userId === streamData.userId);
+
+      console.log('Stream state before update:', {
+        channelId,
+        userId: streamData.userId,
+        streamId: stream.id,
+        trackKind: track.kind,
+        hasExistingStream: !!currentUser?.mediaState.stream,
+        trackCount: stream.getTracks().length,
+        audioTracks: stream.getAudioTracks().length,
+        videoTracks: stream.getVideoTracks().length,
+      });
+
+      // 스트림 유효성 확인 및 업데이트
       if (stream.getTracks().length > 0) {
-        useUserChannelStore.getState().updateUserMediaState(
-          channelId,
-          streamData.userId,
-          { stream },
-        );
+        // 오디오 감지 설정 (오디오 트랙이 있는 경우)
+        if (track.kind === 'audio' && stream.getAudioTracks().length > 0) {
+          this.setupRemoteAudioDetection(stream, streamData.userId);
+        }
+
+        // 기존 스트림이 있다면 새 트랙 추가 전에 같은 종류의 트랙이 있는지 확인
+        if (currentUser?.mediaState.stream) {
+          try {
+            const existingStream = currentUser.mediaState.stream;
+            const existingTrackOfSameKind = existingStream.getTracks().find(t => t.kind === track.kind);
+
+            if (!existingTrackOfSameKind) {
+              existingStream.addTrack(track);
+              console.log('Added track to existing stream:', {
+                streamId: existingStream.id,
+                trackKind: track.kind,
+                totalTracks: existingStream.getTracks().length
+              });
+            } else {
+              console.log('Track of same kind already exists, skipping:', track.kind);
+            }
+          } catch (error) {
+            console.error('Error adding track to existing stream:', error);
+            useUserChannelStore.getState().updateUserMediaState(
+              channelId,
+              streamData.userId,
+              { stream }
+            );
+          }
+        }
+
+        // 트랙 종료 이벤트 핸들러 설정
+        track.onended = () => {
+          this.handleTrackEnded(track, stream, channelId, streamData.userId);
+        };
+
+        // 스크린쉐어 스트림인 경우 별도 처리
+        if (stream.id.includes('screenshare')) {
+          useUserChannelStore.getState().updateUserMediaState(
+            channelId,
+            streamData.userId,
+            {
+              isScreenSharing: true,
+              screenStream: stream
+            }
+          );
+        }
       }
     };
 
@@ -425,9 +475,8 @@ export class MediaServerConnection {
       await this.cleanupExistingConnection(newUserId);
     }
 
-    // 3. 새로운 연결 시도
+    // 3. 새로운 연결 시도 - 각 사용자는 자신의 스트림을 서버로 보내기 위한 연결만 생성
     try {
-      // localStream 상태 로깅
       if (this.localStream) {
         console.log('Local stream details:', {
           audioTracks: this.localStream.getAudioTracks().length,
@@ -436,16 +485,6 @@ export class MediaServerConnection {
       }
 
       await this.prepareConnection(channelId, newUserId, this.localStream || undefined);
-
-      // 연결 상태 확인을 위한 타임아웃 설정 -> TODO : 중복 요청 하는거 같음
-      // setTimeout(() => {
-      //   const connection = this.peerConnections.get(newUserId);
-      //   if (connection && connection.connectionState !== 'connected') {
-      //     console.log(`Connection check for ${newUserId}:`, connection.connectionState);
-      //     this.attemptReconnection(newUserId, channelId);
-      //   }
-      // }, 5000);
-
     } catch (error) {
       console.error('Failed to establish connection with new user:', error);
       // 실패 시 재시도
@@ -471,7 +510,6 @@ export class MediaServerConnection {
   }
 
   private async renegotiateConnection(remotePeerId: string) {
-    console.log('renegotiateConnection', remotePeerId);
     const peerConnection = this.peerConnections.get(remotePeerId);
     const connectionState = this.connectionStates.get(remotePeerId);
 
@@ -498,9 +536,10 @@ export class MediaServerConnection {
       const offer = await peerConnection.createOffer();
       await peerConnection.setLocalDescription(offer);
 
+    console.log('OP_CODES.RECEIVE_VIDEO- renegotiateConnection', remotePeerId);
       this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
         sdp_offer: offer.sdp,
-        sender_id: useAuthStore.getState().user?.user_id.toString(),
+        sender_id: remotePeerId,
       });
 
       await new Promise(resolve => setTimeout(resolve, 500)); // 안정화를 위한 대기
@@ -550,7 +589,7 @@ export class MediaServerConnection {
       console.log('OP_CODES.RECEIVE_VIDEO - createVideoOffer');
       this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
         sdp_offer: offer.sdp,
-        sender_id: useAuthStore.getState().user?.user_id.toString(),
+        sender_id: remotePeerId,
       });
     } catch (error) {
       console.error('Error creating offer:', error);
@@ -571,13 +610,14 @@ export class MediaServerConnection {
   async handleRemoteAnswer(sdp: string, remotePeerId: string) {
     await this.ensureCallConnection();
     const peerConnection = this.peerConnections.get(remotePeerId);
+    const connectionState = this.connectionStates.get(remotePeerId);
+
     if (!peerConnection) {
       console.error('No peer connection found for:', remotePeerId);
       return;
     }
 
     try {
-      // 시그널링 상태 및 연결 상태 로깅
       console.log('Handling remote answer:', {
         remotePeerId,
         signalingState: peerConnection.signalingState,
@@ -586,8 +626,9 @@ export class MediaServerConnection {
         sdp: sdp,
       });
 
-      if (peerConnection.signalingState === 'stable') {
-        console.warn('Connection already stable, ignoring answer');
+      // 시그널링 상태 검증
+      if (peerConnection.signalingState !== 'have-local-offer') {
+        console.warn('Unexpected signaling state for answer:', peerConnection.signalingState);
         return;
       }
 
@@ -597,6 +638,9 @@ export class MediaServerConnection {
       });
 
       await peerConnection.setRemoteDescription(answer);
+      if (connectionState) {
+        connectionState.isRemoteDescriptionSet = true;
+      }
       console.log('Remote description set successfully for peer:', remotePeerId);
 
       // 대기 중인 ICE candidate 처리
@@ -636,7 +680,8 @@ export class MediaServerConnection {
         signalingState: peerConnection.signalingState,
       });
 
-      if (peerConnection.remoteDescription && peerConnection.remoteDescription.type) {
+      // remoteDescription이 설정된 후에만 ICE candidate 추가
+      if (connectionState.isRemoteDescriptionSet) {
         await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
         console.log('Added ICE candidate for:', remotePeerId);
       } else {
@@ -661,13 +706,22 @@ export class MediaServerConnection {
     this.reconnectionAttempts.set(remotePeerId, attempts + 1);
 
     try {
+      // 기존 연결 정리를 확실히
       await this.cleanupExistingConnection(remotePeerId);
-      await new Promise(resolve => setTimeout(resolve, 1000)); // 잠시 대기
+
+      // 충분한 대기 시간 추가
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // 연결 상태 확인
+      const existingConnection = this.peerConnections.get(remotePeerId);
+      if (existingConnection) {
+        console.log('Existing connection found, skipping reconnection');
+        return;
+      }
+
       await this.prepareConnection(channelId, remotePeerId, this.localStream || undefined);
-      await this.createVideoOffer(remotePeerId);
     } catch (error) {
       console.error('Reconnection failed:', error);
-      // 일정 시간 후 재시도
       setTimeout(() => {
         this.attemptReconnection(remotePeerId, channelId);
       }, this.ICE_RECONNECTION_TIMEOUT);
