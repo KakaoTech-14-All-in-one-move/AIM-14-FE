@@ -209,27 +209,27 @@ export class UserStateManager {
     this.stateUpdateCallbacks.forEach(callback => callback(channelId, userId));
   }
 
-  private convertUserData(userData: UserData): ChannelUser {
-    if (!userData.user_id || !userData.channel_id) {
-      throw new Error('Invalid user data: missing required fields');
-    }
-
-    return {
-      userId: userData.user_id,
-      username: userData.username,
-      profileImage: userData.profile_image,
-      channelId: userData.channel_id,
-      mediaState: {
-        isMuted: userData.muted,
-        isDeafened: userData.deafened,
-        isCameraOn: userData.camera_on,
-        isScreenSharing: userData.screen_sharing,
-        isSpeaking: false,
-        stream: null,
-        screenStream: null,
-      },
-    };
-  }
+  // private convertUserData(userData: UserData): ChannelUser {
+  //   if (!userData.user_id || !userData.channel_id) {
+  //     throw new Error('Invalid user data: missing required fields');
+  //   }
+  //
+  //   return {
+  //     userId: userData.user_id,
+  //     username: userData.username,
+  //     profileImage: userData.profile_image,
+  //     channelId: userData.channel_id,
+  //     mediaState: {
+  //       isMuted: userData.muted,
+  //       isDeafened: userData.deafened,
+  //       isCameraOn: userData.camera_on,
+  //       isScreenSharing: userData.screen_sharing,
+  //       isSpeaking: false,
+  //       stream: null,
+  //       screenStream: null,
+  //     },
+  //   };
+  // }
 
   dispose() {
     this.stateUpdateCallbacks.clear();
