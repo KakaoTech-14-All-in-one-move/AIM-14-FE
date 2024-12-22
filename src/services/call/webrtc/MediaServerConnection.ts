@@ -54,7 +54,7 @@ export class MediaServerConnection {
 
   // WebRTC 관련 작업을 하는 모든 메서드에서 Connection 준비 상태 확인
   private async ensureCallConnection(): Promise<CallConnection> {
-    console.log("ensureCallConnection");
+    console.log('ensureCallConnection');
     if (!this.callConnection && this.connectionPromise) {
       await this.connectionPromise;
     }
@@ -95,7 +95,7 @@ export class MediaServerConnection {
 
   async prepareConnection(channelId: string, remotePeerId: string, stream?: MediaStream) {
     const currentUserId = useAuthStore.getState().user?.user_id.toString();
-    console.log("Prepare Connection", currentUserId, channelId, remotePeerId, stream);
+    console.log('Prepare Connection', currentUserId, channelId, remotePeerId, stream);
     const currentChannel = useUserChannelStore.getState().currentUserChannel;
     if (!currentChannel.channelId || currentChannel.channelId !== channelId) {
       console.warn('Must join channel before establishing WebRTC connection');
@@ -128,7 +128,7 @@ export class MediaServerConnection {
       isConnecting: true,
       isNegotiating: false,
       pendingOffer: false,
-      isInitiator: true
+      isInitiator: true,
     });
 
     const peerConnection = new RTCPeerConnection({
@@ -143,19 +143,15 @@ export class MediaServerConnection {
     this.peerConnections.set(remotePeerId, peerConnection);
 
     if (stream) {
-      console.log('Adding stream to peer connection:', {
-        remotePeerId,
-        audioTracks: stream.getAudioTracks().length,
-        videoTracks: stream.getVideoTracks().length,
-      });
-
+      this.localStream = stream;
       stream.getTracks().forEach(track => {
         peerConnection.addTrack(track, stream);
       });
-      this.localStream = stream;
     }
 
-    await this.setupPeerConnectionHandlers(channelId, currentUserId!, remotePeerId);
+    if (currentUserId !== remotePeerId) {
+      await this.setupPeerConnectionHandlers(channelId, currentUserId!, remotePeerId);
+    }
 
     // Offer 생성 및 전송
     const connectionState = this.connectionStates.get(remotePeerId);
@@ -177,7 +173,7 @@ export class MediaServerConnection {
 
         await peerConnection.setLocalDescription(offer);
 
-        console.log("OP_CODES.RECEIVE_VIDEO - prepareConnection");
+        console.log('OP_CODES.RECEIVE_VIDEO - prepareConnection');
         this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
           sdp_offer: offer.sdp,
           sender_id: remotePeerId,
@@ -340,7 +336,7 @@ export class MediaServerConnection {
               console.log('Added track to existing stream:', {
                 streamId: existingStream.id,
                 trackKind: track.kind,
-                totalTracks: existingStream.getTracks().length
+                totalTracks: existingStream.getTracks().length,
               });
             } else {
               console.log('Track of same kind already exists, skipping:', track.kind);
@@ -350,7 +346,7 @@ export class MediaServerConnection {
             useUserChannelStore.getState().updateUserMediaState(
               channelId,
               streamData.userId,
-              { stream }
+              { stream },
             );
           }
         }
@@ -367,8 +363,8 @@ export class MediaServerConnection {
             streamData.userId,
             {
               isScreenSharing: true,
-              screenStream: stream
-            }
+              screenStream: stream,
+            },
           );
         }
       }
@@ -433,15 +429,8 @@ export class MediaServerConnection {
     console.log('currentUserId | users', currentUserId, users);
     if (!currentUserId || !users) return;
 
-    // stream이 전달된 경우 localStream으로 설정
-    if (stream) {
-      this.localStream = stream;
-    }
-
     for (const user of users) {
-      if (user.userId !== currentUserId) {
-        await this.prepareConnection(channelId, user.userId);
-      }
+      await this.prepareConnection(channelId, user.userId, stream);
     }
   }
 
@@ -454,7 +443,7 @@ export class MediaServerConnection {
       newUserId,
       channelUsers: channelUsers.map(u => u.userId),
       hasLocalStream: !!this.localStream,
-      connectionCount: this.peerConnections.size
+      connectionCount: this.peerConnections.size,
     });
 
     // 1. 자신인 경우 처리
@@ -480,7 +469,7 @@ export class MediaServerConnection {
       if (this.localStream) {
         console.log('Local stream details:', {
           audioTracks: this.localStream.getAudioTracks().length,
-          videoTracks: this.localStream.getVideoTracks().length
+          videoTracks: this.localStream.getVideoTracks().length,
         });
       }
 
@@ -920,58 +909,59 @@ export class MediaServerConnection {
     }
   }
 
-  async startScreenShare(): Promise<MediaStream | null> {try {
-    const screenStream = await navigator.mediaDevices.getDisplayMedia({
-      video: {
-        width: { ideal: 1920 },
-        height: { ideal: 1080 },
-        frameRate: { ideal: 30 },
-      },
-    });
+  async startScreenShare(): Promise<MediaStream | null> {
+    try {
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          frameRate: { ideal: 30 },
+        },
+      });
 
-    for (const [_, peerConnection] of this.peerConnections) {
-      const senders = peerConnection.getSenders();
-      const videoTrack = screenStream.getVideoTracks()[0];
-      const videoSender = senders.find(sender =>
-        sender.track?.kind === 'video'
-      );
-
-      if (videoSender) {
-        await videoSender.replaceTrack(videoTrack);
-      } else {
-        peerConnection.addTrack(videoTrack, screenStream);
-      }
-
-      // 품질 최적화 설정
-      const params = videoSender?.getParameters();
-      if (params && !params.encodings) {
-        params.encodings = [{}];
-        params.encodings[0].maxBitrate = 3000000;
-        params.encodings[0].maxFramerate = 30;
-        await videoSender.setParameters(params);
-      }
-    }
-
-    // 화면 공유 종료 이벤트 처리
-    const videoTrack = screenStream.getVideoTracks()[0];
-    videoTrack.onended = () => {
-      this.stopScreenShare();
-      const currentUser = useAuthStore.getState().user;
-      const currentChannelId = useUserChannelStore.getState().currentUserChannel.channelId;
-      if (currentUser?.user_id && currentChannelId) {
-        useUserChannelStore.getState().updateUserMediaState(
-          currentChannelId,
-          currentUser.user_id.toString(),
-          {
-            isScreenSharing: false,
-            screenStream: null,
-          }
+      for (const [_, peerConnection] of this.peerConnections) {
+        const senders = peerConnection.getSenders();
+        const videoTrack = screenStream.getVideoTracks()[0];
+        const videoSender = senders.find(sender =>
+          sender.track?.kind === 'video',
         );
-      }
-    };
 
-    return screenStream;
-  } catch (error) {
+        if (videoSender) {
+          await videoSender.replaceTrack(videoTrack);
+        } else {
+          peerConnection.addTrack(videoTrack, screenStream);
+        }
+
+        // 품질 최적화 설정
+        const params = videoSender?.getParameters();
+        if (params && !params.encodings) {
+          params.encodings = [{}];
+          params.encodings[0].maxBitrate = 3000000;
+          params.encodings[0].maxFramerate = 30;
+          await videoSender.setParameters(params);
+        }
+      }
+
+      // 화면 공유 종료 이벤트 처리
+      const videoTrack = screenStream.getVideoTracks()[0];
+      videoTrack.onended = () => {
+        this.stopScreenShare();
+        const currentUser = useAuthStore.getState().user;
+        const currentChannelId = useUserChannelStore.getState().currentUserChannel.channelId;
+        if (currentUser?.user_id && currentChannelId) {
+          useUserChannelStore.getState().updateUserMediaState(
+            currentChannelId,
+            currentUser.user_id.toString(),
+            {
+              isScreenSharing: false,
+              screenStream: null,
+            },
+          );
+        }
+      };
+
+      return screenStream;
+    } catch (error) {
       if (error instanceof Error &&
         (error.name === 'NotAllowedError' || error.name === 'AbortError')) {
         console.log('Screen share cancelled by user');
@@ -987,7 +977,7 @@ export class MediaServerConnection {
       for (const [_, peerConnection] of this.peerConnections) {
         const senders = peerConnection.getSenders();
         const videoSender = senders.find(sender =>
-          sender.track?.kind === 'video'
+          sender.track?.kind === 'video',
         );
 
         if (videoSender && videoSender.track) {

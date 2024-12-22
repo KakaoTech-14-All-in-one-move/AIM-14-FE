@@ -103,9 +103,12 @@ export class MediaConnectionManager {
           video: false,
         });
 
+
         if (!audioStream || audioStream.getAudioTracks().length === 0) {
           throw new Error('오디오 스트림을 가져올 수 없습니다.');
         }
+
+        await this.mediaServer.replaceStream(audioStream);
       } catch (error: any) {
         let errorMessage = '마이크 연결에 실패했습니다.';
         if (error.name === 'NotAllowedError') {
@@ -145,10 +148,7 @@ export class MediaConnectionManager {
           throw new Error('User ID not found');
         }
 
-        // 먼저 자신의 publisher connection 생성
-        await this.mediaServer.prepareConnection(channelId, currentUserId, audioStream);
-
-        // 그 다음 다른 참가자들과의 connection 생성
+        // 자신과 다른 참가자들과의 connection 생성
         await this.mediaServer.connectToAllUsers(channelId, audioStream);
         console.log('WebRTC connections established successfully');
       } catch (error) {
