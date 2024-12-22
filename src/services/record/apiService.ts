@@ -11,7 +11,7 @@ class ApiService {
     const formData = new FormData();
     formData.append('file', videoFile, 'recording.webm');
 
-    const response = await fetch(`${config.videoServerUrl}/api/video/receive-video/`, {
+    const response = await fetch(`${config.videoServerUrl}/api/video/receive-video`, {
       method: 'POST',
       body: formData,
     });
@@ -25,7 +25,7 @@ class ApiService {
 
   async getVideoFeedback(videoId: string): Promise<VideoFeedbackResponse> {
     const response = await fetch(
-      `${config.videoServerUrl}/api/video/video-send-feedback/${videoId}/`
+      `${config.videoServerUrl}/api/video/video-send-feedback/${videoId}`
     );
 
     if (!response.ok) {
@@ -43,7 +43,7 @@ class ApiService {
 
   async deleteVideoData(videoId: string): Promise<void> {
     const response = await fetch(
-      `${config.videoServerUrl}/api/video/delete_files/${videoId}/`,
+      `${config.videoServerUrl}/api/video/delete_files/${videoId}`,
       { method: 'DELETE' }
     );
 
@@ -93,7 +93,7 @@ class ApiService {
 
   async deleteVoiceData(videoId: string): Promise<void> {
     const response = await fetch(
-      `${config.voiceServerUrl}/api/pronun/delete_files/${videoId}/`,
+      `${config.voiceServerUrl}/api/pronun/delete_files/${videoId}`,
       { method: 'DELETE' }
     );
 
