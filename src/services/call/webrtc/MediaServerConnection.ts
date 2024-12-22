@@ -984,28 +984,24 @@ export class MediaServerConnection {
 
   async stopScreenShare() {
     try {
-      // 카메라 비디오 스트림 가져오기 (필요한 경우)
-      const videoStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          frameRate: { ideal: 30 },
-        }
-      });
-      const videoTrack = videoStream.getVideoTracks()[0];
-
       for (const [_, peerConnection] of this.peerConnections) {
         const senders = peerConnection.getSenders();
         const videoSender = senders.find(sender =>
           sender.track?.kind === 'video'
         );
 
-        if (videoSender) {
-          if (videoSender.track) {
-            videoSender.track.stop();  // 기존 스크린쉐어 트랙 정지
-          }
-          await videoSender.replaceTrack(videoTrack);  // 새 비디오 트랙으로 교체
+        if (videoSender && videoSender.track) {
+          videoSender.track.stop();  // 기존 스크린쉐어 트랙 정지
+          await videoSender.replaceTrack(null);  // 비디오 트랙 제거
         }
+      }
+
+      // 오디오 트랙은 그대로 유지
+      if (this.localStream) {
+        const audioTracks = this.localStream.getAudioTracks();
+        const newStream = new MediaStream();
+        audioTracks.forEach(track => newStream.addTrack(track));
+        this.localStream = newStream;
       }
     } catch (error) {
       console.error('Error stopping screen share:', error);
