@@ -9,6 +9,7 @@ interface UserData {
   deafened: boolean;
   camera_on: boolean;
   screen_sharing: boolean;
+  stream: MediaStream | null;
 }
 
 export class UserStateManager {
@@ -68,7 +69,7 @@ export class UserStateManager {
   }
 
   handleUserJoin(channelId: string, userData: UserData) {
-    // console.log('UserStateManager - handleUserJoin with data:', userData);
+    console.log('UserStateManager - handleUserJoin', userData);
 
     if (!userData.user_id || !channelId) {
       console.error('Invalid user data or channel ID:', { userData, channelId });
@@ -85,14 +86,15 @@ export class UserStateManager {
       // camera_on 값을 명시적으로 false로 설정
       const updatedUserData = {
         ...userData,
-        camera_on: false,  // 강제로 false 설정
+        camera_on: false,
+        stream: userData.stream,
       };
 
-      // console.log('Converting user data with camera off:', updatedUserData);
       const channelUser = this.convertUserData(updatedUserData);
+      console.log('Create channel user:', channelUser);
 
-      // console.log('Created channel user:', channelUser);
       useUserChannelStore.getState().addChannelUser(channelId, channelUser);
+      console.log('ChannelUsers Map:', useUserChannelStore.getState().channelUsers);
       this.joinedUsers.add(userKey);
       this.notifyStateUpdate(channelId, userData.user_id);
     } catch (error) {
@@ -118,7 +120,7 @@ export class UserStateManager {
         isCameraOn: false,  // 명시적으로 false로 설정
         isScreenSharing: userData.screen_sharing,
         isSpeaking: false,
-        stream: null,
+        stream: userData.stream, // TODO : 최초 오디오 스트림 추가
         screenStream: null,
       },
     };

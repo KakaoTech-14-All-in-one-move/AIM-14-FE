@@ -4,6 +4,7 @@ import { useUserChannelStore } from '@/stores/userChannelStore';
 import { apiClient } from '@/api/apiClient';
 import { MediaType } from '../types';
 import { UserStateManager } from '@/services/call/UserStateManager';
+import { useAuthStore } from '@/stores/authStore.ts';
 
 type MessageHandler = (data: any) => void;
 type MessageHandlerMap = Record<number, MessageHandler>;
@@ -108,14 +109,19 @@ export class CallConnection {
         deafened: data.deafened ?? false,
         camera_on: data.camera_on ?? (data.channel_type === 'VIDEO'),
         screen_sharing: data.screen_sharing ?? false,
+        stream: null,
       };
+      // console.log('USERDATA', userData, useAuthStore.getState().user?.user_id);
 
-      // console.log('Processed userData for channel join:', userData);
-      this.userStateManager.handleUserJoin(data.channel_id.toString(), userData);
+      // user_id 가 내가 아닌 경우에만 실행
+      if (userData.user_id !== useAuthStore.getState().user?.user_id.toString()) {
+        console.log('OTHER USER CHANNEL ENTER');
+        this.userStateManager.handleUserJoin(data.channel_id.toString(), userData);
+      }
 
       // 현재 채널에 다른 사용자가 있는 경우에만 WebRTC 연결 시도
-      const currentUsers = useUserChannelStore.getState().channelUsers.get(data.channel_id.toString()) || [];
-      if (currentUsers.length > 1) {  // 자신 외에 다른 사용자가 있는 경우만
+      const channelUsers = useUserChannelStore.getState().channelUsers.get(data.channel_id.toString()) || [];
+      if (channelUsers.length > 1) {  // 자신 외에 다른 사용자가 있는 경우만
         MediaServerConnection.getInstance().handleNewUser(data.channel_id.toString(), data.user_id);
       }
     },

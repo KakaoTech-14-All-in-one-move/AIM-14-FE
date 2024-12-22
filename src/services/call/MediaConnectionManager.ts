@@ -47,6 +47,9 @@ export class MediaConnectionManager {
         return false;
       }
 
+      // CallConnection이 있다는 것이 보장되므로 바로 설정
+      this.mediaServer.setCallConnection(MediaConnectionManager.getCallConnection()!);
+
       const currentUser = useAuthStore.getState().user;
       if (!currentUser?.user_id) {
         console.error('Invalid user data:', currentUser);
@@ -71,21 +74,7 @@ export class MediaConnectionManager {
         return false;
       }
 
-      // 4. 초기 상태 설정
-      console.log('Setting up initial channel state');
-      useUserChannelStore.getState().setCurrentUserChannel(channelId, type);
-      this.userStateManager.handleUserJoin(channelId, {
-        user_id: userId,
-        username: currentUser.username,
-        profile_image: currentUser.profile_image,
-        channel_id: channelId,
-        muted: false,
-        deafened: false,
-        camera_on: false,
-        screen_sharing: false,
-      });
-
-      // 5. 오디오 스트림 획득
+      // 4. 오디오 스트림 획득
       console.log('Getting audio stream');
       let audioStream: MediaStream | null = null;
       try {
@@ -117,6 +106,21 @@ export class MediaConnectionManager {
         return false;
       }
 
+      // 5. 초기 상태 설정
+      console.log('Setting up initial channel state');
+      useUserChannelStore.getState().setCurrentUserChannel(channelId, type);
+      this.userStateManager.handleUserJoin(channelId, {
+        user_id: userId,
+        username: currentUser.username,
+        profile_image: currentUser.profile_image,
+        channel_id: channelId,
+        muted: false,
+        deafened: false,
+        camera_on: false,
+        screen_sharing: false,
+        stream: audioStream,
+      });
+
       // 6. 서버 연결
       console.log('Attempting to join channel via CallConnection');
       try {
@@ -136,12 +140,13 @@ export class MediaConnectionManager {
       // 7. WebRTC 연결
       console.log('Establishing WebRTC connections');
       try {
-        if (import.meta.env.VITE_ENV === 'dev') {
-          // 개발 환경에서는 WebRTC 연결 스킵
-          console.log('Development environment: Skipping WebRTC connections');
-        } else {
-          await this.mediaServer.connectToAllUsers(channelId, audioStream);
-        }
+        // if (import.meta.env.VITE_ENV === 'dev') {
+        //   // 개발 환경에서는 WebRTC 연결 스킵
+        //   console.log('Development environment: Skipping WebRTC connections');
+        // } else {
+        //   await this.mediaServer.connectToAllUsers(channelId, audioStream);
+        // }
+        await this.mediaServer.connectToAllUsers(channelId, audioStream);
         console.log('WebRTC connections established successfully');
       } catch (error) {
         if (import.meta.env.VITE_ENV === 'dev') {

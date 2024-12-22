@@ -53,6 +53,7 @@ export class MediaServerConnection {
 
   // WebRTC 관련 작업을 하는 모든 메서드에서 Connection 준비 상태 확인
   private async ensureCallConnection(): Promise<CallConnection> {
+    console.log("ensureCallConnection");
     if (!this.callConnection && this.connectionPromise) {
       await this.connectionPromise;
     }
@@ -91,8 +92,10 @@ export class MediaServerConnection {
     };
   }
 
+  // TODO : stream 의 역할?
   async prepareConnection(channelId: string, remotePeerId: string, stream?: MediaStream) {
     // 현재 채널 상태 확인
+    console.log("Prepare Connection", channelId, remotePeerId, stream);
     const currentChannel = useUserChannelStore.getState().currentUserChannel;
     if (!currentChannel.channelId || currentChannel.channelId !== channelId) {
       console.warn('Must join channel before establishing WebRTC connection');
@@ -138,6 +141,8 @@ export class MediaServerConnection {
       iceCandidatePoolSize: 10,
       sdpSemantics: 'unified-plan',
     });
+
+    console.log('NEW RTCPeerConnection', peerConnection);
 
     this.peerConnections.set(remotePeerId, peerConnection);
 
@@ -372,8 +377,10 @@ export class MediaServerConnection {
   }
 
   async connectToAllUsers(channelId: string, stream?: MediaStream) {
+    console.log('Connect To All Users', channelId, stream);
     const users = useUserChannelStore.getState().channelUsers.get(channelId);
     const currentUserId = useAuthStore.getState().user?.user_id.toString();
+    console.log('currentUserId | users', currentUserId, users);
     if (!currentUserId || !users) return;
 
     // stream이 전달된 경우 localStream으로 설정
@@ -383,6 +390,7 @@ export class MediaServerConnection {
 
     for (const user of users) {
       if (user.userId !== currentUserId) {
+        // TODO : stream 안 넣어줘도 돼?
         await this.prepareConnection(channelId, user.userId);
       }
     }
@@ -980,7 +988,6 @@ export class MediaServerConnection {
 
   disconnect() {
     this.cleanupAudioDetection();
-
     if (this.localStream) {
       this.localStream.getTracks().forEach(track => {
         track.enabled = false;
@@ -989,41 +996,19 @@ export class MediaServerConnection {
       this.localStream = null;
     }
 
-    // 모든 peer connection 정리
-    for (const [remotePeerId, peerConnection] of this.peerConnections) {
-      peerConnection.getSenders().forEach(sender => {
-        if (sender.track) {
-          sender.track.enabled = false;
-          sender.track.stop();
-        }
-      });
-
-      peerConnection.getTransceivers().forEach(transceiver => {
-        transceiver.stop();
-      });
-      peerConnection.close();
-    }
-
+    // 연결 관련 상태만 정리
     this.peerConnections.clear();
     this.connectionStates.clear();
     this.pendingCandidates.clear();
     this.reconnectionAttempts.clear();
 
-    // 실행 보장을 위해 setTimeout으로 한번 더 실행
-    setTimeout(() => {
-      this.cleanupAudioDetection();
-      if (this.localStream) {
-        this.localStream.getTracks().forEach(track => {
-          track.enabled = false;
-          track.stop();
-        });
-        this.localStream = null;
-      }
-    }, 100);
+    // callConnection은 유지
   }
 
+  // dispose는 앱이 완전히 종료될 때만 호출되어야 함
   dispose() {
     this.disconnect();
+    this.callConnection = null;
     MediaServerConnection.instance = null;
   }
 }
