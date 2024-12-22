@@ -412,8 +412,14 @@ export class MediaServerConnection {
     const connectionState = this.connectionStates.get(remotePeerId);
 
     if (!peerConnection) {
-      console.warn('Ignoring remote answer - no peer connection');
-      return;
+      console.warn('Peer connection not found, retrying in 1s...');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const retryConnection = this.peerConnections.get(remotePeerId);
+      if (!retryConnection) {
+        console.error('Failed to get peer connection after retry');
+        return;
+      }
+      return this.handleRemoteAnswer(sdp, remotePeerId);
     }
 
     // 추가: 이미 stable 상태인 경우의 처리

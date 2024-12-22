@@ -146,14 +146,14 @@ export class CallConnection {
     },
 
     [OP_CODES.VIDEO_ANSWER]: (data: any) => {
-      if (data?.sdpAnswer) {
-        MediaServerConnection.getInstance().handleRemoteAnswer(data.sdpAnswer);
+      if (data?.sdpAnswer && data?.userId) {
+        MediaServerConnection.getInstance().handleRemoteAnswer(data.sdpAnswer, data.userId);
       }
     },
 
     [OP_CODES.ICE_CANDIDATE]: (data: any) => {
-      if (data?.candidate) {
-        MediaServerConnection.getInstance().handleIceCandidate(data.candidate);
+      if (data?.candidate && data?.userId) {
+        MediaServerConnection.getInstance().handleIceCandidate(data.candidate, data.userId);
       }
     },
   };
