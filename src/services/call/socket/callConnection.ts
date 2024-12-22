@@ -146,12 +146,14 @@ export class CallConnection {
     },
 
     [OP_CODES.VIDEO_ANSWER]: (data: any) => {
+      console.log('VIDEO_ANSWER', data);
       if (data?.sdpAnswer && data?.userId) {
         MediaServerConnection.getInstance().handleRemoteAnswer(data.sdpAnswer, data.userId);
       }
     },
 
     [OP_CODES.ICE_CANDIDATE]: (data: any) => {
+      console.log('ICE_CANDIDATE', data);
       if (data?.candidate && data?.userId) {
         MediaServerConnection.getInstance().handleIceCandidate(data.candidate, data.userId);
       }
@@ -300,11 +302,11 @@ export class CallConnection {
     // 재연결 시도 간격을 점진적으로 증가 (최대 60초)
     const delay = Math.min(
       RECONNECT_DELAY * Math.pow(2, this.reconnectCount),  // 지수 백오프
-      this.MAX_RECONNECT_DELAY
+      this.MAX_RECONNECT_DELAY,
     );
 
     this.reconnectTimeout = setTimeout(async () => {
-      console.log(`Attempting reconnection... (attempt ${this.reconnectCount + 1}, delay: ${delay/1000}s)`);
+      console.log(`Attempting reconnection... (attempt ${this.reconnectCount + 1}, delay: ${delay / 1000}s)`);
       const success = await this.connect();
 
       if (success) {
@@ -326,7 +328,7 @@ export class CallConnection {
     try {
       const message = JSON.parse(event.data);
       if (message.op !== OP_CODES.ICE_CANDIDATE) {
-        console.log('Received message:', message);
+        // console.log('Received message:', message);
       }
 
       if (message.op === OP_CODES.ERROR && this.isErrorData(message.data)) {

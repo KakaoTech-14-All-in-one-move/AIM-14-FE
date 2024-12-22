@@ -29,7 +29,7 @@ export class UserStateManager {
   }
 
   handleServerState(channelUsers: UserData[]) {
-    console.log('Handling server state with users:', channelUsers);
+    // console.log('Handling server state with users:', channelUsers);
     const channelUsersMap = new Map<string, ChannelUser[]>();
 
     // 기존의 joined users 초기화
@@ -63,12 +63,12 @@ export class UserStateManager {
 
     channelUsersMap.forEach((users, channelId) => {
       useUserChannelStore.getState().setChannelUsers(channelId, users);
-      console.log(`Updated channel ${channelId} with ${users.length} users`);
+      // console.log(`Updated channel ${channelId} with ${users.length} users`);
     });
   }
 
   handleUserJoin(channelId: string, userData: UserData) {
-    console.log('UserStateManager - handleUserJoin with data:', userData);
+    // console.log('UserStateManager - handleUserJoin with data:', userData);
 
     if (!userData.user_id || !channelId) {
       console.error('Invalid user data or channel ID:', { userData, channelId });
@@ -88,10 +88,10 @@ export class UserStateManager {
         camera_on: false,  // 강제로 false 설정
       };
 
-      console.log('Converting user data with camera off:', updatedUserData);
+      // console.log('Converting user data with camera off:', updatedUserData);
       const channelUser = this.convertUserData(updatedUserData);
 
-      console.log('Created channel user:', channelUser);
+      // console.log('Created channel user:', channelUser);
       useUserChannelStore.getState().addChannelUser(channelId, channelUser);
       this.joinedUsers.add(userKey);
       this.notifyStateUpdate(channelId, userData.user_id);
@@ -101,7 +101,7 @@ export class UserStateManager {
   }
 
   private convertUserData(userData: UserData): ChannelUser {
-    console.log('Converting user data in UserStateManager:', userData);
+    // console.log('Converting user data in UserStateManager:', userData);
 
     if (!userData.user_id || !userData.channel_id) {
       throw new Error('Invalid user data: missing required fields');
@@ -123,12 +123,12 @@ export class UserStateManager {
       },
     };
 
-    console.log('Converted to channel user:', channelUser);
+    // console.log('Converted to channel user:', channelUser);
     return channelUser;
   }
 
   handleUserLeave(channelId: string, userId: string) {
-    console.log('Handling user leave:', { channelId, userId });
+    // console.log('Handling user leave:', { channelId, userId });
 
     if (!userId || !channelId) {
       console.error('Invalid user ID or channel ID:', { userId, channelId });
@@ -148,7 +148,7 @@ export class UserStateManager {
   }
 
   handleUserStateUpdate(channelId: string, userId: string, updates: any) {
-    console.log('Handling user state update:', { channelId, userId, updates });
+    // console.log('Handling user state update:', { channelId, userId, updates });
 
     if (!userId || !channelId) {
       console.error('Invalid user ID or channel ID:', { userId, channelId });

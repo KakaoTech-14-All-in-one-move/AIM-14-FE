@@ -55,7 +55,7 @@ export class MediaConnectionManager {
       const userId = currentUser.user_id.toString();
       console.log('Joining channel for user:', userId);
 
-      // 진행 상황 추적을 위한 로깅 추가
+      // 1. 현재 채널 상태 확인
       console.log('Step 1: Checking current channel state');
       const currentChannel = useUserChannelStore.getState().currentUserChannel;
       if (currentChannel.channelId) {
@@ -63,7 +63,7 @@ export class MediaConnectionManager {
         await this.leaveChannel();
       }
 
-      // 권한 체크 먼저 수행
+      // 2. 마이크 권한 확인
       console.log('Step 2: Checking microphone permissions');
       const hasPermission = await this.checkMicrophonePermission();
       if (!hasPermission) {
@@ -111,9 +111,6 @@ export class MediaConnectionManager {
         if (!audioStream || audioStream.getAudioTracks().length === 0) {
           throw new Error('오디오 스트림을 가져올 수 없습니다.');
         }
-
-        console.log('Successfully got audio stream');
-        await this.mediaServer.replaceStream(audioStream);
       } catch (error: any) {
         let errorMessage = '마이크 연결에 실패했습니다.';
         if (error.name === 'NotAllowedError') {
@@ -176,11 +173,11 @@ export class MediaConnectionManager {
   }
 
   private async checkMicrophonePermission(): Promise<boolean> {
-    console.log('Checking microphone permissions');
+    // console.log('Checking microphone permissions');
     try {
       // 먼저 navigator.permissions로 현재 권한 상태 확인
       const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-      console.log('Current microphone permission status:', permissionStatus.state);
+      // console.log('Current microphone permission status:', permissionStatus.state);
 
       if (permissionStatus.state === 'denied') {
         alert('마이크 권한이 거부되었습니다. 브라우저 설정에서 권한을 허용해주세요.');
