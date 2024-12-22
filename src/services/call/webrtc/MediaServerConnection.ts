@@ -162,7 +162,7 @@ export class MediaServerConnection {
         return;
       }
 
-      // 디버깅 로그
+      // 디버깅 정보 로깅
       console.log('====== Stream Debug Info ======');
       console.log('Stream ID:', stream.id);
       console.log('Track Info:', {
@@ -171,9 +171,11 @@ export class MediaServerConnection {
         label: event.track.label,
         enabled: event.track.enabled,
         muted: event.track.muted,
-        remotePeerId, // 디버깅을 위해 추가
+        readyState: event.track.readyState,
+        remotePeerId
       });
 
+      // 트랙 이벤트 핸들러
       const cleanupTrack = () => {
         if (event.track.kind === 'audio') {
           this.cleanupAudioDetection(remotePeerId);
@@ -194,6 +196,7 @@ export class MediaServerConnection {
         console.log(`Remote track unmuted: ${event.track.kind}`);
       };
 
+      // 스트림 데이터 파싱
       let streamData = stream.id === 'default' ?
         { userId: remotePeerId, endpointId: stream.id } :
         this.parseKurentoStreamId(stream.id, remotePeerId);
@@ -203,6 +206,7 @@ export class MediaServerConnection {
         return;
       }
 
+      // 채널 사용자 확인
       const users = useUserChannelStore.getState().channelUsers.get(channelId);
       if (!users) {
         console.error('No users found in channel:', channelId);
@@ -215,13 +219,15 @@ export class MediaServerConnection {
         return;
       }
 
+      // 스트림 상태 업데이트
       const isScreenShare = stream.id.includes('screenshare');
       useUserChannelStore.getState().updateUserMediaState(
         channelId,
         streamData.userId,
-        isScreenShare ? { screenStream: stream } : { stream },
+        isScreenShare ? { screenStream: stream } : { stream }
       );
 
+      // 오디오 감지 설정
       if (event.track.kind === 'audio' && !isScreenShare) {
         this.setupRemoteAudioDetection(stream, streamData.userId);
       }
@@ -357,28 +363,38 @@ export class MediaServerConnection {
   async createVideoOffer(remotePeerId: string) {
     const peerConnection = this.peerConnections.get(remotePeerId);
     const connectionState = this.connectionStates.get(remotePeerId);
-    const currentUserId = useAuthStore.getState().user?.user_id.toString();
 
     if (!peerConnection || !connectionState?.isConnecting) {
       throw new Error('Connection not prepared');
     }
 
+    if (connectionState.isNegotiating) {
+      console.log('Negotiation already in progress, skipping offer creation');
+      return;
+    }
+
     try {
+      connectionState.isNegotiating = true;
+      console.log('Creating offer for:', remotePeerId);
+
       const offer = await peerConnection.createOffer({
         offerToReceiveAudio: true,
         offerToReceiveVideo: true,
       });
 
+      console.log('Setting local description');
       await peerConnection.setLocalDescription(offer);
 
       this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
         sdp_offer: offer.sdp,
-        sender_id: currentUserId,  // 현재 사용자 ID로 변경
+        sender_id: useAuthStore.getState().user?.user_id.toString()
       });
     } catch (error) {
       console.error('Error creating offer:', error);
       this.resetConnectionState(remotePeerId);
       throw error;
+    } finally {
+      connectionState.isNegotiating = false;
     }
   }
 
@@ -454,13 +470,23 @@ export class MediaServerConnection {
 
   private async addIceCandidate(candidate: RTCIceCandidateInit, remotePeerId: string) {
     const peerConnection = this.peerConnections.get(remotePeerId);
-    if (!peerConnection) return;
+    if (!peerConnection) {
+      console.warn('No peer connection for:', remotePeerId);
+      return;
+    }
 
     try {
-      await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      if (peerConnection.remoteDescription) {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+        console.log('Added ICE candidate for:', remotePeerId);
+      } else {
+        console.warn('Queueing ICE candidate - no remote description');
+        const candidates = this.pendingCandidates.get(remotePeerId) || [];
+        candidates.push(candidate);
+        this.pendingCandidates.set(remotePeerId, candidates);
+      }
     } catch (error) {
       console.error('Error adding ICE candidate:', error);
-      throw error;
     }
   }
 
