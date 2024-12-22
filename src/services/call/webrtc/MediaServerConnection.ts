@@ -17,6 +17,7 @@ export class MediaServerConnection {
   private connectionState = {
     isRemoteDescriptionSet: false,
     isConnecting: false,
+    isNegotiating: false,
   };
 
   private audioContextMap: Map<string, {
@@ -25,7 +26,8 @@ export class MediaServerConnection {
     dataArray: Uint8Array;
   }> = new Map();
 
-  private constructor() {}
+  private constructor() {
+  }
 
   static getInstance(): MediaServerConnection {
     if (!this.instance) {
@@ -51,7 +53,7 @@ export class MediaServerConnection {
 
     this.peerConnection = new RTCPeerConnection({
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-      iceCandidatePoolSize: 10
+      iceCandidatePoolSize: 10,
     });
 
     this.setupPeerConnectionHandlers(channelId, userId);
@@ -73,6 +75,27 @@ export class MediaServerConnection {
     }
   }
 
+  private async renegotiate() {
+    if (!this.peerConnection || this.connectionState.isNegotiating) {
+      console.log('Negotiation already in progress or no peer connection');
+      return;
+    }
+
+    try {
+      this.connectionState.isNegotiating = true;
+      const offer = await this.peerConnection.createOffer();
+      await this.peerConnection.setLocalDescription(offer);
+
+      this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
+        sdp_offer: offer.sdp,
+      });
+    } catch (error) {
+      console.error('Renegotiation failed:', error);
+    } finally {
+      this.connectionState.isNegotiating = false;
+    }
+  }
+
   private setupPeerConnectionHandlers(channelId: string, userId: string) {
     if (!this.peerConnection) return;
 
@@ -82,7 +105,7 @@ export class MediaServerConnection {
         this.callConnection?.sendOp(OP_CODES.ON_ICE_CANDIDATE, {
           candidate: event.candidate.toJSON(),
           sdp_mid: event.candidate.sdpMid,
-          sdp_m_line_index: event.candidate.sdpMLineIndex
+          sdp_m_line_index: event.candidate.sdpMLineIndex,
         });
       }
     };
@@ -150,7 +173,7 @@ export class MediaServerConnection {
       useUserChannelStore.getState().updateUserMediaState(
         channelId,
         remoteUserId,
-        isScreenShare ? { screenStream: stream } : { stream }
+        isScreenShare ? { screenStream: stream } : { stream },
       );
 
       if (event.track.kind === 'audio' && !isScreenShare) {
@@ -187,13 +210,11 @@ export class MediaServerConnection {
 
     // 협상 필요 이벤트
     this.peerConnection.onnegotiationneeded = async () => {
-      if (!this.connectionState.isConnecting) {
+      if (!this.connectionState.isConnecting && !this.connectionState.isNegotiating) {
         try {
-          this.connectionState.isConnecting = true;
           await this.renegotiate();
         } catch (error) {
           console.error('Negotiation failed:', error);
-          this.connectionState.isConnecting = false;
         }
       }
     };
@@ -209,7 +230,7 @@ export class MediaServerConnection {
     if (isScreenShare && track.kind === 'video') {
       useUserChannelStore.getState().updateUserMediaState(channelId, userId, {
         isScreenSharing: false,
-        screenStream: null
+        screenStream: null,
       });
     }
   }
@@ -220,7 +241,7 @@ export class MediaServerConnection {
 
     return {
       endpointId: parts[0],
-      userId: parts[1]
+      userId: parts[1],
     };
   }
 
@@ -232,13 +253,13 @@ export class MediaServerConnection {
     try {
       const offer = await this.peerConnection.createOffer({
         offerToReceiveAudio: true,
-        offerToReceiveVideo: true
+        offerToReceiveVideo: true,
       });
 
       await this.peerConnection.setLocalDescription(offer);
 
       this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
-        sdp_offer: offer.sdp
+        sdp_offer: offer.sdp,
       });
     } catch (error) {
       console.error('Error creating offer:', error);
@@ -250,14 +271,20 @@ export class MediaServerConnection {
   private resetConnectionState() {
     this.connectionState = {
       isRemoteDescriptionSet: false,
-      isConnecting: false
+      isConnecting: false,
+      isNegotiating: false,
     };
     this.pendingCandidates = [];
   }
 
   async handleRemoteAnswer(sdp: string) {
-    if (!this.peerConnection || !this.connectionState.isConnecting) {
-      console.warn('Ignoring remote answer - connection not ready');
+    if (!this.peerConnection) {
+      console.warn('Ignoring remote answer - no peer connection');
+      return;
+    }
+
+    if (this.peerConnection.signalingState === 'stable') {
+      console.warn('Connection already stable, ignoring answer');
       return;
     }
 
@@ -265,11 +292,12 @@ export class MediaServerConnection {
       await this.peerConnection.setRemoteDescription(
         new RTCSessionDescription({
           type: 'answer',
-          sdp
-        })
+          sdp,
+        }),
       );
 
       this.connectionState.isRemoteDescriptionSet = true;
+      this.connectionState.isConnecting = false;
 
       // Process pending candidates
       while (this.pendingCandidates.length > 0) {
@@ -450,8 +478,8 @@ export class MediaServerConnection {
           video: {
             width: { ideal: 1280 },
             height: { ideal: 720 },
-            frameRate: { ideal: 30 }
-          }
+            frameRate: { ideal: 30 },
+          },
         });
 
         // 기존 오디오 트랙이 있는 새 스트림 생성
@@ -478,9 +506,9 @@ export class MediaServerConnection {
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
-            autoGainControl: true
+            autoGainControl: true,
           },
-          video: false
+          video: false,
         });
 
         await this.replaceStream(audioStream);
@@ -515,8 +543,8 @@ export class MediaServerConnection {
         video: {
           width: { ideal: 1920 },
           height: { ideal: 1080 },
-          frameRate: { ideal: 30 }
-        }
+          frameRate: { ideal: 30 },
+        },
       });
 
       if (!this.peerConnection) return null;
@@ -524,7 +552,7 @@ export class MediaServerConnection {
       // 기존 비디오 트랙 제거
       const senders = this.peerConnection.getSenders();
       const videoSenders = senders.filter(sender =>
-        sender.track?.kind === 'video'
+        sender.track?.kind === 'video',
       );
 
       for (const sender of videoSenders) {
@@ -558,8 +586,8 @@ export class MediaServerConnection {
             currentUser.user_id.toString(),
             {
               isScreenSharing: false,
-              screenStream: null
-            }
+              screenStream: null,
+            },
           );
         }
       };
@@ -585,7 +613,7 @@ export class MediaServerConnection {
       const screenSenders = senders.filter(sender =>
         sender.track?.kind === 'video' &&
         sender.track.readyState === 'live' &&
-        sender.track.label.includes('screen')
+        sender.track.label.includes('screen'),
       );
 
       for (const sender of screenSenders) {
@@ -598,21 +626,6 @@ export class MediaServerConnection {
       await this.renegotiate();
     } catch (error) {
       console.error('Error stopping screen share:', error);
-    }
-  }
-
-  private async renegotiate() {
-    if (!this.peerConnection) return;
-
-    try {
-      const offer = await this.peerConnection.createOffer();
-      await this.peerConnection.setLocalDescription(offer);
-
-      this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
-        sdp_offer: offer.sdp
-      });
-    } catch (error) {
-      console.error('Renegotiation failed:', error);
     }
   }
 
