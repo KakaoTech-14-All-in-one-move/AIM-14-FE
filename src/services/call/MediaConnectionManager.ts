@@ -84,13 +84,13 @@ export class MediaConnectionManager {
         return false;
       }
 
-      // WebRTC 연결 준비
-      console.log('Step 4: Preparing WebRTC connection');
+      // Step 4 & 6: Establishing WebRTC connections
+      console.log('Step 4: Establishing WebRTC connections');
       try {
-        await this.mediaServer.prepareConnection(channelId);
-        console.log('WebRTC connection prepared successfully');
+        await this.mediaServer.connectToAllUsers(channelId);
+        console.log('WebRTC connections established successfully');
       } catch (error) {
-        console.error('Failed to prepare WebRTC connection:', error);
+        console.error('Failed to establish WebRTC connections:', error);
         await this.handleFailedJoin();
         return false;
       }
@@ -105,7 +105,7 @@ export class MediaConnectionManager {
             noiseSuppression: true,
             autoGainControl: true,
           },
-          video: false
+          video: false,
         });
 
         if (!audioStream || audioStream.getAudioTracks().length === 0) {
@@ -130,17 +130,6 @@ export class MediaConnectionManager {
         return false;
       }
 
-      // WebRTC 연결 설정
-      console.log('Step 6: Establishing WebRTC connection');
-      try {
-        await this.mediaServer.connect();
-        console.log('WebRTC connection established successfully');
-      } catch (error) {
-        console.error('Failed to establish WebRTC connection:', error);
-        await this.handleFailedJoin();
-        return false;
-      }
-
       try {
         console.log('Step 7: Setting up initial media state');
         // 초기 미디어 상태 설정 - 카메라는 항상 꺼진 상태로 시작
@@ -150,7 +139,7 @@ export class MediaConnectionManager {
           isMuted: false,
           isDeafened: false,
           isCameraOn: false,
-          isScreenSharing: false
+          isScreenSharing: false,
         };
 
         // 채널 상태 업데이트
@@ -207,7 +196,7 @@ export class MediaConnectionManager {
             noiseSuppression: true,
             autoGainControl: true,
           },
-          video: false
+          video: false,
         });
 
         // 테스트 스트림 정리
@@ -274,13 +263,13 @@ export class MediaConnectionManager {
           isMuted: true,
           isDeafened: false,
           isCameraOn: false,
-          isScreenSharing: false
+          isScreenSharing: false,
         };
 
         this.userStateManager.handleUserStateUpdate(
           currentChannel.channelId,
           userId,
-          clearMediaState
+          clearMediaState,
         );
       }
 
@@ -312,7 +301,7 @@ export class MediaConnectionManager {
       // 7. UserStateManager를 통해 사용자 퇴장 처리
       this.userStateManager.handleUserLeave(
         currentChannel.channelId,
-        userId
+        userId,
       );
 
       // 8. 채널 상태 초기화

@@ -44,7 +44,20 @@ export class MediaServerConnection {
     return this.localStream;
   }
 
-  private parseKurentoStreamId(streamId: string): { userId: string; endpointId: string } | null {
+  private parseKurentoStreamId(streamId: string, remotePeerId?: string): { userId: string; endpointId: string } | null {
+    // default 스트림인 경우, remotePeerId 필수 체크
+    if (streamId === 'default') {
+      if (!remotePeerId) {
+        console.error('RemotePeerId is required for default stream');
+        return null;
+      }
+      return {
+        endpointId: streamId,
+        userId: remotePeerId,
+      };
+    }
+
+    // 기존 로직
     const parts = streamId.split('_');
     if (parts.length !== 2) return null;
 
@@ -93,6 +106,12 @@ export class MediaServerConnection {
   }
 
   private setupPeerConnectionHandlers(channelId: string, userId: string, remotePeerId: string) {
+    console.log('Setting up peer connection handlers:', {
+      channelId,
+      userId,
+      remotePeerId,
+    });
+
     const peerConnection = this.peerConnections.get(remotePeerId);
     if (!peerConnection) return;
 
@@ -110,20 +129,28 @@ export class MediaServerConnection {
     peerConnection.oniceconnectionstatechange = () => {
       const state = peerConnection.iceConnectionState;
       console.log(`ICE connection state for ${remotePeerId}: ${state}`);
+      console.log(`Connection state: ${peerConnection.connectionState}`);
 
       switch (state) {
         case 'failed':
-          if (peerConnection) {
-            peerConnection.restartIce();
+          if (peerConnection.connectionState !== 'failed') {
             console.warn(`ICE connection failed for ${remotePeerId} - attempting restart`);
+            peerConnection.restartIce();
           }
           break;
         case 'disconnected':
-          setTimeout(() => {
-            if (peerConnection.iceConnectionState === 'disconnected') {
-              this.attemptReconnection(remotePeerId, channelId);
-            }
-          }, this.ICE_RECONNECTION_TIMEOUT);
+          if (peerConnection.connectionState === 'connected') {
+            console.log('Temporary disconnection detected, waiting before reconnection attempt');
+            setTimeout(() => {
+              if (peerConnection.iceConnectionState === 'disconnected' &&
+                peerConnection.connectionState !== 'connected') {
+                this.attemptReconnection(remotePeerId, channelId);
+              }
+            }, this.ICE_RECONNECTION_TIMEOUT);
+          }
+          break;
+        case 'connected':
+          console.log(`ICE Connection established with ${remotePeerId}`);
           break;
       }
     };
@@ -135,9 +162,28 @@ export class MediaServerConnection {
         return;
       }
 
+      // 디버깅 로그
+      console.log('====== Stream Debug Info ======');
+      console.log('Stream ID:', stream.id);
+      console.log('Track Info:', {
+        kind: event.track.kind,
+        id: event.track.id,
+        label: event.track.label,
+        enabled: event.track.enabled,
+        muted: event.track.muted,
+        remotePeerId, // 디버깅을 위해 추가
+      });
+
+      const cleanupTrack = () => {
+        if (event.track.kind === 'audio') {
+          this.cleanupAudioDetection(remotePeerId);
+        }
+      };
+
       event.track.onended = () => {
         console.log(`Remote track ended: ${event.track.kind}`);
-        this.handleTrackEnded(event.track, stream, channelId);
+        this.handleTrackEnded(event.track, stream, channelId, remotePeerId);
+        cleanupTrack();
       };
 
       event.track.onmute = () => {
@@ -148,30 +194,36 @@ export class MediaServerConnection {
         console.log(`Remote track unmuted: ${event.track.kind}`);
       };
 
-      const streamData = this.parseKurentoStreamId(stream.id);
-      if (!streamData) {
-        console.error('Invalid stream ID format');
+      let streamData = stream.id === 'default' ?
+        { userId: remotePeerId, endpointId: stream.id } :
+        this.parseKurentoStreamId(stream.id, remotePeerId);
+
+      if (!streamData || !streamData.userId) {
+        console.error('Invalid stream data:', { streamId: stream.id, remotePeerId });
         return;
       }
 
-      const { userId: remoteUserId } = streamData;
       const users = useUserChannelStore.getState().channelUsers.get(channelId);
-      const userExists = users?.some(u => u.userId === remoteUserId);
+      if (!users) {
+        console.error('No users found in channel:', channelId);
+        return;
+      }
 
+      const userExists = users.some(u => u.userId === streamData.userId);
       if (!userExists) {
-        console.warn(`User ${remoteUserId} not found in store`);
+        console.warn(`User ${streamData.userId} not found in channel ${channelId}`);
         return;
       }
 
       const isScreenShare = stream.id.includes('screenshare');
       useUserChannelStore.getState().updateUserMediaState(
         channelId,
-        remoteUserId,
+        streamData.userId,
         isScreenShare ? { screenStream: stream } : { stream },
       );
 
       if (event.track.kind === 'audio' && !isScreenShare) {
-        this.setupRemoteAudioDetection(stream, remoteUserId);
+        this.setupRemoteAudioDetection(stream, streamData.userId);
       }
     };
 
@@ -196,6 +248,7 @@ export class MediaServerConnection {
             this.attemptReconnection(remotePeerId, channelId);
           } else {
             console.error(`Max reconnection attempts reached for ${remotePeerId}`);
+            this.cleanupExistingConnection(remotePeerId);
           }
           break;
         case 'closed':
@@ -207,11 +260,25 @@ export class MediaServerConnection {
 
     peerConnection.onnegotiationneeded = async () => {
       const connectionState = this.connectionStates.get(remotePeerId);
-      if (connectionState && !connectionState.isConnecting && !connectionState.isNegotiating) {
-        try {
-          await this.renegotiate(remotePeerId);
-        } catch (error) {
-          console.error('Negotiation failed:', error);
+      if (!connectionState) {
+        console.error('No connection state found for:', remotePeerId);
+        return;
+      }
+
+      if (connectionState.isConnecting || connectionState.isNegotiating) {
+        console.log('Skipping negotiation - already in progress');
+        return;
+      }
+
+      try {
+        connectionState.isNegotiating = true;
+        await this.renegotiateConnection(remotePeerId);
+      } catch (error) {
+        console.error('Negotiation failed:', error);
+        this.resetConnectionState(remotePeerId);
+      } finally {
+        if (connectionState) {
+          connectionState.isNegotiating = false;
         }
       }
     };
@@ -220,25 +287,34 @@ export class MediaServerConnection {
   async connectToAllUsers(channelId: string) {
     const users = useUserChannelStore.getState().channelUsers.get(channelId);
     const currentUserId = useAuthStore.getState().user?.user_id.toString();
+    if (!currentUserId) return;
 
+    // 자신을 제외한 다른 참가자들의 스트림을 받기 위한 연결만 생성
     for (const user of users || []) {
       if (user.userId !== currentUserId) {
         await this.prepareConnection(channelId, user.userId);
-        await this.connect(user.userId);
+        const currentUser = useAuthStore.getState().user;
+        if (!currentUser?.user_id) continue;
+        await this.createVideoOffer(user.userId);
       }
     }
   }
 
   async handleNewUser(channelId: string, newUserId: string) {
     const currentUserId = useAuthStore.getState().user?.user_id.toString();
-    if (newUserId !== currentUserId) {
-      await this.prepareConnection(channelId, newUserId);
-      await this.connect(newUserId);
+    const channelUsers = useUserChannelStore.getState().channelUsers.get(channelId) || [];
+
+    // 자신이거나 채널에 혼자인 경우 WebRTC 연결 생성하지 않음
+    if (newUserId === currentUserId || channelUsers.length <= 1) {
+      return;
     }
+
+    await this.prepareConnection(channelId, newUserId);
+    await this.createVideoOffer(newUserId);
   }
 
-  private handleTrackEnded(track: MediaStreamTrack, stream: MediaStream, channelId: string) {
-    const streamData = this.parseKurentoStreamId(stream.id);
+  private handleTrackEnded(track: MediaStreamTrack, stream: MediaStream, channelId: string, remotePeerId: string) {
+    const streamData = this.parseKurentoStreamId(stream.id, remotePeerId);
     if (!streamData) return;
 
     const { userId } = streamData;
@@ -252,9 +328,10 @@ export class MediaServerConnection {
     }
   }
 
-  private async renegotiate(remotePeerId: string) {
+  private async renegotiateConnection(remotePeerId: string) {
     const peerConnection = this.peerConnections.get(remotePeerId);
     const connectionState = this.connectionStates.get(remotePeerId);
+    const currentUserId = useAuthStore.getState().user?.user_id.toString();
 
     if (!peerConnection || !connectionState || connectionState.isNegotiating) {
       console.log('Negotiation already in progress or no peer connection');
@@ -268,7 +345,7 @@ export class MediaServerConnection {
 
       this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
         sdp_offer: offer.sdp,
-        sender_id: remotePeerId,
+        sender_id: currentUserId,  // 현재 사용자 ID로 변경
       });
     } catch (error) {
       console.error('Renegotiation failed:', error);
@@ -277,9 +354,10 @@ export class MediaServerConnection {
     }
   }
 
-  async connect(remotePeerId: string) {
+  async createVideoOffer(remotePeerId: string) {
     const peerConnection = this.peerConnections.get(remotePeerId);
     const connectionState = this.connectionStates.get(remotePeerId);
+    const currentUserId = useAuthStore.getState().user?.user_id.toString();
 
     if (!peerConnection || !connectionState?.isConnecting) {
       throw new Error('Connection not prepared');
@@ -295,7 +373,7 @@ export class MediaServerConnection {
 
       this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
         sdp_offer: offer.sdp,
-        sender_id: remotePeerId,
+        sender_id: currentUserId,  // 현재 사용자 ID로 변경
       });
     } catch (error) {
       console.error('Error creating offer:', error);
@@ -396,7 +474,7 @@ export class MediaServerConnection {
     try {
       await this.cleanupExistingConnection(remotePeerId);
       await this.prepareConnection(channelId, remotePeerId);
-      await this.connect(remotePeerId);
+      await this.createVideoOffer(remotePeerId);
     } catch (error) {
       console.error('Reconnection failed:', error);
     }
@@ -536,7 +614,7 @@ export class MediaServerConnection {
         }
       });
 
-      await this.renegotiate(remotePeerId);
+      await this.renegotiateConnection(remotePeerId);
     }
 
     const audioTracks = newStream.getAudioTracks();
@@ -665,7 +743,7 @@ export class MediaServerConnection {
 
 // 모든 peer와 재협상
       for (const [remotePeerId] of this.peerConnections) {
-        await this.renegotiate(remotePeerId);
+        await this.renegotiateConnection(remotePeerId);
       }
 
       return screenStream;
@@ -697,7 +775,7 @@ export class MediaServerConnection {
           peerConnection.removeTrack(sender);
         }
 
-        await this.renegotiate(remotePeerId);
+        await this.renegotiateConnection(remotePeerId);
       }
     } catch (error) {
       console.error('Error stopping screen share:', error);

@@ -112,6 +112,12 @@ export class CallConnection {
 
       // console.log('Processed userData for channel join:', userData);
       this.userStateManager.handleUserJoin(data.channel_id.toString(), userData);
+
+      // 현재 채널에 다른 사용자가 있는 경우에만 WebRTC 연결 시도
+      const currentUsers = useUserChannelStore.getState().channelUsers.get(data.channel_id.toString()) || [];
+      if (currentUsers.length > 1) {  // 자신 외에 다른 사용자가 있는 경우만
+        MediaServerConnection.getInstance().handleNewUser(data.channel_id.toString(), data.user_id);
+      }
     },
 
     [OP_CODES.LEAVE_CHANNEL_EVENT]: (data: any) => {
