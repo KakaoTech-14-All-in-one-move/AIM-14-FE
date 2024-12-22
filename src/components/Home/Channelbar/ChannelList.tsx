@@ -74,6 +74,7 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
         return;
       }
 
+      // 텍스트 채널이면 바로 이동
       if (type === 'text') {
         navigate(`/channels/${channel.serverId}/${channel.channelId}`);
         return;
@@ -82,50 +83,39 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
       const mediaType = type.toUpperCase() as MediaType;
       if (isMemberClick) return;
 
+      // 현재 접속 중인 채널이 있으면 확인
       if (currentUserChannel.channelId) {
         const confirmSwitch = window.confirm(
-          `현재 ${type === 'voice' ? '음성' : '화상'} 채널에 접속 중입니다.\n통화를 종료하고 이동하시겠습니까?`,
+          `현재 ${type === 'voice' ? '음성' : '화상'} 채널에 접속 중입니다.\n통화를 종료하고 이동하시겠습니까?`
         );
         if (!confirmSwitch) return;
-
-        // 현재 채널에서 나가기 전에 확장 상태 제거
-        const currentChannel = currentChannels.find(c => c.channelId.toString() === currentUserChannel.channelId);
-        if (currentChannel) {
-          setExpandedChannels(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(currentChannel.channelName);
-            return newSet;
-          });
-        }
 
         await ChannelNavigator.getInstance().handleChannelLeave();
       }
 
-      // 채널 입장 시도 중임을 표시
       setJoiningChannel(channel.channelId.toString());
 
-      // console.log('Attempting to enter channel:', channel.channelId.toString());
-      const success = await ChannelNavigator.getInstance().handleChannelEnter(
-        channel.channelId.toString(),
-        mediaType
-      );
+      try {
+        // 채널 입장 처리를 ChannelNavigator에 위임
+        const success = await ChannelNavigator.getInstance().handleChannelEnter(
+          channel.channelId.toString(),
+          mediaType
+        );
 
-      if (!success) {
-        console.error('Failed to enter channel');
-        alert(`${type === 'voice' ? '음성' : '화상'} 채널 접속에 실패했습니다.`);
-        return;
+        if (success) {
+          toggleChannelExpand(channel.channelName);
+        } else {
+          alert(`${type === 'voice' ? '음성' : '화상'} 채널 접속에 실패했습니다.`);
+        }
+      } finally {
+        setJoiningChannel(null);
       }
-
-      // console.log('Successfully entered channel');
-      toggleChannelExpand(channel.channelName);
-
     } catch (error) {
       console.error('Error in handleChannelClick:', error);
       alert('채널 접속 중 오류가 발생했습니다.');
-    } finally {
       setJoiningChannel(null);
     }
-  }, [type, currentUserChannel.channelId, currentChannels, toggleChannelExpand, navigate, joiningChannel]);
+  }, [type, currentUserChannel.channelId, toggleChannelExpand, navigate, joiningChannel]);
 
 
   const handleRenameChannel = async (channel: Channel) => {

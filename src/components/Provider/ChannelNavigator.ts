@@ -23,53 +23,46 @@ export class ChannelNavigator {
   }
 
   async handleChannelEnter(channelId: string, type: MediaType): Promise<boolean> {
-    if (!this.navigate) {
+    if (!this.navigate!) {
       console.error('Navigation function not set');
       return false;
     }
 
     try {
-      // 1. 먼저 WebRTC 연결 시도
-      const connected = await this.mediaManager.joinChannel(channelId, type);
-
-      if (!connected) {
-        console.error('Failed to connect to channel');
-        return false;
-      }
-
-      // 2. 연결 성공 시에만 페이지 이동
+      // 1. 먼저 페이지 이동
       const path = type === 'VIDEO' ? `/video/${channelId}` : `/voice/${channelId}`;
-      this.navigate(path);
+      this.navigate!(path);  // 저장된 navigate 함수 사용
+
+      // 2. 페이지 이동 후 잠시 대기하여 상태 업데이트 보장
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // 3. WebRTC 연결 시도
+      const connected = await this.mediaManager.joinChannel(channelId, type);
+      if (!connected) {
+        throw new Error('Failed to connect to channel');
+      }
 
       return true;
-
     } catch (error) {
       console.error('Channel enter failed:', error);
-
-      // 3. 에러 발생 시 채널 나가기 시도
-      try {
-        await this.mediaManager.leaveChannel();
-      } catch (cleanupError) {
-        console.error('Failed to cleanup after failed channel enter:', cleanupError);
-      }
-
+      await this.mediaManager.leaveChannel();
+      this.navigate!('/channels');  // 저장된 navigate 함수 사용
       return false;
     }
   }
 
   async handleChannelLeave(): Promise<void> {
-    if (!this.navigate) {
+    if (!this.navigate!) {
       console.error('Navigation function not set');
       return;
     }
 
     try {
       await this.mediaManager.leaveChannel();
-      this.navigate('/channels');
+      this.navigate!('/channels');  // 저장된 navigate 함수 사용
     } catch (error) {
       console.error('Channel leave failed:', error);
-      // 실패하더라도 채널 목록으로 이동
-      this.navigate('/channels');
+      this.navigate!('/channels');  // 저장된 navigate 함수 사용
     }
   }
 
