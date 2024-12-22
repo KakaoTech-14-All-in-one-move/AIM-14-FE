@@ -6,19 +6,19 @@ import { OP_CODES } from '@/services/call/constants';
 export class MediaServerConnection {
   private audioDetectionInterval: number | null = null;
   private static instance: MediaServerConnection | null = null;
-  private peerConnection: RTCPeerConnection | null = null;
+  private peerConnections: Map<string, RTCPeerConnection> = new Map();
   private localStream: MediaStream | null = null;
   private callConnection: CallConnection | null = null;
-  private pendingCandidates: RTCIceCandidateInit[] = [];
-  private reconnectionAttempts = 0;
+  private pendingCandidates: Map<string, RTCIceCandidateInit[]> = new Map();
+  private reconnectionAttempts: Map<string, number> = new Map();
   private readonly MAX_RECONNECTION_ATTEMPTS = 3;
   private readonly ICE_RECONNECTION_TIMEOUT = 3000;
 
-  private connectionState = {
-    isRemoteDescriptionSet: false,
-    isConnecting: false,
-    isNegotiating: false,
-  };
+  private connectionStates: Map<string, {
+    isRemoteDescriptionSet: boolean;
+    isConnecting: boolean;
+    isNegotiating: boolean;
+  }> = new Map();
 
   private audioContextMap: Map<string, {
     context: AudioContext;
@@ -40,107 +40,101 @@ export class MediaServerConnection {
     this.callConnection = connection;
   }
 
-  async prepareConnection(channelId: string) {
-    await this.cleanupExistingConnection();
+  getLocalStream(): MediaStream | null {
+    return this.localStream;
+  }
+
+  private parseKurentoStreamId(streamId: string): { userId: string; endpointId: string } | null {
+    const parts = streamId.split('_');
+    if (parts.length !== 2) return null;
+
+    return {
+      endpointId: parts[0],
+      userId: parts[1],
+    };
+  }
+
+  async prepareConnection(channelId: string, remotePeerId: string) {
+    await this.cleanupExistingConnection(remotePeerId);
 
     const currentUser = useAuthStore.getState().user;
     if (!currentUser?.user_id) {
       throw new Error('No user found');
     }
 
-    this.connectionState.isConnecting = true;
+    this.connectionStates.set(remotePeerId, {
+      isRemoteDescriptionSet: false,
+      isConnecting: true,
+      isNegotiating: false,
+    });
+
     const userId = currentUser.user_id.toString();
 
-    this.peerConnection = new RTCPeerConnection({
+    const peerConnection = new RTCPeerConnection({
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
       iceCandidatePoolSize: 10,
     });
 
-    this.setupPeerConnectionHandlers(channelId, userId);
+    this.peerConnections.set(remotePeerId, peerConnection);
+    this.setupPeerConnectionHandlers(channelId, userId, remotePeerId);
 
-    // 로컬 스트림이 있다면 추가
     if (this.localStream) {
       const audioTracks = this.localStream.getAudioTracks();
       const videoTracks = this.localStream.getVideoTracks();
 
-      // 오디오 트랙 먼저 추가
       audioTracks.forEach(track => {
-        this.peerConnection?.addTrack(track, this.localStream!);
+        peerConnection.addTrack(track, this.localStream!);
       });
 
-      // 비디오 트랙 나중에 추가
       videoTracks.forEach(track => {
-        this.peerConnection?.addTrack(track, this.localStream!);
+        peerConnection.addTrack(track, this.localStream!);
       });
     }
   }
 
-  private async renegotiate() {
-    if (!this.peerConnection || this.connectionState.isNegotiating) {
-      console.log('Negotiation already in progress or no peer connection');
-      return;
-    }
+  private setupPeerConnectionHandlers(channelId: string, userId: string, remotePeerId: string) {
+    const peerConnection = this.peerConnections.get(remotePeerId);
+    if (!peerConnection) return;
 
-    try {
-      this.connectionState.isNegotiating = true;
-      const offer = await this.peerConnection.createOffer();
-      await this.peerConnection.setLocalDescription(offer);
-
-      this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
-        sdp_offer: offer.sdp,
-      });
-    } catch (error) {
-      console.error('Renegotiation failed:', error);
-    } finally {
-      this.connectionState.isNegotiating = false;
-    }
-  }
-
-  private setupPeerConnectionHandlers(channelId: string, userId: string) {
-    if (!this.peerConnection) return;
-
-    // ICE candidate 핸들링
-    this.peerConnection.onicecandidate = (event) => {
+    peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
         this.callConnection?.sendOp(OP_CODES.ON_ICE_CANDIDATE, {
           candidate: event.candidate.toJSON(),
           sdp_mid: event.candidate.sdpMid,
           sdp_m_line_index: event.candidate.sdpMLineIndex,
+          name: remotePeerId,
         });
       }
     };
 
-    // ICE 연결 상태 모니터링
-    this.peerConnection.oniceconnectionstatechange = () => {
-      const state = this.peerConnection?.iceConnectionState;
-      console.log(`ICE connection state: ${state}`);
+    peerConnection.oniceconnectionstatechange = () => {
+      const state = peerConnection.iceConnectionState;
+      console.log(`ICE connection state for ${remotePeerId}: ${state}`);
 
       switch (state) {
         case 'failed':
-          if (this.peerConnection) {
-            this.peerConnection.restartIce();
-            console.warn('ICE connection failed - attempting restart');
+          if (peerConnection) {
+            peerConnection.restartIce();
+            console.warn(`ICE connection failed for ${remotePeerId} - attempting restart`);
           }
           break;
         case 'disconnected':
           setTimeout(() => {
-            if (this.peerConnection?.iceConnectionState === 'disconnected') {
-              this.attemptReconnection();
+            if (peerConnection.iceConnectionState === 'disconnected') {
+              this.attemptReconnection(remotePeerId, channelId);
             }
           }, this.ICE_RECONNECTION_TIMEOUT);
           break;
       }
     };
 
-    // 원격 스트림 수신 처리
-    this.peerConnection.ontrack = (event) => {
+    peerConnection.ontrack = (event) => {
       const stream = event.streams[0];
       if (!stream) {
         console.warn('Received track without stream');
         return;
       }
 
-      // track 이벤트 처리
       event.track.onended = () => {
         console.log(`Remote track ended: ${event.track.kind}`);
         this.handleTrackEnded(event.track, stream, channelId);
@@ -181,43 +175,66 @@ export class MediaServerConnection {
       }
     };
 
-    // 연결 상태 모니터링
-    this.peerConnection.onconnectionstatechange = () => {
-      const state = this.peerConnection?.connectionState;
-      console.log(`Connection state: ${state}`);
+    peerConnection.onconnectionstatechange = () => {
+      const state = peerConnection.connectionState;
+      console.log(`Connection state for ${remotePeerId}: ${state}`);
 
       switch (state) {
         case 'connected':
-          console.log('Successfully connected to media server');
-          this.connectionState.isConnecting = false;
-          this.reconnectionAttempts = 0;
+          console.log(`Successfully connected to peer ${remotePeerId}`);
+          const connectionState = this.connectionStates.get(remotePeerId);
+          if (connectionState) {
+            connectionState.isConnecting = false;
+          }
+          this.reconnectionAttempts.set(remotePeerId, 0);
           break;
         case 'failed':
         case 'disconnected':
-          if (this.reconnectionAttempts < this.MAX_RECONNECTION_ATTEMPTS) {
-            console.warn(`Connection issue (attempt ${this.reconnectionAttempts + 1}/${this.MAX_RECONNECTION_ATTEMPTS})`);
-            this.attemptReconnection();
+          const attempts = this.reconnectionAttempts.get(remotePeerId) || 0;
+          if (attempts < this.MAX_RECONNECTION_ATTEMPTS) {
+            console.warn(`Connection issue with ${remotePeerId} (attempt ${attempts + 1}/${this.MAX_RECONNECTION_ATTEMPTS})`);
+            this.attemptReconnection(remotePeerId, channelId);
           } else {
-            console.error('Max reconnection attempts reached');
+            console.error(`Max reconnection attempts reached for ${remotePeerId}`);
           }
           break;
         case 'closed':
-          console.log('Connection closed');
-          this.resetConnectionState();
+          console.log(`Connection closed for ${remotePeerId}`);
+          this.resetConnectionState(remotePeerId);
           break;
       }
     };
 
-    // 협상 필요 이벤트
-    this.peerConnection.onnegotiationneeded = async () => {
-      if (!this.connectionState.isConnecting && !this.connectionState.isNegotiating) {
+    peerConnection.onnegotiationneeded = async () => {
+      const connectionState = this.connectionStates.get(remotePeerId);
+      if (connectionState && !connectionState.isConnecting && !connectionState.isNegotiating) {
         try {
-          await this.renegotiate();
+          await this.renegotiate(remotePeerId);
         } catch (error) {
           console.error('Negotiation failed:', error);
         }
       }
     };
+  }
+
+  async connectToAllUsers(channelId: string) {
+    const users = useUserChannelStore.getState().channelUsers.get(channelId);
+    const currentUserId = useAuthStore.getState().user?.user_id.toString();
+
+    for (const user of users || []) {
+      if (user.userId !== currentUserId) {
+        await this.prepareConnection(channelId, user.userId);
+        await this.connect(user.userId);
+      }
+    }
+  }
+
+  async handleNewUser(channelId: string, newUserId: string) {
+    const currentUserId = useAuthStore.getState().user?.user_id.toString();
+    if (newUserId !== currentUserId) {
+      await this.prepareConnection(channelId, newUserId);
+      await this.connect(newUserId);
+    }
   }
 
   private handleTrackEnded(track: MediaStreamTrack, stream: MediaStream, channelId: string) {
@@ -235,104 +252,169 @@ export class MediaServerConnection {
     }
   }
 
-  private parseKurentoStreamId(streamId: string): { userId: string; endpointId: string } | null {
-    const parts = streamId.split('_');
-    if (parts.length !== 2) return null;
+  private async renegotiate(remotePeerId: string) {
+    const peerConnection = this.peerConnections.get(remotePeerId);
+    const connectionState = this.connectionStates.get(remotePeerId);
 
-    return {
-      endpointId: parts[0],
-      userId: parts[1],
-    };
+    if (!peerConnection || !connectionState || connectionState.isNegotiating) {
+      console.log('Negotiation already in progress or no peer connection');
+      return;
+    }
+
+    try {
+      connectionState.isNegotiating = true;
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+
+      this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
+        sdp_offer: offer.sdp,
+        sender_id: remotePeerId,
+      });
+    } catch (error) {
+      console.error('Renegotiation failed:', error);
+    } finally {
+      connectionState.isNegotiating = false;
+    }
   }
 
-  async connect() {
-    if (!this.peerConnection || !this.connectionState.isConnecting) {
+  async connect(remotePeerId: string) {
+    const peerConnection = this.peerConnections.get(remotePeerId);
+    const connectionState = this.connectionStates.get(remotePeerId);
+
+    if (!peerConnection || !connectionState?.isConnecting) {
       throw new Error('Connection not prepared');
     }
 
     try {
-      const offer = await this.peerConnection.createOffer({
+      const offer = await peerConnection.createOffer({
         offerToReceiveAudio: true,
         offerToReceiveVideo: true,
       });
 
-      await this.peerConnection.setLocalDescription(offer);
+      await peerConnection.setLocalDescription(offer);
 
       this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
         sdp_offer: offer.sdp,
+        sender_id: remotePeerId,
       });
     } catch (error) {
       console.error('Error creating offer:', error);
-      this.resetConnectionState();
+      this.resetConnectionState(remotePeerId);
       throw error;
     }
   }
 
-  private resetConnectionState() {
-    this.connectionState = {
+  private resetConnectionState(remotePeerId: string) {
+    this.connectionStates.set(remotePeerId, {
       isRemoteDescriptionSet: false,
       isConnecting: false,
       isNegotiating: false,
-    };
-    this.pendingCandidates = [];
+    });
+    this.pendingCandidates.set(remotePeerId, []);
   }
 
-  async handleRemoteAnswer(sdp: string) {
-    if (!this.peerConnection) {
+  async handleRemoteAnswer(sdp: string, remotePeerId: string) {
+    const peerConnection = this.peerConnections.get(remotePeerId);
+    const connectionState = this.connectionStates.get(remotePeerId);
+
+    if (!peerConnection) {
       console.warn('Ignoring remote answer - no peer connection');
       return;
     }
 
-    if (this.peerConnection.signalingState === 'stable') {
+    if (peerConnection.signalingState === 'stable') {
       console.warn('Connection already stable, ignoring answer');
       return;
     }
 
     try {
-      await this.peerConnection.setRemoteDescription(
+      await peerConnection.setRemoteDescription(
         new RTCSessionDescription({
           type: 'answer',
           sdp,
         }),
       );
 
-      this.connectionState.isRemoteDescriptionSet = true;
-      this.connectionState.isConnecting = false;
+      if (connectionState) {
+        connectionState.isRemoteDescriptionSet = true;
+        connectionState.isConnecting = false;
+      }
 
       // Process pending candidates
-      while (this.pendingCandidates.length > 0) {
-        const candidate = this.pendingCandidates.shift()!;
-        await this.addIceCandidate(candidate);
+      const candidates = this.pendingCandidates.get(remotePeerId) || [];
+      while (candidates.length > 0) {
+        const candidate = candidates.shift()!;
+        await this.addIceCandidate(candidate, remotePeerId);
       }
     } catch (error) {
       console.error('Error setting remote description:', error);
-      this.resetConnectionState();
+      this.resetConnectionState(remotePeerId);
       throw error;
     }
   }
 
-  async handleIceCandidate(candidate: RTCIceCandidateInit) {
-    if (!this.peerConnection || !this.connectionState.isConnecting) return;
+  async handleIceCandidate(candidate: RTCIceCandidateInit, remotePeerId: string) {
+    const peerConnection = this.peerConnections.get(remotePeerId);
+    const connectionState = this.connectionStates.get(remotePeerId);
+
+    if (!peerConnection || !connectionState?.isConnecting) return;
 
     try {
-      if (this.connectionState.isRemoteDescriptionSet) {
-        await this.addIceCandidate(candidate);
+      if (connectionState.isRemoteDescriptionSet) {
+        await this.addIceCandidate(candidate, remotePeerId);
       } else {
-        this.pendingCandidates.push(candidate);
+        const candidates = this.pendingCandidates.get(remotePeerId) || [];
+        candidates.push(candidate);
+        this.pendingCandidates.set(remotePeerId, candidates);
       }
     } catch (error) {
       console.error('Error handling ICE candidate:', error);
     }
   }
 
-  private async addIceCandidate(candidate: RTCIceCandidateInit) {
-    if (!this.peerConnection) return;
+  private async addIceCandidate(candidate: RTCIceCandidateInit, remotePeerId: string) {
+    const peerConnection = this.peerConnections.get(remotePeerId);
+    if (!peerConnection) return;
+
     try {
-      await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
     } catch (error) {
       console.error('Error adding ICE candidate:', error);
       throw error;
     }
+  }
+
+  private async attemptReconnection(remotePeerId: string, channelId: string) {
+    const attempts = this.reconnectionAttempts.get(remotePeerId) || 0;
+    if (attempts >= this.MAX_RECONNECTION_ATTEMPTS) {
+      console.error(`Max reconnection attempts reached for ${remotePeerId}`);
+      return;
+    }
+
+    this.reconnectionAttempts.set(remotePeerId, attempts + 1);
+
+    try {
+      await this.cleanupExistingConnection(remotePeerId);
+      await this.prepareConnection(channelId, remotePeerId);
+      await this.connect(remotePeerId);
+    } catch (error) {
+      console.error('Reconnection failed:', error);
+    }
+  }
+
+  private async cleanupExistingConnection(remotePeerId: string) {
+    const peerConnection = this.peerConnections.get(remotePeerId);
+    if (peerConnection) {
+      peerConnection.getTransceivers().forEach(transceiver => {
+        transceiver.stop();
+      });
+
+      peerConnection.close();
+      this.peerConnections.delete(remotePeerId);
+    }
+
+    this.resetConnectionState(remotePeerId);
+    await new Promise(resolve => setTimeout(resolve, 100));
   }
 
   private setupAudioDetection(stream: MediaStream, userId: string) {
@@ -426,10 +508,6 @@ export class MediaServerConnection {
     }
   }
 
-  getLocalStream(): MediaStream | null {
-    return this.localStream;
-  }
-
   async replaceStream(newStream: MediaStream) {
     if (this.localStream) {
       this.localStream.getTracks().forEach(track => {
@@ -439,9 +517,8 @@ export class MediaServerConnection {
 
     this.localStream = newStream;
 
-    if (this.peerConnection) {
-      // 트랜시버 처리
-      const transceivers = this.peerConnection.getTransceivers();
+    for (const [remotePeerId, peerConnection] of this.peerConnections) {
+      const transceivers = peerConnection.getTransceivers();
       for (const transceiver of transceivers) {
         if (transceiver.sender.track) {
           const trackKind = transceiver.sender.track.kind;
@@ -452,15 +529,14 @@ export class MediaServerConnection {
         }
       }
 
-      // 새로운 트랙 추가
       const currentTracks = transceivers.map(t => t.sender.track?.kind);
       newStream.getTracks().forEach(track => {
         if (!currentTracks.includes(track.kind)) {
-          this.peerConnection?.addTrack(track, newStream);
+          peerConnection.addTrack(track, newStream);
         }
       });
 
-      await this.renegotiate();
+      await this.renegotiate(remotePeerId);
     }
 
     const audioTracks = newStream.getAudioTracks();
@@ -472,7 +548,6 @@ export class MediaServerConnection {
   async handleCameraState(isCameraOn: boolean) {
     try {
       if (isCameraOn) {
-        // 비디오 스트림만 따로 요청
         const videoStream = await navigator.mediaDevices.getUserMedia({
           audio: false,
           video: {
@@ -482,10 +557,8 @@ export class MediaServerConnection {
           },
         });
 
-        // 기존 오디오 트랙이 있는 새 스트림 생성
         const combinedStream = new MediaStream();
 
-        // 기존 스트림에서 오디오 트랙 가져오기
         const currentStream = this.getLocalStream();
         if (currentStream) {
           currentStream.getAudioTracks().forEach(track => {
@@ -493,7 +566,6 @@ export class MediaServerConnection {
           });
         }
 
-        // 새 비디오 트랙 추가
         videoStream.getVideoTracks().forEach(track => {
           combinedStream.addTrack(track);
         });
@@ -501,7 +573,6 @@ export class MediaServerConnection {
         await this.replaceStream(combinedStream);
         return { stream: combinedStream };
       } else {
-        // 카메라를 끄는 경우, 새로운 오디오 스트림 생성
         const audioStream = await navigator.mediaDevices.getUserMedia({
           audio: {
             echoCancellation: true,
@@ -519,7 +590,6 @@ export class MediaServerConnection {
       throw error;
     }
   }
-
 
   async toggleAudio(enabled: boolean) {
     if (this.localStream) {
@@ -547,35 +617,36 @@ export class MediaServerConnection {
         },
       });
 
-      if (!this.peerConnection) return null;
+      for (const [remotePeerId, peerConnection] of this.peerConnections) {
+        // 기존 비디오 트랙 제거
+        const senders = peerConnection.getSenders();
+        const videoSenders = senders.filter(sender =>
+          sender.track?.kind === 'video',
+        );
 
-      // 기존 비디오 트랙 제거
-      const senders = this.peerConnection.getSenders();
-      const videoSenders = senders.filter(sender =>
-        sender.track?.kind === 'video',
-      );
-
-      for (const sender of videoSenders) {
-        if (sender.track) {
-          sender.track.stop();
-          this.peerConnection.removeTrack(sender);
+        for (const sender of videoSenders) {
+          if (sender.track) {
+            sender.track.stop();
+            peerConnection.removeTrack(sender);
+          }
         }
+
+        // 화면 공유 트랙 추가
+        const videoTrack = screenStream.getVideoTracks()[0];
+        const sender = peerConnection.addTrack(videoTrack, screenStream);
+
+        // 품질 최적화 설정
+        const params = sender.getParameters();
+        if (!params.encodings) {
+          params.encodings = [{}];
+        }
+        params.encodings[0].maxBitrate = 3000000; // 3Mbps
+        params.encodings[0].maxFramerate = 30;
+        await sender.setParameters(params);
       }
 
-      // 화면 공유 트랙 추가
+// 화면 공유 종료 이벤트 처리
       const videoTrack = screenStream.getVideoTracks()[0];
-      const sender = this.peerConnection.addTrack(videoTrack, screenStream);
-
-      // 품질 최적화 설정
-      const params = sender.getParameters();
-      if (!params.encodings) {
-        params.encodings = [{}];
-      }
-      params.encodings[0].maxBitrate = 3000000; // 3Mbps
-      params.encodings[0].maxFramerate = 30;
-      await sender.setParameters(params);
-
-      // 화면 공유 종료 이벤트 처리
       videoTrack.onended = () => {
         this.stopScreenShare();
         const currentUser = useAuthStore.getState().user;
@@ -592,7 +663,11 @@ export class MediaServerConnection {
         }
       };
 
-      await this.renegotiate();
+// 모든 peer와 재협상
+      for (const [remotePeerId] of this.peerConnections) {
+        await this.renegotiate(remotePeerId);
+      }
+
       return screenStream;
     } catch (error) {
       if (error instanceof Error &&
@@ -606,62 +681,27 @@ export class MediaServerConnection {
   }
 
   async stopScreenShare() {
-    if (!this.peerConnection) return;
-
     try {
-      const senders = this.peerConnection.getSenders();
-      const screenSenders = senders.filter(sender =>
-        sender.track?.kind === 'video' &&
-        sender.track.readyState === 'live' &&
-        sender.track.label.includes('screen'),
-      );
+      for (const [remotePeerId, peerConnection] of this.peerConnections) {
+        const senders = peerConnection.getSenders();
+        const screenSenders = senders.filter(sender =>
+          sender.track?.kind === 'video' &&
+          sender.track.readyState === 'live' &&
+          sender.track.label.includes('screen'),
+        );
 
-      for (const sender of screenSenders) {
-        if (sender.track) {
-          sender.track.stop();
+        for (const sender of screenSenders) {
+          if (sender.track) {
+            sender.track.stop();
+          }
+          peerConnection.removeTrack(sender);
         }
-        this.peerConnection.removeTrack(sender);
-      }
 
-      await this.renegotiate();
+        await this.renegotiate(remotePeerId);
+      }
     } catch (error) {
       console.error('Error stopping screen share:', error);
     }
-  }
-
-  private async attemptReconnection() {
-    if (this.reconnectionAttempts >= this.MAX_RECONNECTION_ATTEMPTS) {
-      console.error('Max reconnection attempts reached');
-      return;
-    }
-
-    this.reconnectionAttempts++;
-
-    try {
-      await this.cleanupExistingConnection();
-      const currentChannelId = useUserChannelStore.getState().currentUserChannel.channelId;
-      if (currentChannelId) {
-        await this.prepareConnection(currentChannelId);
-        await this.connect();
-      }
-    } catch (error) {
-      console.error('Reconnection failed:', error);
-    }
-  }
-
-  private async cleanupExistingConnection() {
-    if (this.peerConnection) {
-      // 모든 트랜시버 정지
-      this.peerConnection.getTransceivers().forEach(transceiver => {
-        transceiver.stop();
-      });
-
-      this.peerConnection.close();
-      this.peerConnection = null;
-    }
-
-    this.resetConnectionState();
-    await new Promise(resolve => setTimeout(resolve, 100));
   }
 
   disconnect() {
@@ -675,25 +715,25 @@ export class MediaServerConnection {
       this.localStream = null;
     }
 
-    if (this.peerConnection) {
-      // 모든 sender의 트랙 정리
-      this.peerConnection.getSenders().forEach(sender => {
+    // 모든 peer connection 정리
+    for (const [remotePeerId, peerConnection] of this.peerConnections) {
+      peerConnection.getSenders().forEach(sender => {
         if (sender.track) {
           sender.track.enabled = false;
           sender.track.stop();
         }
       });
 
-      // 모든 트랜시버 정지
-      this.peerConnection.getTransceivers().forEach(transceiver => {
+      peerConnection.getTransceivers().forEach(transceiver => {
         transceiver.stop();
       });
-
-      this.peerConnection.close();
-      this.peerConnection = null;
+      peerConnection.close();
     }
 
-    this.resetConnectionState();
+    this.peerConnections.clear();
+    this.connectionStates.clear();
+    this.pendingCandidates.clear();
+    this.reconnectionAttempts.clear();
 
     // 실행 보장을 위해 setTimeout으로 한번 더 실행
     setTimeout(() => {
