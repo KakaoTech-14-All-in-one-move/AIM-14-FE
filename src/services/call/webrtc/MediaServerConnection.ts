@@ -81,7 +81,6 @@ export class MediaServerConnection {
       if (event.candidate) {
         this.callConnection?.sendOp(OP_CODES.ON_ICE_CANDIDATE, {
           candidate: event.candidate.toJSON(),
-          name: userId,
           sdpMid: event.candidate.sdpMid,
           sdpMLineIndex: event.candidate.sdpMLineIndex
         });
