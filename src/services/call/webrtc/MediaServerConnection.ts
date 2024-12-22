@@ -405,25 +405,25 @@ export class MediaServerConnection {
       }
     };
 
-    peerConnection.onnegotiationneeded = async () => {
-      const connectionState = this.connectionStates.get(remotePeerId);
-      if (!connectionState) {
-        console.error('No connection state found for:', remotePeerId);
-        return;
-      }
-
-      if (connectionState.pendingOffer) {
-        console.log('Offer already pending, skipping negotiation');
-        return;
-      }
-
-      try {
-        connectionState.pendingOffer = true;
-        await this.renegotiateConnection(remotePeerId);
-      } finally {
-        connectionState.pendingOffer = false;
-      }
-    };
+    // peerConnection.onnegotiationneeded = async () => {
+    //   const connectionState = this.connectionStates.get(remotePeerId);
+    //   if (!connectionState) {
+    //     console.error('No connection state found for:', remotePeerId);
+    //     return;
+    //   }
+    //
+    //   if (connectionState.pendingOffer) {
+    //     console.log('Offer already pending, skipping negotiation');
+    //     return;
+    //   }
+    //
+    //   try {
+    //     connectionState.pendingOffer = true;
+    //     await this.renegotiateConnection(remotePeerId);
+    //   } finally {
+    //     connectionState.pendingOffer = false;
+    //   }
+    // };
   }
 
   async connectToAllUsers(channelId: string, stream?: MediaStream) {
@@ -509,48 +509,6 @@ export class MediaServerConnection {
     }
   }
 
-  private async renegotiateConnection(remotePeerId: string) {
-    const peerConnection = this.peerConnections.get(remotePeerId);
-    const connectionState = this.connectionStates.get(remotePeerId);
-
-    if (!peerConnection || !connectionState || connectionState.isNegotiating) {
-      console.log('Negotiation already in progress or no peer connection');
-      return;
-    }
-
-    try {
-      connectionState.isNegotiating = true;
-
-      // 중요: 이전 연결 상태 확인 및 정리
-      if (peerConnection.signalingState !== 'stable') {
-        console.log('Connection not stable, waiting...');
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        if (peerConnection.signalingState !== 'stable') {
-          console.log('Connection still not stable, rolling back');
-          if (peerConnection.signalingState === 'have-local-offer') {
-            await peerConnection.setLocalDescription({ type: 'rollback' });
-          }
-        }
-      }
-
-      const offer = await peerConnection.createOffer();
-      await peerConnection.setLocalDescription(offer);
-
-    console.log('OP_CODES.RECEIVE_VIDEO- renegotiateConnection', remotePeerId);
-      this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
-        sdp_offer: offer.sdp,
-        sender_id: remotePeerId,
-      });
-
-      await new Promise(resolve => setTimeout(resolve, 500)); // 안정화를 위한 대기
-    } catch (error) {
-      console.error('Renegotiation failed:', error);
-      await this.rollbackNegotiation(peerConnection);
-    } finally {
-      connectionState.isNegotiating = false;
-    }
-  }
-
   private async rollbackNegotiation(peerConnection: RTCPeerConnection) {
     try {
       if (peerConnection.signalingState !== 'stable') {
@@ -594,6 +552,48 @@ export class MediaServerConnection {
     } catch (error) {
       console.error('Error creating offer:', error);
       throw error;
+    }
+  }
+
+  private async renegotiateConnection(remotePeerId: string) {
+    const peerConnection = this.peerConnections.get(remotePeerId);
+    const connectionState = this.connectionStates.get(remotePeerId);
+
+    if (!peerConnection || !connectionState || connectionState.isNegotiating) {
+      console.log('Negotiation already in progress or no peer connection');
+      return;
+    }
+
+    try {
+      connectionState.isNegotiating = true;
+
+      // 중요: 이전 연결 상태 확인 및 정리
+      if (peerConnection.signalingState !== 'stable') {
+        console.log('Connection not stable, waiting...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        if (peerConnection.signalingState !== 'stable') {
+          console.log('Connection still not stable, rolling back');
+          if (peerConnection.signalingState === 'have-local-offer') {
+            await peerConnection.setLocalDescription({ type: 'rollback' });
+          }
+        }
+      }
+
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+
+      console.log('OP_CODES.RECEIVE_VIDEO- renegotiateConnection', remotePeerId);
+      this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
+        sdp_offer: offer.sdp,
+        sender_id: remotePeerId,
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 500)); // 안정화를 위한 대기
+    } catch (error) {
+      console.error('Renegotiation failed:', error);
+      await this.rollbackNegotiation(peerConnection);
+    } finally {
+      connectionState.isNegotiating = false;
     }
   }
 
@@ -841,40 +841,16 @@ export class MediaServerConnection {
 
     this.localStream = newStream;
 
-    const negotiationPromises = [];
-
-    for (const [remotePeerId, peerConnection] of this.peerConnections) {
-      // 현재 협상 상태 확인
-      const connectionState = this.connectionStates.get(remotePeerId);
-      if (connectionState?.isNegotiating) {
-        await new Promise(resolve => {
-          const checkState = setInterval(() => {
-            if (!this.connectionStates.get(remotePeerId)?.isNegotiating) {
-              clearInterval(checkState);
-              resolve(true);
-            }
-          }, 100);
-        });
-      }
-
-      // 트랙 추가
+    // 단순히 각 sender의 트랙만 교체
+    for (const [_, peerConnection] of this.peerConnections) {
       const senders = peerConnection.getSenders();
       newStream.getTracks().forEach(track => {
         const sender = senders.find(s => s.track?.kind === track.kind);
         if (sender) {
           sender.replaceTrack(track);
-        } else {
-          console.log('Adding track:', track.kind);
-          peerConnection.addTrack(track, newStream);
         }
       });
-
-      // 협상을 큐에 추가
-      negotiationPromises.push(this.renegotiateConnection(remotePeerId));
     }
-
-    // 모든 협상이 완료될 때까지 대기
-    await Promise.all(negotiationPromises);
 
     // 오디오 감지 설정
     if (newStream.getAudioTracks().length > 0) {
@@ -944,69 +920,58 @@ export class MediaServerConnection {
     }
   }
 
-  async startScreenShare(): Promise<MediaStream | null> {
-    try {
-      const screenStream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-          frameRate: { ideal: 30 },
-        },
-      });
+  async startScreenShare(): Promise<MediaStream | null> {try {
+    const screenStream = await navigator.mediaDevices.getDisplayMedia({
+      video: {
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        frameRate: { ideal: 30 },
+      },
+    });
 
-      for (const [remotePeerId, peerConnection] of this.peerConnections) {
-        // 기존 비디오 트랙 제거
-        const senders = peerConnection.getSenders();
-        const videoSenders = senders.filter(sender =>
-          sender.track?.kind === 'video',
-        );
-
-        for (const sender of videoSenders) {
-          if (sender.track) {
-            sender.track.stop();
-            peerConnection.removeTrack(sender);
-          }
-        }
-
-        // 화면 공유 트랙 추가
-        const videoTrack = screenStream.getVideoTracks()[0];
-        const sender = peerConnection.addTrack(videoTrack, screenStream);
-
-        // 품질 최적화 설정
-        const params = sender.getParameters();
-        if (!params.encodings) {
-          params.encodings = [{}];
-        }
-        params.encodings[0].maxBitrate = 3000000; // 3Mbps
-        params.encodings[0].maxFramerate = 30;
-        await sender.setParameters(params);
-      }
-
-// 화면 공유 종료 이벤트 처리
+    for (const [_, peerConnection] of this.peerConnections) {
+      const senders = peerConnection.getSenders();
       const videoTrack = screenStream.getVideoTracks()[0];
-      videoTrack.onended = () => {
-        this.stopScreenShare();
-        const currentUser = useAuthStore.getState().user;
-        const currentChannelId = useUserChannelStore.getState().currentUserChannel.channelId;
-        if (currentUser?.user_id && currentChannelId) {
-          useUserChannelStore.getState().updateUserMediaState(
-            currentChannelId,
-            currentUser.user_id.toString(),
-            {
-              isScreenSharing: false,
-              screenStream: null,
-            },
-          );
-        }
-      };
+      const videoSender = senders.find(sender =>
+        sender.track?.kind === 'video'
+      );
 
-// 모든 peer와 재협상
-      for (const [remotePeerId] of this.peerConnections) {
-        await this.renegotiateConnection(remotePeerId);
+      if (videoSender) {
+        await videoSender.replaceTrack(videoTrack);
+      } else {
+        peerConnection.addTrack(videoTrack, screenStream);
       }
 
-      return screenStream;
-    } catch (error) {
+      // 품질 최적화 설정
+      const params = videoSender?.getParameters();
+      if (params && !params.encodings) {
+        params.encodings = [{}];
+        params.encodings[0].maxBitrate = 3000000;
+        params.encodings[0].maxFramerate = 30;
+        await videoSender.setParameters(params);
+      }
+    }
+
+    // 화면 공유 종료 이벤트 처리
+    const videoTrack = screenStream.getVideoTracks()[0];
+    videoTrack.onended = () => {
+      this.stopScreenShare();
+      const currentUser = useAuthStore.getState().user;
+      const currentChannelId = useUserChannelStore.getState().currentUserChannel.channelId;
+      if (currentUser?.user_id && currentChannelId) {
+        useUserChannelStore.getState().updateUserMediaState(
+          currentChannelId,
+          currentUser.user_id.toString(),
+          {
+            isScreenSharing: false,
+            screenStream: null,
+          }
+        );
+      }
+    };
+
+    return screenStream;
+  } catch (error) {
       if (error instanceof Error &&
         (error.name === 'NotAllowedError' || error.name === 'AbortError')) {
         console.log('Screen share cancelled by user');
@@ -1019,22 +984,28 @@ export class MediaServerConnection {
 
   async stopScreenShare() {
     try {
-      for (const [remotePeerId, peerConnection] of this.peerConnections) {
+      // 카메라 비디오 스트림 가져오기 (필요한 경우)
+      const videoStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { ideal: 30 },
+        }
+      });
+      const videoTrack = videoStream.getVideoTracks()[0];
+
+      for (const [_, peerConnection] of this.peerConnections) {
         const senders = peerConnection.getSenders();
-        const screenSenders = senders.filter(sender =>
-          sender.track?.kind === 'video' &&
-          sender.track.readyState === 'live' &&
-          sender.track.label.includes('screen'),
+        const videoSender = senders.find(sender =>
+          sender.track?.kind === 'video'
         );
 
-        for (const sender of screenSenders) {
-          if (sender.track) {
-            sender.track.stop();
+        if (videoSender) {
+          if (videoSender.track) {
+            videoSender.track.stop();  // 기존 스크린쉐어 트랙 정지
           }
-          peerConnection.removeTrack(sender);
+          await videoSender.replaceTrack(videoTrack);  // 새 비디오 트랙으로 교체
         }
-
-        await this.renegotiateConnection(remotePeerId);
       }
     } catch (error) {
       console.error('Error stopping screen share:', error);
