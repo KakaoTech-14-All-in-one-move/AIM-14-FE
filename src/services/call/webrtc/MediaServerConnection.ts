@@ -121,7 +121,7 @@ export class MediaServerConnection {
           candidate: event.candidate.toJSON(),
           sdp_mid: event.candidate.sdpMid,
           sdp_m_line_index: event.candidate.sdpMLineIndex,
-          name: remotePeerId,
+          remote_peer_id: remotePeerId,
         });
       }
     };
@@ -400,6 +400,7 @@ export class MediaServerConnection {
       return;
     }
 
+    // 추가: 이미 stable 상태인 경우의 처리
     if (peerConnection.signalingState === 'stable') {
       console.warn('Connection already stable, ignoring answer');
       return;
@@ -413,12 +414,13 @@ export class MediaServerConnection {
         }),
       );
 
+      // 연결 상태 업데이트
       if (connectionState) {
         connectionState.isRemoteDescriptionSet = true;
         connectionState.isConnecting = false;
       }
 
-      // Process pending candidates
+      // 대기 중인 ICE candidate 처리
       const candidates = this.pendingCandidates.get(remotePeerId) || [];
       while (candidates.length > 0) {
         const candidate = candidates.shift()!;
