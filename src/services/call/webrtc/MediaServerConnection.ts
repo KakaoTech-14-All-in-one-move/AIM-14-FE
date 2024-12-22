@@ -92,7 +92,6 @@ export class MediaServerConnection {
     };
   }
 
-  // TODO : stream 의 역할?
   async prepareConnection(channelId: string, remotePeerId: string, stream?: MediaStream) {
     // 현재 채널 상태 확인
     console.log("Prepare Connection", channelId, remotePeerId, stream);
@@ -183,6 +182,7 @@ export class MediaServerConnection {
 
         await peerConnection.setLocalDescription(offer);
 
+        console.log("OP_CODES.RECEIVE_VIDEO - prepareConnection");
         this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
           sdp_offer: offer.sdp,
           sender_id: currentUserId,
@@ -390,7 +390,6 @@ export class MediaServerConnection {
 
     for (const user of users) {
       if (user.userId !== currentUserId) {
-        // TODO : stream 안 넣어줘도 돼?
         await this.prepareConnection(channelId, user.userId);
       }
     }
@@ -438,14 +437,14 @@ export class MediaServerConnection {
 
       await this.prepareConnection(channelId, newUserId, this.localStream || undefined);
 
-      // 연결 상태 확인을 위한 타임아웃 설정
-      setTimeout(() => {
-        const connection = this.peerConnections.get(newUserId);
-        if (connection && connection.connectionState !== 'connected') {
-          console.log(`Connection check for ${newUserId}:`, connection.connectionState);
-          this.attemptReconnection(newUserId, channelId);
-        }
-      }, 5000);
+      // 연결 상태 확인을 위한 타임아웃 설정 -> TODO : 중복 요청 하는거 같음
+      // setTimeout(() => {
+      //   const connection = this.peerConnections.get(newUserId);
+      //   if (connection && connection.connectionState !== 'connected') {
+      //     console.log(`Connection check for ${newUserId}:`, connection.connectionState);
+      //     this.attemptReconnection(newUserId, channelId);
+      //   }
+      // }, 5000);
 
     } catch (error) {
       console.error('Failed to establish connection with new user:', error);
@@ -472,6 +471,7 @@ export class MediaServerConnection {
   }
 
   private async renegotiateConnection(remotePeerId: string) {
+    console.log('renegotiateConnection', remotePeerId);
     const peerConnection = this.peerConnections.get(remotePeerId);
     const connectionState = this.connectionStates.get(remotePeerId);
 
@@ -547,6 +547,7 @@ export class MediaServerConnection {
 
       await peerConnection.setLocalDescription(offer);
 
+      console.log('OP_CODES.RECEIVE_VIDEO - createVideoOffer');
       this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
         sdp_offer: offer.sdp,
         sender_id: useAuthStore.getState().user?.user_id.toString(),

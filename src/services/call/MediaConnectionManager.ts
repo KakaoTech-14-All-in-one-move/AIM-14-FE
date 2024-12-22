@@ -59,14 +59,30 @@ export class MediaConnectionManager {
       const userId = currentUser.user_id.toString();
       console.log('Joining channel for user:', userId);
 
-      // 2. 현재 채널 정리
+      // 2. 서버 연결
+      console.log('Attempting to join channel via CallConnection');
+      try {
+        const success = await MediaConnectionManager.getCallConnection()!.joinChannel(channelId, type);
+        if (!success) {
+          console.error('Failed to join channel via CallConnection');
+          await this.handleFailedJoin();
+          return false;
+        }
+        console.log('Successfully joined channel via CallConnection');
+      } catch (error) {
+        console.error('Error during CallConnection joinChannel:', error);
+        await this.handleFailedJoin();
+        return false;
+      }
+
+      // 3. 현재 채널 정리
       const currentChannel = useUserChannelStore.getState().currentUserChannel;
       if (currentChannel.channelId) {
         console.log('Leaving current channel before joining new one');
         await this.leaveChannel();
       }
 
-      // 3. 마이크 권한 확인
+      // 4. 마이크 권한 확인
       console.log('Checking microphone permissions');
       const hasPermission = await this.checkMicrophonePermission();
       if (!hasPermission) {
@@ -74,7 +90,7 @@ export class MediaConnectionManager {
         return false;
       }
 
-      // 4. 오디오 스트림 획득
+      // 5. 오디오 스트림 획득
       console.log('Getting audio stream');
       let audioStream: MediaStream | null = null;
       try {
@@ -106,7 +122,7 @@ export class MediaConnectionManager {
         return false;
       }
 
-      // 5. 초기 상태 설정
+      // 6. 초기 상태 설정
       console.log('Setting up initial channel state');
       useUserChannelStore.getState().setCurrentUserChannel(channelId, type);
       this.userStateManager.handleUserJoin(channelId, {
@@ -120,22 +136,6 @@ export class MediaConnectionManager {
         screen_sharing: false,
         stream: audioStream,
       });
-
-      // 6. 서버 연결
-      console.log('Attempting to join channel via CallConnection');
-      try {
-        const success = await MediaConnectionManager.getCallConnection()!.joinChannel(channelId, type);
-        if (!success) {
-          console.error('Failed to join channel via CallConnection');
-          await this.handleFailedJoin();
-          return false;
-        }
-        console.log('Successfully joined channel via CallConnection');
-      } catch (error) {
-        console.error('Error during CallConnection joinChannel:', error);
-        await this.handleFailedJoin();
-        return false;
-      }
 
       // 7. WebRTC 연결
       console.log('Establishing WebRTC connections');

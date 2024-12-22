@@ -96,6 +96,7 @@ export class CallConnection {
     },
 
     [OP_CODES.ENTER_CHANNEL_EVENT]: (data: any) => {
+      console.log('WEBSOCKET RECEIVED - CHANNEL ENTER');
       if (!data?.channel_id || !data?.user_id) return;
       // console.log('Socket ENTER_CHANNEL_EVENT received:', data);
 
@@ -407,7 +408,7 @@ export class CallConnection {
     }
 
     return new Promise((resolve) => {
-      // console.log('SEND CHANNEL ENTER');
+      console.log('SEND CHANNEL ENTER - WEBSOCKET');
       this.sendOp(OP_CODES.ENTER_CHANNEL, {
         server_id: this.currentServerId,
         channel_id: channelId,
