@@ -160,7 +160,7 @@ const Controls = ({
           disabled={isUploading}
           className={`
             ${isUploading ? 'bg-gray-400' : 'bg-[#FEE500] hover:bg-yellow-400'}
-            text-[#3B1E1E] px-4 py-2 rounded-full flex items-center gap-2
+            text-[#3B1E1E] px-4 py-3 rounded-full flex items-center gap-2
             transition-colors duration-200
             disabled:cursor-not-allowed
           `}
