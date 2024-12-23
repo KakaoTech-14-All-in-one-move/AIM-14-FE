@@ -107,13 +107,13 @@ export const FeedbackContent = ({ onNoResult }: FeedbackContentProps) => {
       <div className="fixed inset-0 flex flex-col items-center justify-center bg-discord900">
         <div className="bg-discord800 p-8 rounded-xl shadow-lg flex flex-col items-center">
           <Loader2 className="w-12 h-12 text-discord100 animate-spin" />
-          <p className="mt-4 text-white text-lg font-medium">Analyzing your presentation...</p>
-          <p className="text-discord200 text-sm mt-2">This may take 1-2 minutes</p>
+          <p className="mt-4 text-white text-lg font-medium">발표 영상 분석중...</p>
+          <p className="text-gray-500 text-sm mt-2">영상 길이에 따라 분석 시간이 다를 수 있습니다.</p>
           <button
             onClick={handleCancel}
             className="mt-6 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
           >
-            Cancel Analysis
+            피드백 취소
           </button>
         </div>
       </div>
