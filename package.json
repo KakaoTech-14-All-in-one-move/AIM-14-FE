@@ -20,9 +20,11 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-draggable": "^4.4.6",
+    "react-gauge-chart": "^0.5.1",
     "react-hot-toast": "^2.4.1",
     "react-icons": "^5.3.0",
     "react-router-dom": "^6.26.2",
+    "recharts": "^2.15.0",
     "sockjs-client": "^1.6.1",
     "zustand": "^5.0.0-rc.2"
   },

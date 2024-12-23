@@ -146,17 +146,20 @@ export const VoiceFeedbackContent = ({ onNoResult }: VoiceFeedbackContentProps) 
   };
 
   return (
-    <div className="min-h-screen bg-discord900 p-6">
-      <div className="max-w-4xl mx-auto space-y-8">
-        <div className="bg-discord700 rounded-lg shadow-xl p-6">
+    <div className="min-h-screen bg-discord900 py-8">
+      <div className="max-w-[1400px] mx-auto px-8">
+        <div className="bg-discord800 rounded-xl shadow-xl overflow-hidden">
+          {/* Header */}
           <VoiceFeedbackHeader onBack={handleBack} />
 
-          <div className="space-y-6">
+          {/* Content */}
+          <div className="p-8">
             <VoiceFeedbackScoreSection
               audioSimilarity={result.audio_similarity}
               averageWpm={result.average_wpm}
               ttsWpm={result.tts_wpm}
               pronunciationAccuracy={result.average_pronunciation_accuracy}
+              scriptSimilarity={result.script_similarity}
             />
 
             <VoiceFeedbackTimelineSection
