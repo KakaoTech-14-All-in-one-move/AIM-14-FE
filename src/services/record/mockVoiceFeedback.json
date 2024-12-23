@@ -3,7 +3,7 @@
   "message": "Analysis completed successfully",
   "analysis_result": {
     "audio_similarity": 0.8765432109876543,
-    "average_wpm": 45.32109876543211,
+    "average_wpm": 32.32109876543211,
     "tts_wpm": 60.0,
     "average_pronunciation_accuracy": 0.78,
     "script_similarity": 0.82,
