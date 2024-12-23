@@ -185,14 +185,8 @@ export const FeedbackContent = ({ onNoResult }: FeedbackContentProps) => {
               currentIndex={state.currentIndex}
               totalFrames={state.feedbackData.length}
               timestamp={currentFeedback?.timestamp}
+              onBack={() => navigate('/record')}
             />
-            <button
-              onClick={() => navigate('/record')}
-              className="flex items-center px-4 py-2 bg-discord700 hover:bg-discord600 text-white rounded-lg transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5 mr-2" />
-              녹화 페이지로 돌아가기
-            </button>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

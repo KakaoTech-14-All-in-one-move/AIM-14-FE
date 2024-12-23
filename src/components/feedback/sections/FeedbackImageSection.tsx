@@ -29,7 +29,7 @@ export const FeedbackImageSection = ({
           disabled={currentIndex === 0}
           className="p-2 rounded-lg hover:bg-discord600 disabled:opacity-50 disabled:hover:bg-transparent transition-colors duration-200"
         >
-          <ChevronLeft className="w-6 h-6 text-discord100" />
+          <ChevronLeft className="w-6 h-6 text-white" />
         </button>
 
         <div className="flex space-x-2">
@@ -37,8 +37,10 @@ export const FeedbackImageSection = ({
             <button
               key={idx}
               onClick={() => setCurrentIndex(idx)}
-              className={`w-2 h-2 rounded-full transition-all duration-200 ${
-                currentIndex === idx ? 'bg-discord100' : 'bg-discord500 hover:bg-discord400'
+              className={`w-2.5 h-2.5 rounded-full transition-all duration-200 ${
+                currentIndex === idx
+                  ? 'bg-yellow-400' // 활성 도트를 노란색으로
+                  : 'bg-white' // 비활성 도트를 하얀색으로
               }`}
             />
           ))}
@@ -49,7 +51,7 @@ export const FeedbackImageSection = ({
           disabled={currentIndex === totalFrames - 1}
           className="p-2 rounded-lg hover:bg-discord600 disabled:opacity-50 disabled:hover:bg-transparent transition-colors duration-200"
         >
-          <ChevronRight className="w-6 h-6 text-discord100" />
+          <ChevronRight className="w-6 h-6 text-white" />
         </button>
       </div>
     </div>
