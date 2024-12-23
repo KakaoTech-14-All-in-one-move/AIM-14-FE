@@ -22,7 +22,7 @@ export const VoiceFeedbackHeader = () => {
   return (
     <div className="p-8 flex items-center justify-between">
       <div className="flex items-center space-x-4">
-        <h1 className="text-4xl font-bold text-white">음성 피드백</h1>
+        <h1 className="text-4xl font-bold text-white">발표 음성 피드백</h1>
         <div className="flex items-center space-x-2 bg-discord800 px-4 py-2 rounded-lg">
           <Mic2 className="w-5 h-5 text-yellow-400" />
           <span className="text-yellow-400 font-medium">Voice Analysis</span>

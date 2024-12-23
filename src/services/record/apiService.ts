@@ -138,6 +138,7 @@ class ApiService {
       const mockData = isVoice
         ? await import('@/services/record/mockVoiceFeedback.json')
         : await import('@/services/record/mockVideoFeedback.json');
+      await new Promise(resolve => setTimeout(resolve, 5000));
       return { ...mockData.default, problem: 'success' };
     }
 
