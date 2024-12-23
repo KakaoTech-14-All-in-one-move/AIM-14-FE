@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '@/services/record/apiService.ts';
 import StopIcon from '@/common/icons/stop';
@@ -46,6 +46,39 @@ const Controls = ({
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  // Add cleanup effect for navigation
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      cleanupMediaStreams();
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [cleanupMediaStreams]);
+
+  const handleHomeClick = useCallback(async () => {
+    // Stop recording if active
+    if (isRecording) {
+      stopRecording();
+    }
+
+    // Stop screen sharing if active
+    if (isSharing) {
+      stopSharing();
+    }
+
+    // Cleanup media streams
+    cleanupMediaStreams();
+
+    // Small delay to ensure cleanup completes
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Navigate to home
+    navigate('/home');
+  }, [isRecording, isSharing, stopRecording, stopSharing, cleanupMediaStreams, navigate]);
+
   const handleFeedbackClick = async () => {
     if (!recordedFile) {
       setError('No recording file available');
@@ -56,6 +89,7 @@ const Controls = ({
       setIsUploading(true);
       setError(null);
 
+      // Clean up media streams before navigation
       cleanupMediaStreams();
 
       const uploadResponse = attachedFile
@@ -65,7 +99,7 @@ const Controls = ({
       navigate('/feedback', {
         state: {
           videoId: uploadResponse.video_id,
-          isVoice: !!attachedFile  // 음성 분석인지 여부
+          isVoice: !!attachedFile
         }
       });
 
@@ -80,15 +114,13 @@ const Controls = ({
   return (
     <div className="w-full h-16 bg-[#1E1F22] flex justify-center items-center space-x-6">
       <button
-        onClick={() => {
-          cleanupMediaStreams();
-          navigate('/')}
-        }
-        className="bg-white p-2 rounded-full"
+        onClick={handleHomeClick}
+        className="bg-white p-2 rounded-full hover:bg-gray-100"
+        title="Home"
       >
         <HomeIcon />
       </button>
-      {/* Start/Stop Recording Button */}
+
       <button
         onClick={isRecording ? stopRecording : startRecording}
         className="bg-white p-2 rounded-full"
@@ -96,7 +128,6 @@ const Controls = ({
         {isRecording ? <StopIcon /> : <RecordIcon />}
       </button>
 
-      {/* Camera On/Off Button */}
       <button
         onClick={toggleCamera}
         disabled={isRecording}
@@ -109,7 +140,6 @@ const Controls = ({
         {isCameraOn ? <CameraOnIcon /> : <MicIcon />}
       </button>
 
-      {/* Screen Share/Cancel Button */}
       <button
         onClick={isSharing ? stopSharing : startSharing}
         className="bg-white p-2 rounded-full"
@@ -117,7 +147,6 @@ const Controls = ({
         {isSharing ? <CancelIcon /> : <ShareIcon />}
       </button>
 
-      {/* Download Button - 녹화가 완료되었을 때만 표시 */}
       {isRecordingComplete && (
         <button
           onClick={downloadRecording}
@@ -128,7 +157,6 @@ const Controls = ({
         </button>
       )}
 
-      {/* AI Feedback Button - 녹화가 완료되었을 때만 표시 */}
       {isRecordingComplete && (
         <button
           onClick={handleFeedbackClick}
@@ -145,10 +173,8 @@ const Controls = ({
         </button>
       )}
 
-      {/* Error message */}
       {error && (
-        <div
-          className="absolute bottom-20 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-md">
+        <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-md">
           {error}
         </div>
       )}

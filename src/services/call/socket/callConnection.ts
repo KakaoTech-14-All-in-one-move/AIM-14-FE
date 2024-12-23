@@ -152,8 +152,8 @@ export class CallConnection {
       });
     },
 
-    [OP_CODES.VIDEO_ANSWER]: (data: any) => {
-      console.log('VIDEO_ANSWER', data);
+    [OP_CODES.RECEIVE_VIDEO_ANSWER]: (data: any) => {
+      console.log('RECEIVE_VIDEO_ANSWER', data);
       if (data?.sdpAnswer && data?.userId) {
         MediaServerConnection.getInstance().handleRemoteAnswer(data.sdpAnswer, data.userId);
       }

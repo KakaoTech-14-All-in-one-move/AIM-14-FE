@@ -7,6 +7,12 @@ const CameraRecording = ({ stream }: { stream: MediaStream | null }) => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
     }
+
+    return () => {
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+    };
   }, [stream]);
 
   return (
@@ -15,6 +21,7 @@ const CameraRecording = ({ stream }: { stream: MediaStream | null }) => {
         ref={videoRef}
         autoPlay
         muted
+        playsInline
         className="w-full h-full object-cover rounded-lg"
       />
     </div>
