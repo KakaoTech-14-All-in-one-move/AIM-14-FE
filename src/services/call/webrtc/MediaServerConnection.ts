@@ -1,7 +1,7 @@
 import { useUserChannelStore } from '@/stores/userChannelStore';
 import { CallConnection } from '../socket/callConnection';
 import { useAuthStore } from '@/stores/authStore';
-import { OP_CODES } from '@/services/call/constants';
+import { ICE_SERVER_CONFIG, OP_CODES } from '@/services/call/constants';
 
 export class MediaServerConnection {
   private audioDetectionInterval: number | null = null;
@@ -131,13 +131,7 @@ export class MediaServerConnection {
       isInitiator: true,
     });
 
-    const peerConnection = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-      bundlePolicy: 'balanced',
-      rtcpMuxPolicy: 'require',
-      iceCandidatePoolSize: 10,
-      sdpSemantics: 'unified-plan',
-    });
+    const peerConnection = new RTCPeerConnection(ICE_SERVER_CONFIG);
 
     console.log('NEW RTCPeerConnection', peerConnection);
     this.peerConnections.set(remotePeerId, peerConnection);
@@ -416,6 +410,12 @@ export class MediaServerConnection {
   private setupIceHandler(peerConnection: RTCPeerConnection, remotePeerId: string, channelId: string) {
     // ICE candidate 생성 및 전송
     peerConnection.onicecandidate = (event) => {
+      // localDescription이 설정되어 있는지 먼저 확인
+      if (!peerConnection.localDescription) {
+        console.warn('No local description set, skipping ICE candidate');
+        return;
+      }
+
       if (event.candidate) {
         console.log('Sending ICE candidate:', event.candidate);
         this.callConnection?.sendOp(OP_CODES.ON_ICE_CANDIDATE, {
