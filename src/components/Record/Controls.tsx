@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiService } from '@/services/record/apiService.ts';
+import { apiService } from '@/services/record/apiService';
 import StopIcon from '@/common/icons/stop';
 import CameraOnIcon from '@/common/icons/camera-on';
 import RecordIcon from '@/common/icons/record';
@@ -46,7 +46,6 @@ const Controls = ({
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  // Add cleanup effect for navigation
   useEffect(() => {
     const handleBeforeUnload = () => {
       cleanupMediaStreams();
@@ -59,23 +58,16 @@ const Controls = ({
   }, [cleanupMediaStreams]);
 
   const handleHomeClick = useCallback(async () => {
-    // Stop recording if active
     if (isRecording) {
       stopRecording();
     }
 
-    // Stop screen sharing if active
     if (isSharing) {
       stopSharing();
     }
 
-    // Cleanup media streams
     cleanupMediaStreams();
-
-    // Small delay to ensure cleanup completes
     await new Promise(resolve => setTimeout(resolve, 100));
-
-    // Navigate to home
     navigate('/home');
   }, [isRecording, isSharing, stopRecording, stopSharing, cleanupMediaStreams, navigate]);
 
@@ -88,21 +80,26 @@ const Controls = ({
     try {
       setIsUploading(true);
       setError(null);
-
-      // Clean up media streams before navigation
       cleanupMediaStreams();
 
-      const uploadResponse = attachedFile
-        ? await apiService.uploadVoiceWithScript(recordedFile, await attachedFile.text())
-        : await apiService.uploadVideoForAnalysis(recordedFile);
+      let uploadResponse;
+      if (!isCameraOn) {
+        // Voice recording case
+        uploadResponse = await apiService.uploadVoiceWithScript(
+          recordedFile,
+          attachedFile
+        );
+      } else {
+        // Video recording case
+        uploadResponse = await apiService.uploadVideoForAnalysis(recordedFile);
+      }
 
       navigate('/feedback', {
         state: {
           videoId: uploadResponse.video_id,
-          isVoice: !!attachedFile
+          isVoice: !isCameraOn
         }
       });
-
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to upload video');
       console.error('Failed to process feedback:', error);

@@ -1,0 +1,40 @@
+{
+  "video_id": "9a7b3c4d5e6f7g8h9i0j1k2l3m4n5o6",
+  "message": "Analysis completed successfully",
+  "analysis_result": {
+    "audio_similarity": 0.8765432109876543,
+    "average_wpm": 45.32109876543211,
+    "tts_wpm": 60.0,
+    "average_pronunciation_accuracy": 0.78,
+    "script_similarity": 0.82,
+    "pronunciation_scores": [
+      {
+        "time_segment": "0분 0초 - 1분 0초",
+        "accuracy": 0.75
+      },
+      {
+        "time_segment": "1분 0초 - 2분 0초",
+        "accuracy": 0.81
+      },
+      {
+        "time_segment": "2분 0초 - 3분 0초",
+        "accuracy": 0.78
+      }
+    ],
+    "wpm_scores": [
+      {
+        "time_segment": "0분 0초 - 1분 0초",
+        "wpm": 43.5
+      },
+      {
+        "time_segment": "1분 0초 - 2분 0초",
+        "wpm": 46.2
+      },
+      {
+        "time_segment": "2분 0초 - 3분 0초",
+        "wpm": 46.8
+      }
+    ]
+  },
+  "problem": null
+}

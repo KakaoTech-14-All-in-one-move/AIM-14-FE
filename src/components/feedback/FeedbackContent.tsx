@@ -6,39 +6,11 @@ import { FeedbackHeader } from '@/components/feedback/sections/FeedbackHeader';
 import { FeedbackImageSection } from '@/components/feedback/sections/FeedbackImageSection';
 import { FeedbackAnalysisSection } from '@/components/feedback/sections/FeedbackAnalysisSection';
 import type { FeedbackItem } from '@/components/feedback/types';
+import { RetryModal } from './sections/RetryModal';
 
 interface FeedbackContentProps {
   onNoResult: (message: string) => void;
 }
-
-const RetryModal = ({
-                      isOpen,
-                      onClose,
-                      message,
-                    }: {
-  isOpen: boolean;
-  onClose: () => void;
-  message: string;
-}) => {
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-96 shadow-xl">
-        <h3 className="text-xl font-semibold text-gray-800 mb-4">알림</h3>
-        <p className="text-gray-600 mb-6">{message}</p>
-        <div className="flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-black font-medium rounded transition-colors"
-          >
-            확인
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 export const FeedbackContent = ({ onNoResult }: FeedbackContentProps) => {
   const location = useLocation();
@@ -62,16 +34,12 @@ export const FeedbackContent = ({ onNoResult }: FeedbackContentProps) => {
   }, [navigate]);
 
   const fetchFeedbackData = async () => {
-    console.log('1. fetchFeedbackData started with videoId:', videoId);
-
     if (!videoId) {
-      console.log('No videoId found, navigating to home');
       navigate('/');
       return;
     }
 
     try {
-      console.log('2. Starting pollFeedback request');
       abortControllerRef.current = new AbortController();
       const data = await apiService.pollFeedback(
         videoId,
@@ -80,35 +48,38 @@ export const FeedbackContent = ({ onNoResult }: FeedbackContentProps) => {
         10000,
         abortControllerRef.current.signal
       );
-      console.log('3. pollFeedback response received:', data);
 
-      if (data.problem === 'success' && data.feedbacks && data.feedbacks.length > 0) {
-        console.log('4a. Valid feedback data received, updating state');
-        setState(prev => ({
-          ...prev,
-          isLoading: false,
-          feedbackData: data.feedbacks
-        }));
-        console.log('5a. State updated with feedback data');
+      // problem이 success이거나 null인 경우 모두 성공 처리
+      if (data.problem === 'success' || data.problem === null) {
+        if (data.feedbacks && data.feedbacks.length > 0) {
+          setState(prev => ({
+            ...prev,
+            isLoading: false,
+            feedbackData: data.feedbacks
+          }));
+        } else {
+          throw new Error('분석 결과가 없습니다.');
+        }
       } else {
-        console.log('4b. No valid feedback data, showing modal');
-        setState(prev => ({
-          ...prev,
-          isLoading: false,
-          showModal: true,
-          message: data.message || '분석 결과가 없습니다.'
-        }));
-        console.log('5b. State updated to show modal');
+        // error나 다른 상태일 경우
+        throw new Error(data.message || '분석에 실패했습니다.');
       }
     } catch (error) {
-      console.log('4c. Error occurred:', error);
+      // 에러 발생 시 (200이 아닌 경우) 삭제 요청
+      try {
+        if (videoId) {
+          await apiService.deleteVideoData(videoId);
+        }
+      } catch (deleteError) {
+        console.error('Failed to delete video data:', deleteError);
+      }
+
       setState(prev => ({
         ...prev,
         isLoading: false,
         showModal: true,
         message: error instanceof Error ? error.message : '서버와의 연결에 실패했습니다.'
       }));
-      console.log('5c. State updated with error');
     }
   };
 
@@ -130,21 +101,6 @@ export const FeedbackContent = ({ onNoResult }: FeedbackContentProps) => {
       }
     };
   }, []);
-
-  const handleModalClose = async () => {
-    try {
-      if (videoId) {
-        await apiService.deleteVideoData(videoId);
-      }
-      setState(prev => ({ ...prev, showModal: false }));
-      navigate('/record');
-    } catch (error) {
-      console.error('Failed to delete video data:', error);
-      // 삭제 실패해도 페이지는 이동
-      setState(prev => ({ ...prev, showModal: false }));
-      navigate('/record');
-    }
-  };
 
   if (state.isLoading) {
     return (
@@ -168,7 +124,10 @@ export const FeedbackContent = ({ onNoResult }: FeedbackContentProps) => {
     return (
       <RetryModal
         isOpen={state.showModal}
-        onClose={handleModalClose}
+        onClose={() => {
+          setState(prev => ({ ...prev, showModal: false }));
+          navigate('/record');
+        }}
         message={state.message}
       />
     );

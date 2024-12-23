@@ -19,7 +19,7 @@ class ApiService {
     }
 
     const formData = new FormData();
-    formData.append('file', videoFile, 'recording.webm');
+    formData.append('file', videoFile, 'recording-video.webm');
 
     const response = await fetch(`${config.videoServerUrl}/api/video/receive-video`, {
       method: 'POST',
@@ -64,15 +64,21 @@ class ApiService {
   }
 
   // Voice server API calls
-  async uploadVoiceWithScript(voiceFile: Blob, script: string): Promise<UploadResponse> {
+  async uploadVoiceWithScript(voiceFile: Blob, scriptFile?: File): Promise<UploadResponse> {
     if (config.isDev) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      return { videoId: 'test-voice-id', message: 'Success' };
+      const jsonResponse: UploadResponse = {
+        video_id: 'test-voice-id',
+        message: 'Success'
+      };
+      console.log('Dev mode: Upload response:', jsonResponse);
+      return jsonResponse;
     }
 
     const formData = new FormData();
-    formData.append('file', voiceFile, 'recording.webm');
-    formData.append('script', script);
+    formData.append('video', voiceFile, 'recording-voice.webm');
+    if (scriptFile) {
+      formData.append('script', scriptFile);
+    }
 
     const response = await fetch(
       `${config.voiceServerUrl}/api/pronun/upload-video-with-script`,
@@ -91,7 +97,8 @@ class ApiService {
 
   async getVoiceFeedback(videoId: string): Promise<VoiceFeedbackResponse> {
     if (config.isDev) {
-      const mockData = await import('@/services/record/mockVideoFeedback.json');
+      const mockData = await import('@/services/record/mockVoiceFeedback.json');
+      console.log('Mock data loaded:', mockData);
       return mockData;
     }
 
@@ -128,7 +135,9 @@ class ApiService {
   ): Promise<VideoFeedbackResponse | VoiceFeedbackResponse> {
     // 개발 환경에서는 mock 데이터 사용
     if (config.isDev) {
-      const mockData = await import('@/services/record/mockVideoFeedback.json');
+      const mockData = isVoice
+        ? await import('@/services/record/mockVoiceFeedback.json')
+        : await import('@/services/record/mockVideoFeedback.json');
       return { ...mockData.default, problem: 'success' };
     }
 

@@ -27,34 +27,34 @@ export interface VideoFeedbackResponse {
   problem: string;
 }
 
-export interface VoiceFeedbackScores {
-  time_segment: string;
-  accuracy: number;
-}
-
-export interface WPMScores {
-  time_segment: string;
-  wpm: number;
-}
-
-export interface VoiceAnalysisResult {
-  audio_similarity: number;
-  average_wpm: number;
-  tts_wpm: number;
-  average_pronunciation_accuracy: number;
-  script_similarity: number;
-  pronunciation_scores: VoiceFeedbackScores[];
-  wpm_scores: WPMScores[];
-}
-
 export interface VoiceFeedbackResponse {
   video_id: string;
   message: string;
-  analysis_result: VoiceAnalysisResult;
-  problem: string;
+  analysis_result: {
+    audio_similarity: number;
+    average_wpm: number;
+    tts_wpm: number;
+    average_pronunciation_accuracy: number;
+    script_similarity: number;
+    pronunciation_scores: Array<{
+      time_segment: string;
+      accuracy: number;
+    }>;
+    wpm_scores: Array<{
+      time_segment: string;
+      wpm: number;
+    }>;
+  };
+  problem: 'success' | 'processing' | 'error';
 }
 
 export interface UploadResponse {
   video_id: string;
   message: string;
+}
+
+export interface VideoFeedbackResponse {
+  message: string;
+  problem: 'success' | 'processing' | 'error' | null;
+  feedbacks: FeedbackItem[];
 }
