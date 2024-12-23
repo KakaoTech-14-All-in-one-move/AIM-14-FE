@@ -137,28 +137,32 @@ export const FeedbackContent = ({ onNoResult }: FeedbackContentProps) => {
 
   return (
     <>
-      <div className="min-h-screen bg-discord900 p-6">
-        <div className="max-w-7xl mx-auto space-y-8">
-          <div className="flex items-center justify-between">
-            <FeedbackHeader
-              currentIndex={state.currentIndex}
-              totalFrames={state.feedbackData.length}
-              timestamp={currentFeedback?.timestamp}
-              onBack={() => navigate('/record')}
-            />
-          </div>
+      <div className="min-h-screen bg-discord900 py-8">
+        <div className="max-w-[1400px] mx-auto px-8">
+          <div className="bg-discord800 rounded-xl shadow-xl overflow-hidden">
+            <div className="p-8">
+              <div className="flex items-center justify-between">
+                <FeedbackHeader
+                  currentIndex={state.currentIndex}
+                  totalFrames={state.feedbackData.length}
+                  timestamp={currentFeedback?.timestamp}
+                  onBack={() => navigate('/record')}
+                />
+              </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <FeedbackImageSection
-              currentIndex={state.currentIndex}
-              setCurrentIndex={(index) => setState(prev => ({ ...prev, currentIndex: index }))}
-              totalFrames={state.feedbackData.length}
-              imageBase64={currentFeedback?.image_base64}
-            />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
+                <FeedbackImageSection
+                  currentIndex={state.currentIndex}
+                  setCurrentIndex={(index) => setState(prev => ({ ...prev, currentIndex: index }))}
+                  totalFrames={state.feedbackData.length}
+                  imageBase64={currentFeedback?.image_base64}
+                />
 
-            <FeedbackAnalysisSection
-              feedbackText={currentFeedback?.feedback_text}
-            />
+                <FeedbackAnalysisSection
+                  feedbackText={currentFeedback?.feedback_text}
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
