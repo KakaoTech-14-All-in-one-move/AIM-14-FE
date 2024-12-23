@@ -15,6 +15,7 @@ export const OP_CODES = {
   UPDATE_STATE: 5,
   ON_ICE_CANDIDATE: 6,
   RECEIVE_VIDEO: 7,
+  CANCEL_VIDEO: 8,
 
   // Server -> Client
   ERROR: -1,
@@ -25,7 +26,8 @@ export const OP_CODES = {
   LEAVE_CHANNEL_EVENT: 14,
   UPDATE_STATE_EVENT: 15,
   ICE_CANDIDATE: 16,
-  VIDEO_ANSWER: 17,
+  RECEIVE_VIDEO_ANSWER: 17,
+  CANCEL_VIDEO_ANSWER: 18,
 } as const;
 
 export const ERROR_CODES = {

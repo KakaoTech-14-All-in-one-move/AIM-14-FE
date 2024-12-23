@@ -108,7 +108,7 @@ export class MediaConnectionManager {
           throw new Error('오디오 스트림을 가져올 수 없습니다.');
         }
 
-        await this.mediaServer.replaceStream(audioStream);
+        await this.mediaServer.setupLocalAudioDetection(audioStream);
       } catch (error: any) {
         let errorMessage = '마이크 연결에 실패했습니다.';
         if (error.name === 'NotAllowedError') {
@@ -406,6 +406,15 @@ export class MediaConnectionManager {
       if ('isCameraOn' in updates) {
         try {
           const streamUpdate = await this.mediaServer.handleCameraState(updates.isCameraOn);
+          console.log('Camera state update:', {
+            hasCameraStream: !!streamUpdate.stream,
+            tracks: streamUpdate.stream?.getTracks().map(track => ({
+              kind: track.kind,
+              enabled: track.enabled,
+              readyState: track.readyState,
+              settings: track.getSettings()  // 실제 비디오 설정 확인
+            }))
+          });
           mediaStateUpdates.stream = streamUpdate.stream;
           mediaStateUpdates.isCameraOn = updates.isCameraOn;
         } catch (error) {
