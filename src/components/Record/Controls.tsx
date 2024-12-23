@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiService } from '@/services/record/apiService.ts';
+import { apiService } from '@/services/record/apiService';
 import StopIcon from '@/common/icons/stop';
 import CameraOnIcon from '@/common/icons/camera-on';
 import RecordIcon from '@/common/icons/record';
@@ -46,6 +46,31 @@ const Controls = ({
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      cleanupMediaStreams();
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [cleanupMediaStreams]);
+
+  const handleHomeClick = useCallback(async () => {
+    if (isRecording) {
+      stopRecording();
+    }
+
+    if (isSharing) {
+      stopSharing();
+    }
+
+    cleanupMediaStreams();
+    await new Promise(resolve => setTimeout(resolve, 100));
+    navigate('/home');
+  }, [isRecording, isSharing, stopRecording, stopSharing, cleanupMediaStreams, navigate]);
+
   const handleFeedbackClick = async () => {
     if (!recordedFile) {
       setError('No recording file available');
@@ -55,20 +80,26 @@ const Controls = ({
     try {
       setIsUploading(true);
       setError(null);
-
       cleanupMediaStreams();
 
-      const uploadResponse = attachedFile
-        ? await apiService.uploadVoiceWithScript(recordedFile, await attachedFile.text())
-        : await apiService.uploadVideoForAnalysis(recordedFile);
+      let uploadResponse;
+      if (!isCameraOn) {
+        // Voice recording case
+        uploadResponse = await apiService.uploadVoiceWithScript(
+          recordedFile,
+          attachedFile
+        );
+      } else {
+        // Video recording case
+        uploadResponse = await apiService.uploadVideoForAnalysis(recordedFile);
+      }
 
       navigate('/feedback', {
         state: {
           videoId: uploadResponse.video_id,
-          isVoice: !!attachedFile  // 음성 분석인지 여부
+          isVoice: !isCameraOn
         }
       });
-
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to upload video');
       console.error('Failed to process feedback:', error);
@@ -80,15 +111,13 @@ const Controls = ({
   return (
     <div className="w-full h-16 bg-[#1E1F22] flex justify-center items-center space-x-6">
       <button
-        onClick={() => {
-          cleanupMediaStreams();
-          navigate('/')}
-        }
-        className="bg-white p-2 rounded-full"
+        onClick={handleHomeClick}
+        className="bg-white p-2 rounded-full hover:bg-gray-100"
+        title="Home"
       >
         <HomeIcon />
       </button>
-      {/* Start/Stop Recording Button */}
+
       <button
         onClick={isRecording ? stopRecording : startRecording}
         className="bg-white p-2 rounded-full"
@@ -96,7 +125,6 @@ const Controls = ({
         {isRecording ? <StopIcon /> : <RecordIcon />}
       </button>
 
-      {/* Camera On/Off Button */}
       <button
         onClick={toggleCamera}
         disabled={isRecording}
@@ -109,7 +137,6 @@ const Controls = ({
         {isCameraOn ? <CameraOnIcon /> : <MicIcon />}
       </button>
 
-      {/* Screen Share/Cancel Button */}
       <button
         onClick={isSharing ? stopSharing : startSharing}
         className="bg-white p-2 rounded-full"
@@ -117,7 +144,6 @@ const Controls = ({
         {isSharing ? <CancelIcon /> : <ShareIcon />}
       </button>
 
-      {/* Download Button - 녹화가 완료되었을 때만 표시 */}
       {isRecordingComplete && (
         <button
           onClick={downloadRecording}
@@ -128,14 +154,13 @@ const Controls = ({
         </button>
       )}
 
-      {/* AI Feedback Button - 녹화가 완료되었을 때만 표시 */}
       {isRecordingComplete && (
         <button
           onClick={handleFeedbackClick}
           disabled={isUploading}
           className={`
             ${isUploading ? 'bg-gray-400' : 'bg-[#FEE500] hover:bg-yellow-400'}
-            text-[#3B1E1E] px-4 py-2 rounded-full flex items-center gap-2
+            text-[#3B1E1E] px-4 py-3 rounded-full flex items-center gap-2
             transition-colors duration-200
             disabled:cursor-not-allowed
           `}
@@ -145,10 +170,8 @@ const Controls = ({
         </button>
       )}
 
-      {/* Error message */}
       {error && (
-        <div
-          className="absolute bottom-20 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-md">
+        <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-md">
           {error}
         </div>
       )}

@@ -23,7 +23,7 @@ class ApiService {
     }
 
     const formData = new FormData();
-    formData.append('file', videoFile, 'recording.webm');
+    formData.append('file', videoFile, 'recording-video.webm');
 
     const response = await fetch(`${config.videoServerUrl}/api/video/receive-video`, {
       method: 'POST',
@@ -38,21 +38,17 @@ class ApiService {
   }
 
   async getVideoFeedback(videoId: string): Promise<VideoFeedbackResponse> {
+    if (config.isDev) {
+      const mockData = await import('@/services/record/mockVideoFeedback.json');
+      console.log('Mock data loaded:', mockData);
+      return mockData;
+    }
+
     const response = await fetch(
       `${config.videoServerUrl}/api/video/video-send-feedback/${videoId}`,
     );
 
-    if (!response.ok) {
-      throw new Error(`Failed to get video feedback: ${response.status}`);
-    }
-
-    const data: VideoFeedbackResponse = await response.json();
-
-    if (!data.feedbacks?.length || data.problem === 'none') {
-      throw new Error(data.message || '분석 결과가 없습니다. 다시 시도해주세요.');
-    }
-
-    return data;
+    return response.json();
   }
 
   async deleteVideoData(videoId: string): Promise<void> {
@@ -82,8 +78,10 @@ class ApiService {
     }
 
     const formData = new FormData();
-    formData.append('file', voiceFile, 'recording.webm');
-    formData.append('script', script);
+    formData.append('video', voiceFile, 'recording-voice.webm');
+    if (scriptFile) {
+      formData.append('script', scriptFile);
+    }
 
     const response = await fetch(`${config.voiceServerUrl}/api/pronun/upload-video-with-script`, {
       method: 'POST',
@@ -106,17 +104,7 @@ class ApiService {
 
     const response = await fetch(`${config.voiceServerUrl}/api/pronun/send-feedback/${videoId}`);
 
-    if (!response.ok) {
-      throw new Error(`Failed to get voice feedback: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    if (data.problem === 'none') {
-      throw new Error(data.message || '분석 결과가 없습니다. 다시 시도해주세요.');
-    }
-
-    return data;
+    return response.json();
   }
 
   async deleteVoiceData(videoId: string): Promise<void> {
@@ -159,7 +147,12 @@ class ApiService {
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
+        if (signal?.aborted) {
+          throw new Error('Request aborted');
+        }
+
         const response = await getFeedback();
+
         if (response.problem !== 'processing') {
           return response;
         }
@@ -175,18 +168,11 @@ class ApiService {
 
         currentInterval = Math.min(currentInterval * 1.5, 30000);
       } catch (error) {
-        if (error instanceof Error && error.message.includes('분석 결과가 없습니다')) {
-          throw error;
-        }
-        console.warn(`Polling attempt ${attempt + 1} failed:`, error);
+        throw error;
       }
-
-      // Exponential backoff with max of 30 seconds
-      currentInterval = Math.min(currentInterval * 1.5, 30000);
-      await new Promise((resolve) => setTimeout(resolve, currentInterval));
     }
 
-    throw new Error('피드백 분석 시간이 초과되었습니다. 다시 시도해주세요.');
+    throw new Error('피드백 분석 시간이 초과되었습니다.');
   }
 }
 

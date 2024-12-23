@@ -150,13 +150,13 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({
     }
 
     // 스트림 상태 로깅
-    // console.log('[VideoUserBox] Video stream check:', {
-    //   userId: user.userId,
-    //   isCurrentUser,
-    //   isCameraOn: user.mediaState.isCameraOn,
-    //   hasStream: !!user.mediaState.stream,
-    //   trackCount: user.mediaState.stream?.getVideoTracks().length
-    // });
+    console.log('[VideoUserBox] Video stream check:', {
+      userId: user.userId,
+      isCurrentUser,
+      isCameraOn: user.mediaState.isCameraOn,
+      hasStream: !!user.mediaState.stream,
+      trackCount: user.mediaState.stream?.getVideoTracks().length
+    });
 
     const hasVideoStream = !!(
       user.mediaState.stream &&

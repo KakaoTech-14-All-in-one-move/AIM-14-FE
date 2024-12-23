@@ -5,7 +5,14 @@ import { VoiceFeedbackContent } from '@/components/feedback/VoiceFeedbackContent
 const Feedback = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const isVoice = location.state?.isVoice;
+
+  if (!location.state) {
+    navigate('/');
+    return null;
+  }
+
+  const { isVoice } = location.state;
+  console.log('isVoice:', isVoice);
 
   const handleNoResult = (message: string) => {
     alert(message);
