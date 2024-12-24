@@ -47,19 +47,58 @@ export class MediaConnectionManager {
         return false;
       }
 
-      // CallConnection이 있다는 것이 보장되므로 바로 설정
-      this.mediaServer.setCallConnection(MediaConnectionManager.getCallConnection()!);
-
       const currentUser = useAuthStore.getState().user;
       if (!currentUser?.user_id) {
         console.error('Invalid user data:', currentUser);
         return false;
       }
 
-      const userId = currentUser.user_id.toString();
-      console.log('Joining channel for user:', userId);
+      // 2. 현재 채널 정리
+      const currentChannel = useUserChannelStore.getState().currentUserChannel;
+      if (currentChannel.channelId) {
+        console.log('Leaving current channel before joining new one');
+        await this.leaveChannel();
+      }
 
-      // 2. 서버 연결
+      // 3. 마이크 권한 확인
+      console.log('Checking microphone permissions');
+      const hasPermission = await this.checkMicrophonePermission();
+      if (!hasPermission) {
+        console.log('Failed to get microphone permission');
+        return false;
+      }
+
+      // 4. 오디오 스트림 획득
+      console.log('Getting audio stream');
+      let audioStream: MediaStream | null = null;
+      try {
+        audioStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+          video: false,
+        });
+
+        if (!audioStream || audioStream.getAudioTracks().length === 0) {
+          throw new Error('오디오 스트림을 가져올 수 없습니다.');
+        }
+      } catch (error: any) {
+        let errorMessage = '마이크 연결에 실패했습니다.';
+        if (error.name === 'NotAllowedError') {
+          errorMessage = '마이크 접근이 거부되었습니다. 브라우저 설정에서 권한을 허용해주세요.';
+        } else if (error.name === 'NotFoundError') {
+          errorMessage = '마이크를 찾을 수 없습니다. 마이크가 제대로 연결되어 있는지 확인해주세요.';
+        } else if (error.name === 'NotReadableError') {
+          errorMessage = '마이크에 접근할 수 없습니다. 다른 앱에서 사용 중인지 확인해주세요.';
+        }
+        alert(errorMessage);
+        await this.handleFailedJoin();
+        return false;
+      }
+
+      // 5. 채널 입장 웹소켓 요청을 먼저 수행
       console.log('Attempting to join channel via CallConnection');
       try {
         const success = await MediaConnectionManager.getCallConnection()!.joinChannel(channelId, type);
@@ -75,61 +114,11 @@ export class MediaConnectionManager {
         return false;
       }
 
-      // 3. 현재 채널 정리
-      const currentChannel = useUserChannelStore.getState().currentUserChannel;
-      if (currentChannel.channelId) {
-        console.log('Leaving current channel before joining new one');
-        await this.leaveChannel();
-      }
-
-      // 4. 마이크 권한 확인
-      console.log('Checking microphone permissions');
-      const hasPermission = await this.checkMicrophonePermission();
-      if (!hasPermission) {
-        console.log('Failed to get microphone permission');
-        return false;
-      }
-
-      // 5. 오디오 스트림 획득
-      console.log('Getting audio stream');
-      let audioStream: MediaStream | null = null;
-      try {
-        audioStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-          video: false,
-        });
-
-
-        if (!audioStream || audioStream.getAudioTracks().length === 0) {
-          throw new Error('오디오 스트림을 가져올 수 없습니다.');
-        }
-
-        await this.mediaServer.setupLocalAudioDetection(audioStream);
-      } catch (error: any) {
-        let errorMessage = '마이크 연결에 실패했습니다.';
-        if (error.name === 'NotAllowedError') {
-          errorMessage = '마이크 접근이 거부되었습니다. 브라우저 설정에서 권한을 허용해주세요.';
-        } else if (error.name === 'NotFoundError') {
-          errorMessage = '마이크를 찾을 수 없습니다. 마이크가 제대로 연결되어 있는지 확인해주세요.';
-        } else if (error.name === 'NotReadableError') {
-          errorMessage = '마이크에 접근할 수 없습니다. 다른 앱에서 사용 중인지 확인해주세요.';
-        }
-
-        alert(errorMessage);
-        console.error('Error getting audio stream:', error);
-        await this.handleFailedJoin();
-        return false;
-      }
-
       // 6. 초기 상태 설정
       console.log('Setting up initial channel state');
       useUserChannelStore.getState().setCurrentUserChannel(channelId, type);
       this.userStateManager.handleUserJoin(channelId, {
-        user_id: userId,
+        user_id: currentUser.user_id.toString(),
         username: currentUser.username,
         profile_image: currentUser.profile_image,
         channel_id: channelId,
@@ -140,43 +129,18 @@ export class MediaConnectionManager {
         stream: audioStream,
       });
 
-      // 7. WebRTC 연결
-      console.log('Establishing WebRTC connections');
-      try {
-        const currentUserId = useAuthStore.getState().user?.user_id.toString();
-        if (!currentUserId) {
-          throw new Error('User ID not found');
-        }
+      // 7. 자신의 send peer 먼저 생성
+      await this.mediaServer.createLocalPeer(channelId, currentUser.user_id.toString(), audioStream);
 
-        // 자신과 다른 참가자들과의 connection 생성
-        await this.mediaServer.connectToAllUsers(channelId, audioStream);
-        console.log('WebRTC connections established successfully');
-      } catch (error) {
-        if (import.meta.env.VITE_ENV === 'dev') {
-          console.log('Development environment: Ignoring WebRTC connection error');
-        } else {
-          console.error('Failed to establish WebRTC connections:', error);
-          await this.handleFailedJoin();
-          return false;
+      // 8. 기존 채널 참가자들의 receive peer 생성
+      const channelUsers = useUserChannelStore.getState().channelUsers.get(channelId) || [];
+      for (const user of channelUsers) {
+        if (user.userId !== currentUser.user_id.toString()) {
+          await this.mediaServer.createRemotePeer(channelId, user.userId);
         }
       }
 
-      // 8. 최종 미디어 상태 업데이트
-      console.log('Setting up final media state');
-      const initialMediaState = {
-        stream: audioStream,
-        screenStream: null,
-        isMuted: false,
-        isDeafened: false,
-        isCameraOn: false,
-        isScreenSharing: false,
-      };
-
-      this.userStateManager.handleUserStateUpdate(channelId, userId, initialMediaState);
-      this.notifyStateUpdate(channelId);
-      console.log('Successfully joined channel:', channelId);
       return true;
-
     } catch (error) {
       console.error('Error joining channel:', error);
       await this.handleFailedJoin();

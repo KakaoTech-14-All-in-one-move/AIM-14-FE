@@ -277,6 +277,95 @@ export class MediaServerConnection {
     };
   }
 
+  async createLocalPeer(channelId: string, userId: string, stream: MediaStream) {
+    const peerConnection = new RTCPeerConnection(ICE_SERVER_CONFIG);
+    this.localStream = stream;
+
+    // 스트림 추가
+    stream.getTracks().forEach(track => {
+      peerConnection.addTrack(track, stream);
+    });
+
+    // ICE candidate 처리
+    peerConnection.onicecandidate = (event) => {
+      if (event.candidate) {
+        this.callConnection?.sendOp(OP_CODES.ON_ICE_CANDIDATE, {
+          candidate: event.candidate.toJSON(),
+          remote_peer_id: userId,
+        });
+      }
+    };
+
+    // 연결 상태 모니터링
+    this.setupConnectionStateHandler(peerConnection, userId, channelId);
+
+    // Offer 생성 및 전송
+    try {
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+
+      this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
+        sdp_offer: offer.sdp,
+        sender_id: userId,
+      });
+
+      this.peerConnections.set(userId, peerConnection);
+    } catch (error) {
+      console.error('Error creating local peer:', error);
+      throw error;
+    }
+  }
+
+// 다른 참가자의 receive peer 생성
+  async createRemotePeer(channelId: string, remoteUserId: string) {
+    const peerConnection = new RTCPeerConnection(ICE_SERVER_CONFIG);
+
+    // 트랙 수신 처리
+    peerConnection.ontrack = (event) => {
+      if (!event.streams.length) return;
+
+      const stream = event.streams[0];
+      this.setupRemoteAudioDetection(stream, remoteUserId);
+
+      useUserChannelStore.getState().updateUserMediaState(
+        channelId,
+        remoteUserId,
+        { stream },
+      );
+    };
+
+    // ICE candidate 처리
+    peerConnection.onicecandidate = (event) => {
+      if (event.candidate) {
+        this.callConnection?.sendOp(OP_CODES.ON_ICE_CANDIDATE, {
+          candidate: event.candidate.toJSON(),
+          remote_peer_id: remoteUserId,
+        });
+      }
+    };
+
+    // 연결 상태 모니터링
+    this.setupConnectionStateHandler(peerConnection, remoteUserId, channelId);
+
+    try {
+      const offer = await peerConnection.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
+      });
+      await peerConnection.setLocalDescription(offer);
+
+      this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
+        sdp_offer: offer.sdp,
+        sender_id: remoteUserId,
+      });
+
+      this.peerConnections.set(remoteUserId, peerConnection);
+    } catch (error) {
+      console.error('Error creating remote peer:', error);
+      throw error;
+    }
+  }
+
   private setupTrackHandler(peerConnection: RTCPeerConnection, remotePeerId: string, channelId: string) {
     peerConnection.ontrack = (event) => {
       console.log('Media track added:', {
