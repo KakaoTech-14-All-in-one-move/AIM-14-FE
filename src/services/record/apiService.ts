@@ -7,7 +7,7 @@ import type {
 const config = {
   videoServerUrl: import.meta.env.VITE_AI_VIDEO_SERVER_URL,
   voiceServerUrl: import.meta.env.VITE_AI_VOICE_SERVER_URL,
-  isDev: import.meta.env.VITE_ENV === 'dev',
+  isDev: import.meta.env.VITE_ENV === 'd',
 };
 
 class ApiService {
