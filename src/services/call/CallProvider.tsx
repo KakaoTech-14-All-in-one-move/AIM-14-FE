@@ -22,18 +22,17 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!accessToken) return;
 
-    let mounted = true;  // 컴포넌트 마운트 상태 추적
+    let mounted = true;
     const callConnection = CallConnection.getInstance(accessToken);
 
     const connect = async () => {
       try {
-        if (!mounted) return;  // 컴포넌트가 언마운트되었다면 중단
+        if (!mounted) return;
 
         setConnection(callConnection);
-        mediaManager.setCallConnection(callConnection);
         const connected = await callConnection.connect();
 
-        if (mounted) {  // 상태 업데이트 전에 마운트 상태 확인
+        if (mounted) {
           setIsConnected(connected);
         }
       } catch (error) {
@@ -47,7 +46,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     connect();
 
     return () => {
-      mounted = false;  // 클린업 시 마운트 상태 변경
+      mounted = false;
       callConnection.disconnect();
       mediaManager.dispose();
       userStateManager.dispose();

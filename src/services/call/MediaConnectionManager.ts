@@ -26,13 +26,12 @@ export class MediaConnectionManager {
     return this.instance;
   }
 
-  setCallConnection(connection: CallConnection) {
-    MediaConnectionManager.callConnection = connection;
-    this.mediaServer.setCallConnection(connection);
-  }
-
   static getCallConnection(): CallConnection | null {
     return MediaConnectionManager.callConnection;
+  }
+
+  setCallConnection(connection: CallConnection) {
+    MediaConnectionManager.callConnection = connection;
   }
 
   private notifyStateUpdate(channelId: string | null) {
@@ -84,6 +83,8 @@ export class MediaConnectionManager {
         if (!audioStream || audioStream.getAudioTracks().length === 0) {
           throw new Error('오디오 스트림을 가져올 수 없습니다.');
         }
+
+        await this.mediaServer.replaceStream(audioStream);
       } catch (error: any) {
         let errorMessage = '마이크 연결에 실패했습니다.';
         if (error.name === 'NotAllowedError') {
@@ -98,7 +99,7 @@ export class MediaConnectionManager {
         return false;
       }
 
-      // 5. 채널 입장 웹소켓 요청을 먼저 수행
+      // 5. 채널 입장 웹소켓 요청
       console.log('Attempting to join channel via CallConnection');
       try {
         const success = await MediaConnectionManager.getCallConnection()!.joinChannel(channelId, type);
@@ -129,17 +130,7 @@ export class MediaConnectionManager {
         stream: audioStream,
       });
 
-      // 7. 자신의 send peer 먼저 생성
-      await this.mediaServer.createLocalPeer(channelId, currentUser.user_id.toString(), audioStream);
-
-      // 8. 기존 채널 참가자들의 receive peer 생성
-      const channelUsers = useUserChannelStore.getState().channelUsers.get(channelId) || [];
-      for (const user of channelUsers) {
-        if (user.userId !== currentUser.user_id.toString()) {
-          await this.mediaServer.createRemotePeer(channelId, user.userId);
-        }
-      }
-
+      // Peer 연결 로직은 제거 (CallConnection에서 처리)
       return true;
     } catch (error) {
       console.error('Error joining channel:', error);
@@ -376,8 +367,8 @@ export class MediaConnectionManager {
               kind: track.kind,
               enabled: track.enabled,
               readyState: track.readyState,
-              settings: track.getSettings()  // 실제 비디오 설정 확인
-            }))
+              settings: track.getSettings(),  // 실제 비디오 설정 확인
+            })),
           });
           mediaStateUpdates.stream = streamUpdate.stream;
           mediaStateUpdates.isCameraOn = updates.isCameraOn;

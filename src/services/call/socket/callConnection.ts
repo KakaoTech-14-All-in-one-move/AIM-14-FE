@@ -5,6 +5,7 @@ import { apiClient } from '@/api/apiClient';
 import { MediaType } from '../types';
 import { UserStateManager } from '@/services/call/UserStateManager';
 import { useAuthStore } from '@/stores/authStore.ts';
+import { MediaConnectionManager } from '@/services/call/MediaConnectionManager.ts';
 
 type MessageHandler = (data: any) => void;
 type MessageHandlerMap = Record<number, MessageHandler>;
@@ -95,16 +96,19 @@ export class CallConnection {
       this.userStateManager.handleServerState(channelUsers);
     },
 
-    [OP_CODES.ENTER_CHANNEL_EVENT]: (data: any) => {
+    [OP_CODES.ENTER_CHANNEL_EVENT]: async (data: any) => {
       console.log('WEBSOCKET RECEIVED - CHANNEL ENTER');
       if (!data?.channel_id || !data?.user_id) return;
-      // console.log('Socket ENTER_CHANNEL_EVENT received:', data);
 
+      const channelId = data.channel_id.toString();
+      const currentUserId = useAuthStore.getState().user?.user_id.toString();
+
+      // UserState 업데이트는 모든 경우에 수행
       const userData = {
         user_id: data.user_id,
         username: data.username,
         profile_image: data.profile_image,
-        channel_id: data.channel_id.toString(),
+        channel_id: channelId,
         channel_type: data.channel_type,
         muted: data.muted ?? false,
         deafened: data.deafened ?? false,
@@ -112,18 +116,31 @@ export class CallConnection {
         screen_sharing: data.screen_sharing ?? false,
         stream: null,
       };
-      // console.log('USERDATA', userData, useAuthStore.getState().user?.user_id);
+      this.userStateManager.handleUserJoin(channelId, userData);
 
-      // user_id 가 내가 아닌 경우에만 실행
-      if (userData.user_id !== useAuthStore.getState().user?.user_id.toString()) {
-        console.log('OTHER USER CHANNEL ENTER');
-        this.userStateManager.handleUserJoin(data.channel_id.toString(), userData);
+      // 내가 입장한 경우
+      if (data.user_id === currentUserId) {
+        console.log('My channel enter - Creating WebRTC connections');
+        // 1. 내 send peer 생성
+        await MediaServerConnection.getInstance().createLocalPeer(
+          channelId,
+          currentUserId!,
+          MediaServerConnection.getInstance().getLocalStream()!
+        );
+
+        // 2. 기존 채널 참가자들의 receive peer 생성
+        const channelUsers = useUserChannelStore.getState().channelUsers.get(channelId) || [];
+        for (const user of channelUsers) {
+          if (user.userId !== currentUserId) {
+            await MediaServerConnection.getInstance().createRemotePeer(channelId, user.userId);
+          }
+        }
       }
-
-      // 현재 채널에 다른 사용자가 있는 경우에만 WebRTC 연결 시도
-      const channelUsers = useUserChannelStore.getState().channelUsers.get(data.channel_id.toString()) || [];
-      if (channelUsers.length > 1) {  // 자신 외에 다른 사용자가 있는 경우만
-        MediaServerConnection.getInstance().handleNewUser(data.channel_id.toString(), data.user_id);
+      // 다른 사람이 입장한 경우
+      else {
+        console.log('Other user channel enter - Creating receive peer');
+        // 해당 유저의 receive peer 생성
+        await MediaServerConnection.getInstance().createRemotePeer(channelId, data.user_id);
       }
     },
 
@@ -269,7 +286,14 @@ export class CallConnection {
         clearTimeout(timeoutId);
 
         if (this.isConnected()) {
+          // WebSocket 연결 성공 로그 출력
           console.log('WebSocket connected successfully');
+
+          // MediaServerConnection에 CallConnection 설정
+          MediaServerConnection.getInstance().setCallConnection(this);
+          MediaConnectionManager.getInstance().setCallConnection(this);
+
+          // 초기화 메시지 전송
           this.sendOp(OP_CODES.INIT, { token: this.accessToken });
 
           if (this.heartbeatIntervalTime > 0) {

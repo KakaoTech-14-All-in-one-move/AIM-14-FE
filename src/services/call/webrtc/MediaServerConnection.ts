@@ -13,8 +13,9 @@ export class MediaServerConnection {
   private readonly ICE_RECONNECTION_TIMEOUT = 3000;
   private static instance: MediaServerConnection | null = null;
   private callConnection: CallConnection | null = null;
-  private readonly connectionPromise: Promise<void> | null = null;
-  private connectionResolve: (() => void) | null = null;
+  private readonly connectionPromise: Promise<void>;
+  private connectionResolve!: () => void;
+  private connectionInitialized: boolean = false;
 
   private connectionStates: Map<string, {
     isRemoteDescriptionSet: boolean;
@@ -31,10 +32,30 @@ export class MediaServerConnection {
   }> = new Map();
 
   private constructor() {
-    // 초기화 시점에 Promise 생성
+    // Promise를 생성하고 resolver를 저장
     this.connectionPromise = new Promise((resolve) => {
       this.connectionResolve = resolve;
     });
+  }
+
+  setCallConnection(connection: CallConnection) {
+    this.callConnection = connection;
+    this.connectionInitialized = true;
+    // Promise resolve
+    this.connectionResolve();
+  }
+
+  private async ensureCallConnection(): Promise<CallConnection> {
+    if (!this.connectionInitialized) {
+      console.log('Waiting for CallConnection initialization...');
+      await this.connectionPromise;
+    }
+
+    if (!this.callConnection) {
+      throw new Error('CallConnection is not initialized even after waiting');
+    }
+
+    return this.callConnection;
   }
 
   static getInstance(): MediaServerConnection {
@@ -42,28 +63,6 @@ export class MediaServerConnection {
       this.instance = new MediaServerConnection();
     }
     return this.instance;
-  }
-
-  setCallConnection(connection: CallConnection) {
-    this.callConnection = connection;
-    // CallConnection이 설정되면 Promise resolve
-    if (this.connectionResolve) {
-      this.connectionResolve();
-    }
-  }
-
-  // WebRTC 관련 작업을 하는 모든 메서드에서 Connection 준비 상태 확인
-  private async ensureCallConnection(): Promise<CallConnection> {
-    console.log('ensureCallConnection');
-    if (!this.callConnection && this.connectionPromise) {
-      await this.connectionPromise;
-    }
-
-    if (!this.callConnection) {
-      throw new Error('CallConnection is not initialized');
-    }
-
-    return this.callConnection;
   }
 
   getLocalStream(): MediaStream | null {
@@ -278,6 +277,7 @@ export class MediaServerConnection {
   }
 
   async createLocalPeer(channelId: string, userId: string, stream: MediaStream) {
+    const callConnection = await this.ensureCallConnection();
     const peerConnection = new RTCPeerConnection(ICE_SERVER_CONFIG);
     this.localStream = stream;
 
@@ -287,11 +287,14 @@ export class MediaServerConnection {
     });
 
     // ICE candidate 처리
+    console.log('SEND ICE CANDIDATE : LOCAL PEER ->', userId);
     peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
-        this.callConnection?.sendOp(OP_CODES.ON_ICE_CANDIDATE, {
+        callConnection.sendOp(OP_CODES.ON_ICE_CANDIDATE, {
           candidate: event.candidate.toJSON(),
-          remote_peer_id: userId,
+          sdp_mid: event.candidate?.sdpMid,
+          sdp_m_line_index: event.candidate?.sdpMLineIndex,
+          target_id: userId,
         });
       }
     };
@@ -304,7 +307,8 @@ export class MediaServerConnection {
       const offer = await peerConnection.createOffer();
       await peerConnection.setLocalDescription(offer);
 
-      this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
+      console.log('SEND RECEIVED VIDEO : LOCAL PEER ->', userId);
+      callConnection.sendOp(OP_CODES.RECEIVE_VIDEO, {
         sdp_offer: offer.sdp,
         sender_id: userId,
       });
@@ -335,11 +339,14 @@ export class MediaServerConnection {
     };
 
     // ICE candidate 처리
+    console.log('SEND ICE CANDIDATE : REMOTE PEER ->', remoteUserId);
     peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
         this.callConnection?.sendOp(OP_CODES.ON_ICE_CANDIDATE, {
           candidate: event.candidate.toJSON(),
-          remote_peer_id: remoteUserId,
+          sdp_mid: event.candidate?.sdpMid,
+          sdp_m_line_index: event.candidate?.sdpMLineIndex,
+          target_id: remoteUserId,
         });
       }
     };
@@ -354,6 +361,7 @@ export class MediaServerConnection {
       });
       await peerConnection.setLocalDescription(offer);
 
+      console.log('SEND RECEIVED VIDEO : REMOTE PEER ->', remoteUserId);
       this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
         sdp_offer: offer.sdp,
         sender_id: remoteUserId,
@@ -506,12 +514,12 @@ export class MediaServerConnection {
       }
 
       if (event.candidate) {
-        console.log('Sending ICE candidate:', event.candidate);
+        console.log('setupIceHandler -> Sending ICE candidate:', event.candidate);
         this.callConnection?.sendOp(OP_CODES.ON_ICE_CANDIDATE, {
           candidate: event.candidate.toJSON(),
           sdp_mid: event.candidate.sdpMid,
           sdp_m_line_index: event.candidate.sdpMLineIndex,
-          remote_peer_id: remotePeerId,
+          target_id: remotePeerId,
         });
       }
     };

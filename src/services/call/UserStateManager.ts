@@ -79,7 +79,8 @@ export class UserStateManager {
     const userKey = `${channelId}:${userData.user_id}`;
     // 이미 존재하는 경우 기존 상태 정리 후 재가입
     if (this.joinedUsers.has(userKey)) {
-      this.handleUserLeave(channelId, userData.user_id);
+      // this.handleUserLeave(channelId, userData.user_id);
+      console.log('User is already in joinedUsers Set', userKey);
     }
 
     try {
