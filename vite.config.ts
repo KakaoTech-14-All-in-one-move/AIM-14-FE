@@ -15,9 +15,16 @@ export default defineConfig({
     rollupOptions: {
       input: path.resolve(__dirname, 'index.html'),
       output: {
+        // CSS 파일도 해시 제거
         entryFileNames: 'assets/[name].js',
         chunkFileNames: 'assets/[name].js',
-        assetFileNames: 'assets/[name].[ext]',
+        assetFileNames: ({ name }) => {
+          // CSS 파일의 경우 index.css로 출력
+          if (name?.endsWith('.css')) {
+            return 'assets/index.css';
+          }
+          return 'assets/[name].[ext]';
+        },
       },
     },
   },
