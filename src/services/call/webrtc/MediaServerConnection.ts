@@ -22,7 +22,8 @@ export class MediaServerConnection {
     isConnecting: boolean;
     isNegotiating: boolean;
     pendingOffer: boolean;
-    isInitiator: boolean
+    isInitiator: boolean;
+    isGatheringComplete: boolean;
   }> = new Map();
 
   private audioContextMap: Map<string, {
@@ -95,6 +96,8 @@ export class MediaServerConnection {
   async prepareConnection(channelId: string, remotePeerId: string, stream?: MediaStream) {
     const currentUserId = useAuthStore.getState().user?.user_id.toString();
     console.log('Prepare Connection', currentUserId, channelId, remotePeerId, stream);
+
+    // 채널 상태 검증
     const currentChannel = useUserChannelStore.getState().currentUserChannel;
     if (!currentChannel.channelId || currentChannel.channelId !== channelId) {
       console.warn('Must join channel before establishing WebRTC connection');
@@ -109,10 +112,6 @@ export class MediaServerConnection {
 
     await this.ensureCallConnection();
 
-    if (remotePeerId === currentUserId) {
-      console.log('Creating publisher connection for self');
-    }
-
     // 기존 연결 정리
     if (this.peerConnections.has(remotePeerId)) {
       console.log('Connection already exists, cleaning up first');
@@ -121,20 +120,31 @@ export class MediaServerConnection {
 
     console.log('Preparing connection for peer:', remotePeerId);
 
-    // 새로운 상태 관리 구조
+    // 새로운 연결 상태 초기화
     this.connectionStates.set(remotePeerId, {
       isRemoteDescriptionSet: false,
       isConnecting: true,
       isNegotiating: false,
       pendingOffer: false,
       isInitiator: true,
+      isGatheringComplete: false,
     });
 
+    // RTCPeerConnection 생성
     const peerConnection = new RTCPeerConnection(ICE_SERVER_CONFIG);
-
     console.log('NEW RTCPeerConnection', peerConnection);
     this.peerConnections.set(remotePeerId, peerConnection);
 
+    // ICE gathering 시작 전 이벤트 핸들러 설정
+    peerConnection.onicegatheringstatechange = () => {
+      console.log('ICE gathering state:', {
+        remotePeerId,
+        state: peerConnection.iceGatheringState,
+        connectionState: peerConnection.connectionState,
+      });
+    };
+
+    // 스트림 추가
     if (stream) {
       this.localStream = stream;
       stream.getTracks().forEach(track => {
@@ -142,24 +152,30 @@ export class MediaServerConnection {
       });
     }
 
+    // 연결 상태 및 ICE 핸들러 설정
     this.setupConnectionStateHandler(peerConnection, remotePeerId, channelId);
     this.setupIceHandler(peerConnection, remotePeerId, channelId);
 
-    // 자신의 연결이 아닌 경우에만 트랙 핸들러 설정 (오디오 피드백 방지)
+    // 트랙 핸들러 설정 (오디오 피드백 방지)
     if (currentUserId !== remotePeerId) {
       this.setupTrackHandler(peerConnection, remotePeerId, channelId);
     }
 
+    // ICE gathering이 시작되기를 기다림
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     // Offer 생성 및 전송
     const connectionState = this.connectionStates.get(remotePeerId);
     const remotePeerUser = channelUsers?.find(user => user.userId === remotePeerId);
+
     if (!connectionState?.pendingOffer) {
       connectionState!.pendingOffer = true;
       try {
         const offerOptions = {
           offerToReceiveAudio: true,
-          offerToReceiveVideo: remotePeerUser?.mediaState.isCameraOn, // 카메라가 켜져있을 때만 비디오 수신
-          voiceActivityDetection: false,
+          offerToReceiveVideo: remotePeerUser?.mediaState.isCameraOn,
+          voiceActivityDetection: true,
+          iceRestart: true,  // ICE 재시작 허용
         };
 
         const offer = await peerConnection.createOffer(offerOptions);
@@ -167,18 +183,12 @@ export class MediaServerConnection {
           remotePeerId,
           hasAudio: offer.sdp.includes('m=audio'),
           hasVideo: offer.sdp.includes('m=video'),
-          // SDP의 비디오 섹션만 추출
           videoSection: offer.sdp.split('m=video')[1]?.split('m=')[0],
-        });
-        console.log('Created offer:', {
-          type: offer.type,
-          remotePeerId,
-          sdp: offer.sdp,
         });
 
         await peerConnection.setLocalDescription(offer);
+        await new Promise(resolve => setTimeout(resolve, 100)); // ICE gathering 시작을 위한 대기
 
-        console.log('OP_CODES.RECEIVE_VIDEO - prepareConnection');
         this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
           sdp_offer: offer.sdp,
           sender_id: remotePeerId,
@@ -188,7 +198,6 @@ export class MediaServerConnection {
         connectionState!.pendingOffer = false;
         throw error;
       }
-
       connectionState!.pendingOffer = false;
     }
   }
@@ -291,7 +300,7 @@ export class MediaServerConnection {
     peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
         callConnection.sendOp(OP_CODES.ON_ICE_CANDIDATE, {
-          candidate: event.candidate.toJSON(),
+          candidate: event.candidate.candidate,
           sdp_mid: event.candidate?.sdpMid,
           sdp_m_line_index: event.candidate?.sdpMLineIndex,
           target_id: userId,
@@ -343,7 +352,7 @@ export class MediaServerConnection {
     peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
         this.callConnection?.sendOp(OP_CODES.ON_ICE_CANDIDATE, {
-          candidate: event.candidate.toJSON(),
+          candidate: event.candidate.candidate,
           sdp_mid: event.candidate?.sdpMid,
           sdp_m_line_index: event.candidate?.sdpMLineIndex,
           target_id: remoteUserId,
@@ -505,18 +514,29 @@ export class MediaServerConnection {
   }
 
   private setupIceHandler(peerConnection: RTCPeerConnection, remotePeerId: string, channelId: string) {
+    let iceCandidateQueue: RTCIceCandidate[] = [];
+    let isGatheringComplete = false;
+
     // ICE candidate 생성 및 전송
     peerConnection.onicecandidate = (event) => {
-      // localDescription이 설정되어 있는지 먼저 확인
       if (!peerConnection.localDescription) {
-        console.warn('No local description set, skipping ICE candidate');
+        console.warn('No local description set, queuing ICE candidate');
+        if (event.candidate) {
+          iceCandidateQueue.push(event.candidate);
+        }
         return;
       }
 
       if (event.candidate) {
-        console.log('setupIceHandler -> Sending ICE candidate:', event.candidate);
+        console.log('ICE candidate generated:', {
+          type: event.candidate.type,
+          protocol: event.candidate.protocol,
+          address: event.candidate.address,
+          port: event.candidate.port,
+        });
+
         this.callConnection?.sendOp(OP_CODES.ON_ICE_CANDIDATE, {
-          candidate: event.candidate.toJSON(),
+          candidate: event.candidate.candidate,
           sdp_mid: event.candidate.sdpMid,
           sdp_m_line_index: event.candidate.sdpMLineIndex,
           target_id: remotePeerId,
@@ -531,50 +551,108 @@ export class MediaServerConnection {
         peerId: remotePeerId,
         state: peerConnection.iceConnectionState,
         connectionState: peerConnection.connectionState,
+        signalingState: peerConnection.signalingState,
       });
 
       switch (state) {
-        case 'failed':
-          if (peerConnection.connectionState !== 'failed') {
-            console.warn(`ICE connection failed for ${remotePeerId} - attempting restart`);
-            peerConnection.restartIce();
-          }
-          break;
-        case 'disconnected':
-          if (peerConnection.connectionState === 'connected') {
-            console.log('Temporary disconnection detected, waiting before reconnection attempt');
-            setTimeout(() => {
-              if (peerConnection.iceConnectionState === 'disconnected' &&
-                peerConnection.connectionState !== 'connected') {
-                this.attemptReconnection(remotePeerId, channelId);
-              }
-            }, this.ICE_RECONNECTION_TIMEOUT);
-          }
+        case 'checking':
+          console.log(`ICE checking in progress for ${remotePeerId}`);
           break;
         case 'connected':
           console.log(`ICE Connection established with ${remotePeerId}`);
+          // 큐에 있는 candidate 처리
+          if (iceCandidateQueue.length > 0) {
+            this.processQueuedCandidates(peerConnection, iceCandidateQueue);
+          }
+          break;
+        case 'failed':
+          console.warn(`ICE connection failed for ${remotePeerId}`);
+          if (peerConnection.connectionState !== 'failed') {
+            this.handleIceFailure(peerConnection, remotePeerId, channelId);
+          }
+          break;
+        case 'disconnected':
+          console.warn(`ICE connection disconnected for ${remotePeerId}`);
+          this.handleIceDisconnection(peerConnection, remotePeerId, channelId);
           break;
       }
     };
 
+    // ICE gathering 상태 모니터링
     peerConnection.onicegatheringstatechange = () => {
+      const state = peerConnection.iceGatheringState;
       console.log('ICE gathering state changed:', {
         remotePeerId,
-        state: peerConnection.iceGatheringState,
+        state: state,
         connectionState: peerConnection.connectionState,
+        signalingState: peerConnection.signalingState,
       });
+
+      if (state === 'complete') {
+        isGatheringComplete = true;
+        console.log('ICE gathering completed for:', remotePeerId);
+        this.handleIceGatheringComplete(peerConnection, remotePeerId);
+      }
     };
   }
 
-  async connectToAllUsers(channelId: string, stream?: MediaStream) {
-    console.log('Connect To All Users', channelId, stream);
-    const users = useUserChannelStore.getState().channelUsers.get(channelId);
-    const currentUserId = useAuthStore.getState().user?.user_id.toString();
-    console.log('currentUserId | users', currentUserId, users);
-    if (!currentUserId || !users) return;
+  private async processQueuedCandidates(peerConnection: RTCPeerConnection, candidates: RTCIceCandidate[]) {
+    console.log(`Processing ${candidates.length} queued ICE candidates`);
 
-    for (const user of users) {
-      await this.prepareConnection(channelId, user.userId, stream);
+    for (const candidate of candidates) {
+      try {
+        await peerConnection.addIceCandidate(candidate);
+        console.log('Successfully added queued ICE candidate:', {
+          type: candidate.type,
+          protocol: candidate.protocol,
+          address: candidate.address,
+          port: candidate.port
+        });
+      } catch (error) {
+        console.error('Error adding queued ICE candidate:', error);
+      }
+    }
+    candidates.length = 0; // 큐 비우기
+  }
+
+// ICE 실패 처리
+  private async handleIceFailure(peerConnection: RTCPeerConnection, remotePeerId: string, channelId: string) {
+    console.log('Attempting ICE restart...');
+    try {
+      const offerOptions = {
+        iceRestart: true,
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
+      };
+      const offer = await peerConnection.createOffer(offerOptions);
+      await peerConnection.setLocalDescription(offer);
+
+      this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
+        sdp_offer: offer.sdp,
+        sender_id: remotePeerId,
+      });
+    } catch (error) {
+      console.error('ICE restart failed:', error);
+      this.attemptReconnection(remotePeerId, channelId);
+    }
+  }
+
+// 연결 해제 처리
+  private handleIceDisconnection(peerConnection: RTCPeerConnection, remotePeerId: string, channelId: string) {
+    if (peerConnection.connectionState === 'connected') {
+      setTimeout(() => {
+        if (peerConnection.iceConnectionState === 'disconnected') {
+          this.attemptReconnection(remotePeerId, channelId);
+        }
+      }, this.ICE_RECONNECTION_TIMEOUT);
+    }
+  }
+
+// ICE Gathering 완료 처리
+  private handleIceGatheringComplete(peerConnection: RTCPeerConnection, remotePeerId: string) {
+    const connectionState = this.connectionStates.get(remotePeerId);
+    if (connectionState) {
+      connectionState.isGatheringComplete = true;
     }
   }
 
@@ -737,6 +815,7 @@ export class MediaServerConnection {
       isNegotiating: false,
       pendingOffer: false,
       isInitiator: false,
+      isGatheringComplete: false,
     });
     this.pendingCandidates.set(remotePeerId, []);
   }
@@ -746,9 +825,9 @@ export class MediaServerConnection {
       remotePeerId,
       hasAudio: sdp.includes('m=audio'),
       hasVideo: sdp.includes('m=video'),
-      // SDP의 비디오 섹션만 추출
-      videoSection: sdp.split('m=video')[1]?.split('m=')[0],
+      videoSection: sdp.split('m=video')[1]?.split('m=')[0]
     });
+
     await this.ensureCallConnection();
     const peerConnection = this.peerConnections.get(remotePeerId);
     const connectionState = this.connectionStates.get(remotePeerId);
@@ -759,49 +838,111 @@ export class MediaServerConnection {
     }
 
     try {
+      // 시그널링 상태 검증
+      if (peerConnection.signalingState !== 'have-local-offer') {
+        console.warn('Unexpected signaling state for answer:', peerConnection.signalingState);
+
+        // 시그널링 상태 복구 시도
+        if (peerConnection.signalingState === 'stable') {
+          console.log('Connection is stable, creating new offer...');
+          const offer = await peerConnection.createOffer({
+            iceRestart: true
+          });
+          await peerConnection.setLocalDescription(offer);
+          return;
+        }
+
+        // 롤백 시도
+        if (peerConnection.signalingState === 'have-remote-offer') {
+          await peerConnection.setLocalDescription({type: 'rollback'});
+        }
+      }
+
       console.log('Handling remote answer:', {
         remotePeerId,
         signalingState: peerConnection.signalingState,
         connectionState: peerConnection.connectionState,
         iceConnectionState: peerConnection.iceConnectionState,
-        sdp: sdp,
       });
-
-      // 시그널링 상태 검증
-      if (peerConnection.signalingState !== 'have-local-offer') {
-        console.warn('Unexpected signaling state for answer:', peerConnection.signalingState);
-        return;
-      }
 
       const answer = new RTCSessionDescription({
         type: 'answer',
-        sdp,
+        sdp
       });
 
-      peerConnection.setRemoteDescription(answer)
-        .then(() => console.log('Remote description set successfully'))
-        .catch(console.error);
+      // Remote Description 설정
+      await peerConnection.setRemoteDescription(answer);
+      console.log('Remote description set successfully for peer:', remotePeerId);
+
       if (connectionState) {
         connectionState.isRemoteDescriptionSet = true;
       }
-      console.log('Remote description set successfully for peer:', remotePeerId);
 
       // 대기 중인 ICE candidate 처리
       const candidates = this.pendingCandidates.get(remotePeerId) || [];
+      console.log(`Processing ${candidates.length} pending ICE candidates for:`, remotePeerId);
+
       for (const candidate of candidates) {
         try {
-          peerConnection.addIceCandidate(new RTCIceCandidate(candidate))
-            .then(() => console.log('ICE Candidate added successfully'))
-            .catch(console.error);
-          console.log('Added pending ICE candidate for peer:', remotePeerId);
+          await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+          console.log('Successfully added pending ICE candidate');
         } catch (error) {
           console.error('Error adding pending ICE candidate:', error);
         }
       }
       this.pendingCandidates.set(remotePeerId, []);
 
+      // 연결 상태 확인
+      if (peerConnection.iceConnectionState === 'failed') {
+        console.warn('ICE connection failed after setting remote description');
+        await this.restartIce(peerConnection, remotePeerId);
+      }
+
     } catch (error) {
       console.error('Error handling remote answer:', error);
+      // 에러 복구 시도
+      if (error instanceof Error && error.name === 'InvalidStateError') {
+        await this.handleInvalidStateError(peerConnection, remotePeerId);
+      } else {
+        throw error;
+      }
+    }
+  }
+
+// ICE 재시작
+  private async restartIce(peerConnection: RTCPeerConnection, remotePeerId: string) {
+    try {
+      const offer = await peerConnection.createOffer({
+        iceRestart: true,
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true
+      });
+      await peerConnection.setLocalDescription(offer);
+
+      this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
+        sdp_offer: offer.sdp,
+        sender_id: remotePeerId
+      });
+    } catch (error) {
+      console.error('ICE restart failed:', error);
+    }
+  }
+
+// 잘못된 상태 에러 처리
+  private async handleInvalidStateError(peerConnection: RTCPeerConnection, remotePeerId: string) {
+    try {
+      await peerConnection.setLocalDescription({type: 'rollback'});
+      const offer = await peerConnection.createOffer({
+        iceRestart: true
+      });
+      await peerConnection.setLocalDescription(offer);
+
+      this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
+        sdp_offer: offer.sdp,
+        sender_id: remotePeerId
+      });
+    } catch (error) {
+      console.error('Error recovery failed:', error);
       throw error;
     }
   }
