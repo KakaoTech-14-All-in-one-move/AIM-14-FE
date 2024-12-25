@@ -50,5 +50,10 @@ export const RECONNECT_DELAY = 5000;
 export const ICE_SERVER_CONFIG = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
+    {
+      urls: 'turn:13.124.102.218:3478',
+      username: 'aim14',
+      credential: 'aim14'
+    }
   ],
 };
