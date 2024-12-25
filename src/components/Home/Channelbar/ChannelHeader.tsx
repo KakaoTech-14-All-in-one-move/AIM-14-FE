@@ -10,7 +10,7 @@ const ChannelHeader: React.FC = () => {
 
   return (
     <div className="flex items-center justify-between p-4 border-b-2 border-discord800">
-      <span className="font-semibold">{selectedServer?.server_name || 'No Server Selected'}</span>
+      <span className="font-semibold">{selectedServer?.server_name || 'Home'}</span>
       <ChevronDown size={20} />
     </div>
   );

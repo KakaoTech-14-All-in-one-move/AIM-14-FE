@@ -74,6 +74,12 @@ const ChannelList: React.FC<Props> = ({ type, icon: Icon }) => {
         return;
       }
 
+      // home 채널인 경우 /home으로 이동
+      if (channel.channelName.toLowerCase() === 'home') {
+        navigate('/home');
+        return;
+      }
+
       // 텍스트 채널이면 바로 이동
       if (type === 'text') {
         navigate(`/channels/${channel.serverId}/${channel.channelId}`);
