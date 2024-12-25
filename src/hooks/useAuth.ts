@@ -93,16 +93,12 @@ export const useAuth = () => {
       const cleanup = () => {
         // WebSocket 연결 해제
         useWebSocketStore.getState().disconnect();
-        // 로컬 스토리지 정리
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        localStorage.removeItem('user');
-        // Auth 상태 초기화
+        // Auth 상태 초기화 (즉시 상태 업데이트)
         useAuthStore.getState().clearAuth();
         // Servers 상태 초기화
         useServerStore.getState().setServers([]);
-        // 페이지 강제 이동
-        window.location.href = '/login';
+        // 페이지 이동
+        navigate('/login');
       };
 
       cleanup();
