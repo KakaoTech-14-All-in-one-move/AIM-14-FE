@@ -15,7 +15,7 @@ export const OFFER_OPTION = {
     offerToReceiveVideo: true,
     voiceActivityDetection: true,
     iceRestart: true,
-  }
+  },
 } as const;
 
 export class MediaServerConnection {
@@ -81,27 +81,6 @@ export class MediaServerConnection {
 
   getLocalStream(): MediaStream | null {
     return this.localStream;
-  }
-
-  private parseKurentoStreamId(streamId: string, remotePeerId?: string): { userId: string; endpointId: string } | null {
-    if (streamId === 'default') {
-      if (!remotePeerId) {
-        console.error('RemotePeerId is required for default stream');
-        return null;
-      }
-      return {
-        endpointId: streamId,
-        userId: remotePeerId,
-      };
-    }
-
-    const parts = streamId.split('_');
-    if (parts.length !== 2) return null;
-
-    return {
-      endpointId: parts[0],
-      userId: parts[1],
-    };
   }
 
   async prepareConnection(channelId: string, remotePeerId: string, stream?: MediaStream) {
@@ -337,18 +316,7 @@ export class MediaServerConnection {
   async createRemotePeer(channelId: string, remoteUserId: string) {
     const peerConnection = new RTCPeerConnection(ICE_SERVER_CONFIG);
 
-    peerConnection.ontrack = (event) => {
-      if (!event.streams.length) return;
-
-      const stream = event.streams[0];
-      this.setupRemoteAudioDetection(stream, remoteUserId);
-
-      useUserChannelStore.getState().updateUserMediaState(
-        channelId,
-        remoteUserId,
-        { stream },
-      );
-    };
+    this.setupTrackHandler(peerConnection, remoteUserId, channelId);
 
     console.log('SEND ICE CANDIDATE : REMOTE PEER ->', remoteUserId);
     peerConnection.onicecandidate = (event) => {
@@ -394,8 +362,8 @@ export class MediaServerConnection {
         streams: event.streams.length,
         streamDetails: event.streams[0] ? {
           id: event.streams[0].id,
-          tracks: event.streams[0].getTracks().length
-        } : null
+          tracks: event.streams[0].getTracks().length,
+        } : null,
       });
 
       if (!event.streams.length) {
@@ -403,17 +371,38 @@ export class MediaServerConnection {
         return;
       }
 
-      const stream = event.streams[0];
-
       // UserChannelStore를 통해 스트림 상태 업데이트
       useUserChannelStore.getState().updateUserMediaState(
         channelId,
         remotePeerId,
         {
-          stream,
-          isCameraOn: stream.getVideoTracks().length > 0
-        }
+          stream: event.streams[0],
+          isCameraOn: event.streams[0].getVideoTracks().length > 0,
+        },
       );
+
+      // 현재 채널의 모든 유저 상태 로깅
+      const channelUsers = useUserChannelStore.getState().channelUsers.get(channelId);
+      console.log('Current channel users state:', channelId, {
+        users: channelUsers?.map(user => ({
+          userId: user.userId,
+          mediaState: {
+            isCameraOn: user.mediaState.isCameraOn,
+            isScreenSharing: user.mediaState.isScreenSharing,
+            isSpeaking: user.mediaState.isSpeaking,
+            hasStream: !!user.mediaState.stream,
+            streamTracks: user.mediaState.stream?.getTracks().map(track => ({
+              kind: track.kind,
+              enabled: track.enabled,
+              muted: track.muted,
+              streamDetails: event.streams[0] ? {
+                id: event.streams[0].id,
+                tracks: event.streams[0].getTracks().length,
+              } : null,
+            })),
+          },
+        })),
+      });
     };
   }
 
@@ -506,7 +495,7 @@ export class MediaServerConnection {
           type: candidate.type,
           protocol: candidate.protocol,
           address: candidate.address,
-          port: candidate.port
+          port: candidate.port,
         });
       } catch (error) {
         console.error('Error adding queued ICE candidate:', error);
@@ -553,50 +542,50 @@ export class MediaServerConnection {
     }
   }
 
-  async handleNewUser(channelId: string, newUserId: string) {
-    const currentUserId = useAuthStore.getState().user?.user_id.toString();
-    const channelUsers = useUserChannelStore.getState().channelUsers.get(channelId) || [];
-
-    console.log('Handle new user:', {
-      currentUserId,
-      newUserId,
-      channelUsers: channelUsers.map(u => u.userId),
-      hasLocalStream: !!this.localStream,
-      connectionCount: this.peerConnections.size,
-    });
-
-    if (newUserId === currentUserId) {
-      console.log('Skip self connection');
-      return;
-    }
-
-    if (this.peerConnections.has(newUserId)) {
-      const connection = this.peerConnections.get(newUserId);
-      const state = connection?.connectionState;
-      console.log(`Existing connection state for ${newUserId}:`, state);
-
-      if (state === 'connected') {
-        return;
-      }
-      await this.cleanupExistingConnection(newUserId);
-    }
-
-    try {
-      if (this.localStream) {
-        console.log('Local stream details:', {
-          audioTracks: this.localStream.getAudioTracks().length,
-          videoTracks: this.localStream.getVideoTracks().length,
-        });
-      }
-
-      await this.prepareConnection(channelId, newUserId, this.localStream || undefined);
-    } catch (error) {
-      console.error('Failed to establish connection with new user:', error);
-      setTimeout(() => {
-        this.handleNewUser(channelId, newUserId);
-      }, 2000);
-    }
-  }
+  // async handleNewUser(channelId: string, newUserId: string) {
+  //   const currentUserId = useAuthStore.getState().user?.user_id.toString();
+  //   const channelUsers = useUserChannelStore.getState().channelUsers.get(channelId) || [];
+  //
+  //   console.log('Handle new user:', {
+  //     currentUserId,
+  //     newUserId,
+  //     channelUsers: channelUsers.map(u => u.userId),
+  //     hasLocalStream: !!this.localStream,
+  //     connectionCount: this.peerConnections.size,
+  //   });
+  //
+  //   if (newUserId === currentUserId) {
+  //     console.log('Skip self connection');
+  //     return;
+  //   }
+  //
+  //   if (this.peerConnections.has(newUserId)) {
+  //     const connection = this.peerConnections.get(newUserId);
+  //     const state = connection?.connectionState;
+  //     console.log(`Existing connection state for ${newUserId}:`, state);
+  //
+  //     if (state === 'connected') {
+  //       return;
+  //     }
+  //     await this.cleanupExistingConnection(newUserId);
+  //   }
+  //
+  //   try {
+  //     if (this.localStream) {
+  //       console.log('Local stream details:', {
+  //         audioTracks: this.localStream.getAudioTracks().length,
+  //         videoTracks: this.localStream.getVideoTracks().length,
+  //       });
+  //     }
+  //
+  //     await this.prepareConnection(channelId, newUserId, this.localStream || undefined);
+  //   } catch (error) {
+  //     console.error('Failed to establish connection with new user:', error);
+  //     setTimeout(() => {
+  //       this.handleNewUser(channelId, newUserId);
+  //     }, 2000);
+  //   }
+  // }
 
   private async renegotiateConnection(remotePeerId: string) {
     const peerConnection = this.peerConnections.get(remotePeerId);
@@ -657,27 +646,27 @@ export class MediaServerConnection {
         if (peerConnection.signalingState === 'stable') {
           console.log('Connection is stable, creating new offer...');
           const offer = await peerConnection.createOffer({
-            iceRestart: true
+            iceRestart: true,
           });
           await peerConnection.setLocalDescription(offer);
           return;
         }
 
         if (peerConnection.signalingState === 'have-remote-offer') {
-          await peerConnection.setLocalDescription({type: 'rollback'});
+          await peerConnection.setLocalDescription({ type: 'rollback' });
         }
       }
 
-      console.log('Handling remote answer:', {
-        remotePeerId,
-        signalingState: peerConnection.signalingState,
-        connectionState: peerConnection.connectionState,
-        iceConnectionState: peerConnection.iceConnectionState,
-      });
+      // console.log('Handling remote answer:', {
+      //   remotePeerId,
+      //   signalingState: peerConnection.signalingState,
+      //   connectionState: peerConnection.connectionState,
+      //   iceConnectionState: peerConnection.iceConnectionState,
+      // });
 
       const answer = new RTCSessionDescription({
         type: 'answer',
-        sdp
+        sdp,
       });
 
       await peerConnection.setRemoteDescription(answer);
@@ -688,7 +677,7 @@ export class MediaServerConnection {
       }
 
       const candidates = this.pendingCandidates.get(remotePeerId) || [];
-      console.log(`Processing ${candidates.length} pending ICE candidates for:`, remotePeerId);
+      // console.log(`Processing ${candidates.length} pending ICE candidates for:`, remotePeerId);
 
       for (const candidate of candidates) {
         try {
@@ -727,7 +716,7 @@ export class MediaServerConnection {
 
       this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
         sdp_offer: offer.sdp,
-        sender_id: remotePeerId
+        sender_id: remotePeerId,
       });
     } catch (error) {
       console.error('ICE restart failed:', error);
@@ -736,7 +725,7 @@ export class MediaServerConnection {
 
   private async handleInvalidStateError(peerConnection: RTCPeerConnection, remotePeerId: string) {
     try {
-      await peerConnection.setLocalDescription({type: 'rollback'});
+      await peerConnection.setLocalDescription({ type: 'rollback' });
       const currentChannel = useUserChannelStore.getState().currentUserChannel;
       const offerOptions = currentChannel.channelType === 'VOICE'
         ? OFFER_OPTION.VOICE_CHANNEL
@@ -747,7 +736,7 @@ export class MediaServerConnection {
 
       this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
         sdp_offer: offer.sdp,
-        sender_id: remotePeerId
+        sender_id: remotePeerId,
       });
     } catch (error) {
       console.error('Error recovery failed:', error);
@@ -765,13 +754,13 @@ export class MediaServerConnection {
     }
 
     try {
-      console.log('Handling ICE candidate:', {
-        remotePeerId,
-        candidate,
-        connectionState: peerConnection.connectionState,
-        iceConnectionState: peerConnection.iceConnectionState,
-        signalingState: peerConnection.signalingState,
-      });
+      // console.log('Handling ICE candidate:', {
+      //   remotePeerId,
+      //   candidate,
+      //   connectionState: peerConnection.connectionState,
+      //   iceConnectionState: peerConnection.iceConnectionState,
+      //   signalingState: peerConnection.signalingState,
+      // });
 
       await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
       console.log('ICE Candidate added successfully for:', remotePeerId);
@@ -950,34 +939,76 @@ export class MediaServerConnection {
             width: { ideal: 1280 },
             height: { ideal: 720 },
             frameRate: { ideal: 30 },
-          }
+          },
         });
 
         const videoTrack = videoStream.getVideoTracks()[0];
         const currentStream = this.getLocalStream();
 
-        // 기존 peer 연결에 비디오 트랙 추가
+        if (!currentStream) {
+          console.error('No local stream available');
+          throw new Error('No local stream available');
+        }
+
+        // 새로운 MediaStream 생성
+        const newStream = new MediaStream();
+
+        // 기존 오디오 트랙 추가
+        currentStream.getAudioTracks().forEach(track => {
+          newStream.addTrack(track);
+        });
+
+        // 새로운 비디오 트랙 추가
+        newStream.addTrack(videoTrack);
+
+        // localStream 업데이트
+        this.localStream = newStream;
+
+        // 모든 peer 연결 업데이트
         for (const [peerId, peerConnection] of this.peerConnections) {
-          const sender = peerConnection.getSenders().find(s => s.track?.kind === 'video');
-          if (sender) {
-            await sender.replaceTrack(videoTrack);
+          // 기존 비디오 sender 찾기
+          const videoSender = peerConnection.getSenders().find(sender =>
+            sender.track?.kind === 'video'
+          );
+
+          if (videoSender) {
+            await videoSender.replaceTrack(videoTrack);
           } else {
-            peerConnection.addTrack(videoTrack, currentStream!);
+            peerConnection.addTrack(videoTrack, newStream);
+          }
+
+          // 필요한 경우 재협상
+          if (peerConnection.connectionState === 'connected') {
+            await this.renegotiateConnection(peerId);
           }
         }
 
-        return { stream: currentStream };
-      } else {
-        // 비디오 트랙만 제거
-        this.localStream?.getVideoTracks().forEach(track => {
-          track.stop();
-          track.enabled = false;
-        });
+        return { stream: newStream };
 
-        for (const [_, peerConnection] of this.peerConnections) {
-          const sender = peerConnection.getSenders().find(s => s.track?.kind === 'video');
-          if (sender) {
-            await sender.replaceTrack(null);
+      } else {
+        // 카메라를 끄는 경우
+        if (this.localStream) {
+          // 비디오 트랙만 제거
+          const videoTracks = this.localStream.getVideoTracks();
+          videoTracks.forEach(track => {
+            track.stop();
+            this.localStream?.removeTrack(track);
+          });
+
+          // peer 연결 업데이트
+          for (const [peerId, peerConnection] of this.peerConnections) {
+            const videoSender = peerConnection.getSenders().find(sender =>
+              sender.track?.kind === 'video'
+            );
+
+            if (videoSender) {
+              // 비디오 트랙 제거
+              await videoSender.replaceTrack(null);
+              // 필요한 경우 재협상
+              if (peerConnection.connectionState === 'connected') {
+                await this.renegotiateConnection(peerId);
+              }
+            }
           }
         }
 

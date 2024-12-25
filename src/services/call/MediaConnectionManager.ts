@@ -40,7 +40,7 @@ export class MediaConnectionManager {
 
   async joinChannel(channelId: string, type: MediaType): Promise<boolean> {
     try {
-      // 1. 기본 체크
+      // 1. 기본 체크 (변경 없음)
       if (!MediaConnectionManager.getCallConnection()) {
         console.error('No CallConnection available');
         return false;
@@ -52,54 +52,61 @@ export class MediaConnectionManager {
         return false;
       }
 
-      // 2. 현재 채널 정리
+      // 2. 현재 채널 정리 (변경 없음)
       const currentChannel = useUserChannelStore.getState().currentUserChannel;
       if (currentChannel.channelId) {
         console.log('Leaving current channel before joining new one');
         await this.leaveChannel();
       }
 
-      // 3. 마이크 권한 확인
-      console.log('Checking microphone permissions');
-      const hasPermission = await this.checkMicrophonePermission();
+      // 3. 마이크 및 카메라 권한 확인
+      console.log('Checking media permissions');
+      const hasPermission = await this.checkMediaPermissions(type);
       if (!hasPermission) {
-        console.log('Failed to get microphone permission');
+        console.log('Failed to get media permissions');
         return false;
       }
 
-      // 4. 오디오 스트림 획득
-      console.log('Getting audio stream');
-      let audioStream: MediaStream | null = null;
+      // 4. 오디오/비디오 스트림 획득 (채널 타입에 따라 다르게 처리)
+      console.log('Getting media stream for channel type:', type);
+      let mediaStream: MediaStream | null = null;
       try {
-        audioStream = await navigator.mediaDevices.getUserMedia({
+        mediaStream = await navigator.mediaDevices.getUserMedia({
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
           },
-          video: false,
+          // VIDEO 채널인 경우에만 비디오 활성화
+          ...(type === 'VIDEO' && {
+            video: {
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              frameRate: { ideal: 30 },
+            }
+          })
         });
 
-        if (!audioStream || audioStream.getAudioTracks().length === 0) {
-          throw new Error('오디오 스트림을 가져올 수 없습니다.');
+        if (!mediaStream || (mediaStream.getAudioTracks().length === 0)) {
+          throw new Error('미디어 스트림을 가져올 수 없습니다.');
         }
 
-        await this.mediaServer.replaceStream(audioStream);
+        await this.mediaServer.replaceStream(mediaStream);
       } catch (error: any) {
-        let errorMessage = '마이크 연결에 실패했습니다.';
+        let errorMessage = '미디어 연결에 실패했습니다.';
         if (error.name === 'NotAllowedError') {
-          errorMessage = '마이크 접근이 거부되었습니다. 브라우저 설정에서 권한을 허용해주세요.';
+          errorMessage = `${type === 'VIDEO' ? '카메라/' : ''}마이크 접근이 거부되었습니다. 브라우저 설정에서 권한을 허용해주세요.`;
         } else if (error.name === 'NotFoundError') {
-          errorMessage = '마이크를 찾을 수 없습니다. 마이크가 제대로 연결되어 있는지 확인해주세요.';
+          errorMessage = `${type === 'VIDEO' ? '카메라/' : ''}마이크를 찾을 수 없습니다. 장치가 제대로 연결되어 있는지 확인해주세요.`;
         } else if (error.name === 'NotReadableError') {
-          errorMessage = '마이크에 접근할 수 없습니다. 다른 앱에서 사용 중인지 확인해주세요.';
+          errorMessage = `${type === 'VIDEO' ? '카메라/' : ''}마이크에 접근할 수 없습니다. 다른 앱에서 사용 중인지 확인해주세요.`;
         }
         alert(errorMessage);
         await this.handleFailedJoin();
         return false;
       }
 
-      // 5. 채널 입장 웹소켓 요청
+      // 5. 채널 입장 웹소켓 요청 (변경 없음)
       console.log('Attempting to join channel via CallConnection');
       try {
         const success = await MediaConnectionManager.getCallConnection()!.joinChannel(channelId, type);
@@ -115,7 +122,7 @@ export class MediaConnectionManager {
         return false;
       }
 
-      // 6. 초기 상태 설정
+      // 6. 초기 상태 설정 (채널 타입에 따라 camera_on 설정)
       console.log('Setting up initial channel state');
       useUserChannelStore.getState().setCurrentUserChannel(channelId, type);
       this.userStateManager.handleUserJoin(channelId, {
@@ -125,12 +132,11 @@ export class MediaConnectionManager {
         channel_id: channelId,
         muted: false,
         deafened: false,
-        camera_on: false,
+        camera_on: type === 'VIDEO', // VIDEO 채널인 경우에만 true
         screen_sharing: false,
-        stream: audioStream,
+        stream: mediaStream,
       });
 
-      // Peer 연결 로직은 제거 (CallConnection에서 처리)
       return true;
     } catch (error) {
       console.error('Error joining channel:', error);
@@ -139,33 +145,36 @@ export class MediaConnectionManager {
     }
   }
 
-  private async checkMicrophonePermission(): Promise<boolean> {
-    // console.log('Checking microphone permissions');
+  // checkMediaPermissions 메서드 추가
+  private async checkMediaPermissions(type: MediaType): Promise<boolean> {
     try {
-      // 먼저 navigator.permissions로 현재 권한 상태 확인
-      const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-      // console.log('Current microphone permission status:', permissionStatus.state);
+      // 채널 타입에 따라 필요한 권한 확인
+      const permissionQueries = [
+        await navigator.permissions.query({ name: 'microphone' as PermissionName }),
+        ...(type === 'VIDEO' ? [await navigator.permissions.query({ name: 'camera' as PermissionName })] : [])
+      ];
 
-      if (permissionStatus.state === 'denied') {
-        alert('마이크 권한이 거부되었습니다. 브라우저 설정에서 권한을 허용해주세요.');
+      const permissions = await Promise.all(permissionQueries);
+
+      if (permissions.some(permission => permission.state === 'denied')) {
+        const errorMessage = type === 'VIDEO'
+          ? '카메라 또는 마이크 권한이 거부되었습니다. 브라우저 설정에서 권한을 허용해주세요.'
+          : '마이크 권한이 거부되었습니다. 브라우저 설정에서 권한을 허용해주세요.';
+        alert(errorMessage);
         return false;
       }
 
       // 권한이 granted가 아닌 경우 직접 getUserMedia 호출하여 권한 요청
-      if (permissionStatus.state !== 'granted') {
-        console.log('Requesting microphone permission explicitly');
+      if (permissions.some(permission => permission.state !== 'granted')) {
+        console.log('Requesting media permissions explicitly');
         const stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-          video: false,
+          audio: true,
+          video: type === 'VIDEO' // VIDEO 채널일 때만 비디오 권한 요청
         });
 
         // 테스트 스트림 정리
         stream.getTracks().forEach(track => track.stop());
-        console.log('Microphone permission granted successfully');
+        console.log(`${type} channel media permissions granted successfully`);
         return true;
       }
 
@@ -173,13 +182,21 @@ export class MediaConnectionManager {
     } catch (error: any) {
       console.error('Permission check failed:', error);
 
-      // 사용자가 이해하기 쉬운 오류 메시지 표시
       if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-        alert('마이크 접근이 거부되었습니다. 음성 채팅을 위해서는 마이크 권한이 필요합니다.');
+        const errorMessage = type === 'VIDEO'
+          ? '카메라/마이크 접근이 거부되었습니다. 영상 채팅을 위해서는 카메라와 마이크 권한이 필요합니다.'
+          : '마이크 접근이 거부되었습니다. 음성 채팅을 위해서는 마이크 권한이 필요합니다.';
+        alert(errorMessage);
       } else if (error.name === 'NotFoundError') {
-        alert('마이크를 찾을 수 없습니다. 마이크가 제대로 연결되어 있는지 확인해주세요.');
+        const errorMessage = type === 'VIDEO'
+          ? '카메라/마이크를 찾을 수 없습니다. 장치가 제대로 연결되어 있는지 확인해주세요.'
+          : '마이크를 찾을 수 없습니다. 마이크가 제대로 연결되어 있는지 확인해주세요.';
+        alert(errorMessage);
       } else {
-        alert('마이크 권한 확인 중 오류가 발생했습니다. 브라우저 설정을 확인해주세요.');
+        const errorMessage = type === 'VIDEO'
+          ? '미디어 권한 확인 중 오류가 발생했습니다. 브라우저 설정을 확인해주세요.'
+          : '마이크 권한 확인 중 오류가 발생했습니다. 브라우저 설정을 확인해주세요.';
+        alert(errorMessage);
       }
 
       return false;
@@ -224,7 +241,7 @@ export class MediaConnectionManager {
         const clearMediaState = {
           stream: null,
           screenStream: null,
-          isMuted: true,
+          isMuted: false,
           isDeafened: false,
           isCameraOn: false,
           isScreenSharing: false,
@@ -285,138 +302,142 @@ export class MediaConnectionManager {
       const { currentUserChannel } = useUserChannelStore.getState();
       const currentUser = useAuthStore.getState().user;
 
-      if (!currentUserChannel.channelId || !currentUser) return;
+      if (!currentUserChannel.channelId || !currentUser) {
+        console.warn('No active channel or user');
+        return;
+      }
+
+      const userId = currentUser.user_id.toString();
+      const channelId = currentUserChannel.channelId;
 
       // 현재 상태 가져오기
-      const channelUsers = useUserChannelStore.getState().channelUsers;
-      const currentUserState = channelUsers
-        .get(currentUserChannel.channelId)
-        ?.find((user) => user.userId === currentUser.user_id.toString());
+      const currentUserState = useUserChannelStore.getState().channelUsers
+        .get(channelId)
+        ?.find((user) => user.userId === userId);
 
-      if (!currentUserState) return;
+      if (!currentUserState) {
+        console.warn('Current user state not found');
+        return;
+      }
 
-      // 서버에 전송할 업데이트 준비
+      // 상태 업데이트 준비
+      const mediaStateUpdates: Partial<MediaState> = {};
       const serverUpdates = {
-        muted: 'isMuted' in updates ? updates.isMuted : currentUserState.mediaState.isMuted,
-        deafened:
-          'isDeafened' in updates ? updates.isDeafened : currentUserState.mediaState.isDeafened,
-        camera_on:
-          'isCameraOn' in updates ? updates.isCameraOn : currentUserState.mediaState.isCameraOn,
-        screen_sharing:
-          'isScreenSharing' in updates
-            ? updates.isScreenSharing
-            : currentUserState.mediaState.isScreenSharing,
+        muted: currentUserState.mediaState.isMuted,
+        deafened: currentUserState.mediaState.isDeafened,
+        camera_on: currentUserState.mediaState.isCameraOn,
+        screen_sharing: currentUserState.mediaState.isScreenSharing,
       };
 
-      // 상태 업데이트를 위한 배치 작업
-      const mediaStateUpdates: Partial<MediaState> = {};
+      console.log('serverUpdates, updates', serverUpdates, updates);
 
-      // 화면 공유 상태 변경 처리
-      if ('isScreenSharing' in updates) {
-        try {
-          if (updates.isScreenSharing === true) {
+      // 각 상태 변경 처리
+      try {
+        // 1. 카메라 상태 변경
+        if ('isCameraOn' in updates) {
+          console.log('Processing camera state update:', updates.isCameraOn);
+
+          const streamUpdate = await this.mediaServer.handleCameraState(updates.isCameraOn);
+
+          if (streamUpdate.stream) {
+            console.log('Camera state update result:', {
+              hasStream: !!streamUpdate.stream,
+              stream: streamUpdate.stream,
+            });
+
+            mediaStateUpdates.stream = streamUpdate.stream;
+            mediaStateUpdates.isCameraOn = updates.isCameraOn;
+            serverUpdates.camera_on = updates.isCameraOn;
+          } else if (updates.isCameraOn) {
+            // 카메라를 켜려고 했는데 실패한 경우
+            console.warn('Failed to get camera stream');
+            await this.rollbackCameraState(channelId, userId, true);
+            return;
+          } else {
+            // 카메라를 끄는 경우
+            mediaStateUpdates.isCameraOn = false;
+            serverUpdates.camera_on = false;
+          }
+        }
+
+        // 2. 화면 공유 상태 변경
+        if ('isScreenSharing' in updates) {
+          console.log('Processing screen share update:', updates.isScreenSharing);
+
+          if (updates.isScreenSharing) {
             // 카메라가 켜져있으면 먼저 끄기
             if (currentUserState.mediaState.isCameraOn) {
-              mediaStateUpdates.isCameraOn = false;
               await this.mediaServer.handleCameraState(false);
+              mediaStateUpdates.isCameraOn = false;
+              serverUpdates.camera_on = false;
             }
 
-            // 화면 공유 시작
             const stream = await this.mediaServer.startScreenShare();
-
             if (!stream) {
-              await this.rollbackScreenShareState(
-                currentUserChannel.channelId,
-                currentUser.user_id.toString(),
-                serverUpdates,
-              );
+              console.warn('Failed to start screen sharing');
+              await this.rollbackScreenShareState(channelId, userId, serverUpdates);
               return;
             }
 
-            // 화면 공유 종료 이벤트 핸들러
             stream.getVideoTracks()[0].onended = () => {
               this.updateMediaState({ isScreenSharing: false });
             };
 
             mediaStateUpdates.screenStream = stream;
             mediaStateUpdates.isScreenSharing = true;
+            serverUpdates.screen_sharing = true;
           } else {
-            // 화면 공유 중지
             await this.mediaServer.stopScreenShare();
             mediaStateUpdates.screenStream = null;
             mediaStateUpdates.isScreenSharing = false;
+            serverUpdates.screen_sharing = false;
           }
-        } catch (error) {
-          console.error('Error in screen share:', error);
-          await this.rollbackScreenShareState(
-            currentUserChannel.channelId,
-            currentUser.user_id.toString(),
-            serverUpdates,
-          );
-          throw error;
         }
-      }
 
-      // 카메라 상태 변경 처리
-      if ('isCameraOn' in updates) {
-        try {
-          const streamUpdate = await this.mediaServer.handleCameraState(updates.isCameraOn);
-          console.log('Camera state update:', {
-            hasCameraStream: !!streamUpdate.stream,
-            tracks: streamUpdate.stream?.getTracks().map(track => ({
-              kind: track.kind,
-              enabled: track.enabled,
-              readyState: track.readyState,
-              settings: track.getSettings(),  // 실제 비디오 설정 확인
-            })),
-          });
-          mediaStateUpdates.stream = streamUpdate.stream;
-          mediaStateUpdates.isCameraOn = updates.isCameraOn;
-        } catch (error) {
-          console.error('Failed to toggle camera:', error);
-          await this.rollbackCameraState(
-            currentUserChannel.channelId,
-            currentUser.user_id.toString(),
-            updates.isCameraOn,
-          );
-          return;
-        }
-      }
-
-      // 음소거/음성 차단 상태 변경 처리
-      if ('isMuted' in updates || 'isDeafened' in updates) {
-        const channelUser = channelUsers
-          .get(currentUserChannel.channelId)
-          ?.find((user) => user.userId === currentUser.user_id.toString());
-
-        if (channelUser?.mediaState.stream) {
-          if ('isMuted' in updates) {
+        // 3. 오디오 상태 변경
+        if ('isMuted' in updates || 'isDeafened' in updates) {
+          if ('isMuted' in updates && currentUserState.mediaState.stream) {
             await this.mediaServer.toggleAudio(!updates.isMuted);
             mediaStateUpdates.isMuted = updates.isMuted;
+            serverUpdates.muted = updates.isMuted;
           }
+
           if ('isDeafened' in updates) {
             mediaStateUpdates.isDeafened = updates.isDeafened;
+            serverUpdates.deafened = updates.isDeafened;
           }
         }
+
+        // 4. 로컬 상태 업데이트
+        console.log('Updating local media state:', mediaStateUpdates);
+        this.userStateManager.handleUserStateUpdate(
+          channelId,
+          userId,
+          mediaStateUpdates
+        );
+
+        // 5. 서버 상태 업데이트
+        console.log('Sending server updates:', serverUpdates);
+        await MediaConnectionManager.getCallConnection()?.updateState(serverUpdates);
+
+      } catch (error) {
+        console.error('Error during media state update:', error);
+        // 에러 발생 시 이전 상태로 롤백
+        const rollbackState = {
+          ...currentUserState.mediaState,
+          ...('isCameraOn' in updates ? { isCameraOn: !updates.isCameraOn } : {}),
+          ...('isScreenSharing' in updates ? { isScreenSharing: !updates.isScreenSharing } : {}),
+        };
+
+        this.userStateManager.handleUserStateUpdate(
+          channelId,
+          userId,
+          rollbackState
+        );
+        throw error;
       }
-
-      // 모든 상태 변경을 한 번에 적용
-      const finalState = {
-        ...serverUpdates,
-        ...mediaStateUpdates,
-      };
-
-      // 로컬 상태 업데이트
-      this.userStateManager.handleUserStateUpdate(
-        currentUserChannel.channelId,
-        currentUser.user_id.toString(),
-        finalState,
-      );
-
-      // 서버에 상태 업데이트 전송
-      await MediaConnectionManager.getCallConnection()?.updateState(serverUpdates);
     } catch (error) {
-      console.error('Error updating media state:', error);
+      console.error('Fatal error in updateMediaState:', error);
       throw error;
     }
   }

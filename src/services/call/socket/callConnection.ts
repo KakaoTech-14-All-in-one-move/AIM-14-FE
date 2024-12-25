@@ -118,7 +118,6 @@ export class CallConnection {
       };
 
       // 내가 입장한 경우
-      console.log('COMPARE : ', data.user_id, currentUserId, data.user_id === currentUserId);
       if (data.user_id === currentUserId) {
         console.log('My channel enter - Creating WebRTC connections');
         // 1. 내 send peer 생성
@@ -177,14 +176,14 @@ export class CallConnection {
     },
 
     [OP_CODES.RECEIVE_VIDEO_ANSWER]: (data: any) => {
-      console.log('RECEIVE_VIDEO_ANSWER', data);
+      // console.log('RECEIVE_VIDEO_ANSWER', data);
       if (data?.sdpAnswer && data?.userId) {
         MediaServerConnection.getInstance().handleRemoteAnswer(data.sdpAnswer, data.userId);
       }
     },
 
     [OP_CODES.ICE_CANDIDATE]: (data: any) => {
-      console.log('ICE_CANDIDATE', data);
+      // console.log('ICE_CANDIDATE', data);
       if (data?.candidate && data?.userId) {
         MediaServerConnection.getInstance().handleIceCandidate(data.candidate, data.userId);
       }
