@@ -388,15 +388,14 @@ export class MediaServerConnection {
 
   private setupTrackHandler(peerConnection: RTCPeerConnection, remotePeerId: string, channelId: string) {
     peerConnection.ontrack = (event) => {
-      console.log('Media track added:', {
+      console.log('Track received:', {
         kind: event.track.kind,
-        id: event.track.id,
         enabled: event.track.enabled,
-        muted: event.track.muted,
-        streamDetails: {
-          id: event.streams[0]?.id,
-          trackCount: event.streams[0]?.getTracks().length,
-        },
+        streams: event.streams.length,
+        streamDetails: event.streams[0] ? {
+          id: event.streams[0].id,
+          tracks: event.streams[0].getTracks().length
+        } : null
       });
 
       if (!event.streams.length) {
@@ -404,105 +403,17 @@ export class MediaServerConnection {
         return;
       }
 
-      const track = event.track;
       const stream = event.streams[0];
 
-      console.log('Track received detailed:', {
-        kind: track.kind,
-        id: track.id,
-        readyState: track.readyState,
-        enabled: track.enabled,
-        muted: track.muted,
-        streamId: stream.id,
-        streamTracks: stream.getTracks().length,
-      });
-
-      let streamData = this.parseKurentoStreamId(stream.id, remotePeerId);
-      if (!streamData) {
-        streamData = {
-          userId: remotePeerId,
-          endpointId: 'default',
-        };
-      }
-
-      const currentUser = useUserChannelStore
-        .getState()
-        .channelUsers.get(channelId)
-        ?.find(user => user.userId === streamData.userId);
-
-      console.log('Received track:', {
-        kind: track.kind,
-        enabled: track.enabled,
-        readyState: track.readyState,
-        muted: track.muted,
-        constraints: track.getConstraints(),
-        settings: track.getSettings(),
-      });
-
-      let updatedStream: MediaStream;
-      if (currentUser?.mediaState.stream) {
-        const activeTracks = currentUser.mediaState.stream.getTracks().filter(t =>
-          t.readyState === 'live' && !t.muted,
-        );
-
-        updatedStream = new MediaStream();
-
-        activeTracks.forEach(t => updatedStream.addTrack(t));
-
-        if (track.readyState === 'live') {
-          updatedStream.addTrack(track);
-        }
-
-      } else {
-        updatedStream = new MediaStream([track]);
-      }
-
-      console.log('Final stream state:', {
-        videoTracks: updatedStream.getVideoTracks().length,
-        audioTracks: updatedStream.getAudioTracks().length,
-        allTracks: updatedStream.getTracks().map(t => ({
-          kind: t.kind,
-          enabled: t.enabled,
-          readyState: t.readyState,
-        })),
-      });
-
-      if (track.kind === 'audio' && track.enabled) {
-        this.setupRemoteAudioDetection(updatedStream, streamData.userId);
-      }
-
-      if (stream.id.includes('screenshare') && track.kind === 'video') {
-        useUserChannelStore.getState().updateUserMediaState(
-          channelId,
-          streamData.userId,
-          {
-            isScreenSharing: true,
-            screenStream: stream,
-          },
-        );
-        return;
-      }
-
+      // UserChannelStore를 통해 스트림 상태 업데이트
       useUserChannelStore.getState().updateUserMediaState(
         channelId,
-        streamData.userId,
+        remotePeerId,
         {
-          stream: updatedStream,
-          isCameraOn: updatedStream.getVideoTracks().length > 0 &&
-            updatedStream.getVideoTracks()[0].enabled,
-        },
+          stream,
+          isCameraOn: stream.getVideoTracks().length > 0
+        }
       );
-
-      track.onended = () => {
-        this.handleTrackEnded(track, updatedStream, channelId, streamData.userId);
-      };
-
-      console.log('Track handler completed:', {
-        userId: streamData.userId,
-        finalTrackCount: updatedStream.getTracks().length,
-        hasVideo: updatedStream.getVideoTracks().length > 0,
-        hasAudio: updatedStream.getAudioTracks().length > 0,
-      });
     };
   }
 
@@ -687,64 +598,6 @@ export class MediaServerConnection {
     }
   }
 
-  private handleTrackEnded(track: MediaStreamTrack, stream: MediaStream, channelId: string, remotePeerId: string) {
-    const streamData = this.parseKurentoStreamId(stream.id, remotePeerId);
-    if (!streamData) return;
-
-    const { userId } = streamData;
-    const isScreenShare = stream.id.includes('screenshare');
-
-    if (isScreenShare && track.kind === 'video') {
-      useUserChannelStore.getState().updateUserMediaState(channelId, userId, {
-        isScreenSharing: false,
-        screenStream: null,
-      });
-    }
-  }
-
-  private async rollbackNegotiation(peerConnection: RTCPeerConnection) {
-    try {
-      if (peerConnection.signalingState !== 'stable') {
-        await peerConnection.setLocalDescription({ type: 'rollback' });
-      }
-    } catch (error) {
-      console.error('Rollback failed:', error);
-    }
-  }
-
-  private async createVideoOffer(remotePeerId: string) {
-    const peerConnection = this.peerConnections.get(remotePeerId);
-    if (!peerConnection) {
-      console.error('No peer connection for:', remotePeerId);
-      return;
-    }
-
-    try {
-      const currentChannel = useUserChannelStore.getState().currentUserChannel;
-      const offerOptions = currentChannel.channelType === 'VOICE'
-        ? OFFER_OPTION.VOICE_CHANNEL
-        : OFFER_OPTION.VIDEO_CHANNEL;
-
-      const offer = await peerConnection.createOffer(offerOptions);
-
-      console.log('Created offer:', {
-        sdp: offer.sdp,
-        type: offer.type,
-      });
-
-      await peerConnection.setLocalDescription(offer);
-
-      console.log('OP_CODES.RECEIVE_VIDEO - createVideoOffer');
-      this.callConnection?.sendOp(OP_CODES.RECEIVE_VIDEO, {
-        sdp_offer: offer.sdp,
-        sender_id: remotePeerId,
-      });
-    } catch (error) {
-      console.error('Error creating offer:', error);
-      throw error;
-    }
-  }
-
   private async renegotiateConnection(remotePeerId: string) {
     const peerConnection = this.peerConnections.get(remotePeerId);
     if (!peerConnection) return;
@@ -781,12 +634,12 @@ export class MediaServerConnection {
   }
 
   async handleRemoteAnswer(sdp: string, remotePeerId: string) {
-    console.log('Received answer SDP:', {
-      remotePeerId,
-      hasAudio: sdp.includes('m=audio'),
-      hasVideo: sdp.includes('m=video'),
-      videoSection: sdp.split('m=video')[1]?.split('m=')[0]
-    });
+    // console.log('Received answer SDP:', {
+    //   remotePeerId,
+    //   hasAudio: sdp.includes('m=audio'),
+    //   hasVideo: sdp.includes('m=video'),
+    //   videoSection: sdp.split('m=video')[1]?.split('m=')[0]
+    // });
 
     await this.ensureCallConnection();
     const peerConnection = this.peerConnections.get(remotePeerId);
@@ -905,10 +758,9 @@ export class MediaServerConnection {
   async handleIceCandidate(candidate: RTCIceCandidateInit, remotePeerId: string) {
     await this.ensureCallConnection();
     const peerConnection = this.peerConnections.get(remotePeerId);
-    const connectionState = this.connectionStates.get(remotePeerId);
 
-    if (!peerConnection || !connectionState?.isConnecting) {
-      console.log('No peer connection or not connecting for peer:', remotePeerId);
+    if (!peerConnection) {
+      console.log('No peer connection for peer:', remotePeerId);
       return;
     }
 
@@ -921,17 +773,9 @@ export class MediaServerConnection {
         signalingState: peerConnection.signalingState,
       });
 
-      if (connectionState.isRemoteDescriptionSet) {
-        peerConnection.addIceCandidate(new RTCIceCandidate(candidate))
-          .then(() => console.log('ICE Candidate added successfully'))
-          .catch(console.error);
-        console.log('Added ICE candidate for:', remotePeerId);
-      } else {
-        console.log('Queuing ICE candidate for:', remotePeerId);
-        const candidates = this.pendingCandidates.get(remotePeerId) || [];
-        candidates.push(candidate);
-        this.pendingCandidates.set(remotePeerId, candidates);
-      }
+      await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      console.log('ICE Candidate added successfully for:', remotePeerId);
+
     } catch (error) {
       console.error('Error handling ICE candidate:', error);
     }
