@@ -161,9 +161,22 @@ const Sidebar: FC = () => {
 
       const serverStore = useServerStore.getState();
       serverStore.addServer(newServer);
-
       serverStore.setSelectedServerId(newServer.server_id);
-      await handleServerChange(newServer.server_id);
+
+      // 채널 정보를 가져옵니다
+      const channelsResponse = await apiClient.client.get(`/api/v1/servers/${newServer.server_id}/channels`);
+      const channels: Channel[] = channelsResponse.data;
+      setChannels(channels);
+
+      // 새로 생성된 채널로 이동합니다
+      if (channels.length > 0) {
+        const newChannel = channels[channels.length - 1]; // 가장 최근에 생성된 채널
+        setCurrentChannel(newChannel);
+        navigate(`/channels/${newServer.server_id}/${newChannel.channelId}`);
+      } else {
+        // 채널이 없는 경우에만 서버 페이지로 이동
+        navigate(`/channels/${newServer.server_id}`);
+      }
 
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || '서버 생성에 실패했습니다.';
@@ -241,7 +254,7 @@ const Sidebar: FC = () => {
   };
 
   return (
-    <div className="h-screen w-16 flex flex-col bg-discord900 shadow-lg">
+    <div className="h-screen w-16 min-w-[64px] max-w-[64px] flex flex-col bg-discord900 shadow-lg">
       <SidebarIcon
         icon={<HomeIcon />}
         text="홈"

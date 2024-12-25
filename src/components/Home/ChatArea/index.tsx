@@ -14,7 +14,8 @@ const ChatArea: React.FC = () => {
   const { connect, disconnect } = useWebSocketStore();
 
   useEffect(() => {
-    if (!channelId && location.pathname !== '/home') {
+    // 서버 ID는 있지만 채널이 없는 경우는 유효한 상태이므로 리다이렉트하지 않음
+    if (!channelId && location.pathname === '/channels') {
       navigate('/home');
     }
   }, [channelId, location.pathname, navigate]);
@@ -55,7 +56,7 @@ const ChatArea: React.FC = () => {
   if (!channelId) {
     return (
       <div className="flex flex-col h-full bg-discord500 flex-grow items-center justify-center">
-        <p className="text-gray-400">채널을 선택하여 대화를 시작하세요.</p>
+        <p className="text-gray-400">채널을 생성하여 대화를 시작하세요.</p>
       </div>
     );
   }
