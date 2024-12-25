@@ -22,6 +22,7 @@ export class MediaServerConnection {
   private audioDetectionInterval: number | null = null;
   private peerConnections: Map<string, RTCPeerConnection> = new Map();
   private localStream: MediaStream | null = null;
+  private screenStream: MediaStream | null = null;
   private pendingCandidates: Map<string, RTCIceCandidateInit[]> = new Map();
   private reconnectionAttempts: Map<string, number> = new Map();
   private readonly MAX_RECONNECTION_ATTEMPTS = 3;
@@ -910,6 +911,7 @@ export class MediaServerConnection {
       this.localStream.getTracks().forEach(track => track.stop());
     }
     this.localStream = newStream;
+    this.setupLocalAudioDetection(newStream);
 
     const currentUserId = useAuthStore.getState().user?.user_id.toString();
     if (!currentUserId) return;
@@ -933,91 +935,83 @@ export class MediaServerConnection {
 
   async handleCameraState(isCameraOn: boolean) {
     try {
+      const currentStream = this.localStream;
+
+      // 1. 오디오 트랙 유지
+      const audioTrack = currentStream?.getAudioTracks()[0];
+
       if (isCameraOn) {
+        // 2. 비디오만 새로 생성
         const videoStream = await navigator.mediaDevices.getUserMedia({
           video: {
             width: { ideal: 1280 },
             height: { ideal: 720 },
-            frameRate: { ideal: 30 },
-          },
+            frameRate: { ideal: 30 }
+          }
         });
 
         const videoTrack = videoStream.getVideoTracks()[0];
-        const currentStream = this.getLocalStream();
 
-        if (!currentStream) {
-          console.error('No local stream available');
-          throw new Error('No local stream available');
-        }
+        // 3. 기존 오디오와 새 비디오를 합침
+        const newStream = new MediaStream([
+          audioTrack || (await this.getAudioTrack()),
+          videoTrack
+        ]);
 
-        // 새로운 MediaStream 생성
-        const newStream = new MediaStream();
-
-        // 기존 오디오 트랙 추가
-        currentStream.getAudioTracks().forEach(track => {
-          newStream.addTrack(track);
-        });
-
-        // 새로운 비디오 트랙 추가
-        newStream.addTrack(videoTrack);
-
-        // localStream 업데이트
         this.localStream = newStream;
 
-        // 모든 peer 연결 업데이트
-        for (const [peerId, peerConnection] of this.peerConnections) {
-          // 기존 비디오 sender 찾기
-          const videoSender = peerConnection.getSenders().find(sender =>
-            sender.track?.kind === 'video'
-          );
-
-          if (videoSender) {
-            await videoSender.replaceTrack(videoTrack);
-          } else {
-            peerConnection.addTrack(videoTrack, newStream);
-          }
-
-          // 필요한 경우 재협상
-          if (peerConnection.connectionState === 'connected') {
-            await this.renegotiateConnection(peerId);
-          }
-        }
-
-        return { stream: newStream };
-
       } else {
-        // 카메라를 끄는 경우
-        if (this.localStream) {
-          // 비디오 트랙만 제거
-          const videoTracks = this.localStream.getVideoTracks();
-          videoTracks.forEach(track => {
-            track.stop();
-            this.localStream?.removeTrack(track);
-          });
+        // 4. 비디오만 제거하고 오디오 유지
+        currentStream?.getVideoTracks().forEach(track => track.stop());
 
-          // peer 연결 업데이트
-          for (const [peerId, peerConnection] of this.peerConnections) {
-            const videoSender = peerConnection.getSenders().find(sender =>
-              sender.track?.kind === 'video'
-            );
-
-            if (videoSender) {
-              // 비디오 트랙 제거
-              await videoSender.replaceTrack(null);
-              // 필요한 경우 재협상
-              if (peerConnection.connectionState === 'connected') {
-                await this.renegotiateConnection(peerId);
-              }
+        if (audioTrack) {
+          this.localStream = new MediaStream([audioTrack]);
+        } else {
+          // 오디오가 없는 경우만 새로 생성
+          const audioStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
             }
-          }
+          });
+          this.localStream = audioStream;
         }
-
-        return { stream: this.localStream };
       }
+
+      // 5. Sender 업데이트
+      const currentUserId = useAuthStore.getState().user?.user_id.toString();
+      if (!currentUserId) return;
+
+      const peerConnection = this.peerConnections.get(currentUserId);
+      if (peerConnection) {
+        await this.updateSenders(peerConnection, this.localStream);
+      }
+
+      return { stream: this.localStream };
     } catch (error) {
       console.error('Error handling camera state:', error);
       throw error;
     }
+  }
+
+  private async updateSenders(peerConnection: RTCPeerConnection, stream: MediaStream) {
+    const senders = peerConnection.getSenders();
+
+    for (const track of stream.getTracks()) {
+      const sender = senders.find(s => s.track?.kind === track.kind);
+      if (sender) {
+        await sender.replaceTrack(track);
+      } else {
+        peerConnection.addTrack(track, stream);
+      }
+    }
+
+    // 제거된 트랙의 sender 정리
+    senders.forEach(sender => {
+      if (!stream.getTracks().some(track => track.kind === sender.track?.kind)) {
+        peerConnection.removeTrack(sender);
+      }
+    });
   }
 
   async toggleAudio(enabled: boolean) {
@@ -1036,6 +1030,8 @@ export class MediaServerConnection {
     }
   }
 
+  private screenStream: MediaStream | null = null;
+
   async startScreenShare(): Promise<MediaStream | null> {
     try {
       const screenStream = await navigator.mediaDevices.getDisplayMedia({
@@ -1046,46 +1042,38 @@ export class MediaServerConnection {
         },
       });
 
-      for (const [_, peerConnection] of this.peerConnections) {
-        const senders = peerConnection.getSenders();
-        const videoTrack = screenStream.getVideoTracks()[0];
-        const videoSender = senders.find(sender =>
-          sender.track?.kind === 'video',
+      // 이전 화면 공유 스트림이 있다면 정리
+      if (this.screenStream) {
+        this.screenStream.getTracks().forEach(track => track.stop());
+      }
+      this.screenStream = screenStream;
+
+      const currentUserId = useAuthStore.getState().user?.user_id.toString();
+      if (!currentUserId) return null;
+
+      const peerConnection = this.peerConnections.get(currentUserId);
+      if (peerConnection) {
+        const videoSender = peerConnection.getSenders().find(sender =>
+          sender.track?.kind === 'video'
         );
 
         if (videoSender) {
-          await videoSender.replaceTrack(videoTrack);
-        } else {
-          peerConnection.addTrack(videoTrack, screenStream);
+          // 기존 비디오 트랙을 화면 공유 트랙으로 교체
+          await videoSender.replaceTrack(screenStream.getVideoTracks()[0]);
         }
 
-        const params = videoSender?.getParameters();
-        if (params && !params.encodings) {
-          params.encodings = [{}];
-          params.encodings[0].maxBitrate = 3000000;
-          params.encodings[0].maxFramerate = 30;
-          await videoSender.setParameters(params);
+        // 연결 재협상
+        if (peerConnection.connectionState === 'connected') {
+          await this.renegotiateConnection(currentUserId);
         }
       }
 
-      const videoTrack = screenStream.getVideoTracks()[0];
-      videoTrack.onended = () => {
+      screenStream.getVideoTracks()[0].onended = () => {
         this.stopScreenShare();
-        const currentUser = useAuthStore.getState().user;
-        const currentChannelId = useUserChannelStore.getState().currentUserChannel.channelId;
-        if (currentUser?.user_id && currentChannelId) {
-          useUserChannelStore.getState().updateUserMediaState(
-            currentChannelId,
-            currentUser.user_id.toString(),
-            {
-              isScreenSharing: false,
-              screenStream: null,
-            },
-          );
-        }
       };
 
       return screenStream;
+
     } catch (error) {
       if (error instanceof Error &&
         (error.name === 'NotAllowedError' || error.name === 'AbortError')) {
@@ -1098,27 +1086,45 @@ export class MediaServerConnection {
   }
 
   async stopScreenShare() {
-    try {
-      for (const [_, peerConnection] of this.peerConnections) {
-        const senders = peerConnection.getSenders();
-        const videoSender = senders.find(sender =>
-          sender.track?.kind === 'video',
-        );
+    // 화면 공유 스트림 정리
+    if (this.screenStream) {
+      this.screenStream.getTracks().forEach(track => track.stop());
+      this.screenStream = null;
+    }
 
-        if (videoSender && videoSender.track) {
-          videoSender.track.stop();
+    const currentUserId = useAuthStore.getState().user?.user_id.toString();
+    if (!currentUserId) return;
+
+    const peerConnection = this.peerConnections.get(currentUserId);
+    if (peerConnection) {
+      const videoSender = peerConnection.getSenders().find(sender =>
+        sender.track?.kind === 'video'
+      );
+
+      if (videoSender) {
+        // 만약 카메라가 켜져있었다면, 카메라 트랙으로 돌아가기
+        if (this.localStream && this.localStream.getVideoTracks().length > 0) {
+          await videoSender.replaceTrack(this.localStream.getVideoTracks()[0]);
+        } else {
           await videoSender.replaceTrack(null);
         }
       }
 
-      if (this.localStream) {
-        const audioTracks = this.localStream.getAudioTracks();
-        const newStream = new MediaStream();
-        audioTracks.forEach(track => newStream.addTrack(track));
-        this.localStream = newStream;
+      if (peerConnection.connectionState === 'connected') {
+        await this.renegotiateConnection(currentUserId);
       }
-    } catch (error) {
-      console.error('Error stopping screen share:', error);
+    }
+
+    const currentChannelId = useUserChannelStore.getState().currentUserChannel.channelId;
+    if (currentChannelId) {
+      useUserChannelStore.getState().updateUserMediaState(
+        currentChannelId,
+        currentUserId,
+        {
+          isScreenSharing: false,
+          screenStream: null,
+        },
+      );
     }
   }
 
