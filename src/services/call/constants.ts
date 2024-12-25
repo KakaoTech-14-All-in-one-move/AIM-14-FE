@@ -53,7 +53,22 @@ export const ICE_SERVER_CONFIG = {
     {
       urls: 'turn:13.124.102.218:3478',
       username: 'aim14',
-      credential: 'aim14'
-    }
+      credential: 'aim14',
+    },
   ],
 };
+
+export const OFFER_OPTION = {
+  VOICE_CHANNEL: {
+    offerToReceiveAudio: true,
+    offerToReceiveVideo: false,
+    voiceActivityDetection: true,
+    iceRestart: true,
+  },
+  VIDEO_CHANNEL: {
+    offerToReceiveAudio: true,
+    offerToReceiveVideo: true,
+    voiceActivityDetection: true,
+    iceRestart: true,
+  }
+} as const;

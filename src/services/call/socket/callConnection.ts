@@ -97,7 +97,7 @@ export class CallConnection {
     },
 
     [OP_CODES.ENTER_CHANNEL_EVENT]: async (data: any) => {
-      console.log('WEBSOCKET RECEIVED - CHANNEL ENTER');
+      console.log('WEBSOCKET RECEIVED - CHANNEL ENTER : ', data);
       if (!data?.channel_id || !data?.user_id) return;
 
       const channelId = data.channel_id.toString();
@@ -118,6 +118,7 @@ export class CallConnection {
       };
 
       // 내가 입장한 경우
+      console.log('COMPARE : ', data.user_id, currentUserId, data.user_id === currentUserId);
       if (data.user_id === currentUserId) {
         console.log('My channel enter - Creating WebRTC connections');
         // 1. 내 send peer 생성
