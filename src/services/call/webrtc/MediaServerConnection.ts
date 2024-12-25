@@ -1102,41 +1102,42 @@ export class MediaServerConnection {
     try {
       if (isCameraOn) {
         const videoStream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
           video: {
             width: { ideal: 1280 },
             height: { ideal: 720 },
             frameRate: { ideal: 30 },
-          },
+          }
         });
 
-        const combinedStream = new MediaStream();
-
+        const videoTrack = videoStream.getVideoTracks()[0];
         const currentStream = this.getLocalStream();
-        if (currentStream) {
-          currentStream.getAudioTracks().forEach(track => {
-            combinedStream.addTrack(track);
-          });
+
+        // 기존 peer 연결에 비디오 트랙 추가
+        for (const [peerId, peerConnection] of this.peerConnections) {
+          const sender = peerConnection.getSenders().find(s => s.track?.kind === 'video');
+          if (sender) {
+            await sender.replaceTrack(videoTrack);
+          } else {
+            peerConnection.addTrack(videoTrack, currentStream!);
+          }
         }
 
-        videoStream.getVideoTracks().forEach(track => {
-          combinedStream.addTrack(track);
-        });
-
-        await this.replaceStream(combinedStream);
-        return { stream: combinedStream };
+        return { stream: currentStream };
       } else {
-        const audioStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-          video: false,
+        // 비디오 트랙만 제거
+        this.localStream?.getVideoTracks().forEach(track => {
+          track.stop();
+          track.enabled = false;
         });
 
-        await this.replaceStream(audioStream);
-        return { stream: audioStream };
+        for (const [_, peerConnection] of this.peerConnections) {
+          const sender = peerConnection.getSenders().find(s => s.track?.kind === 'video');
+          if (sender) {
+            await sender.replaceTrack(null);
+          }
+        }
+
+        return { stream: this.localStream };
       }
     } catch (error) {
       console.error('Error handling camera state:', error);

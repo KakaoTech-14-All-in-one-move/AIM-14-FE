@@ -189,6 +189,19 @@ export class CallConnection {
         MediaServerConnection.getInstance().handleIceCandidate(data.candidate, data.userId);
       }
     },
+
+    [OP_CODES.CANCEL_VIDEO_ANSWER]: (data: any) => {
+      const { currentUserChannel } = useUserChannelStore.getState();
+      if (data?.userId) {
+        console.log('Cancel sending peer for changing media stream : ', data.userId);
+        // 기존 연결 정리 후 새 연결 시도
+        MediaServerConnection.getInstance().prepareConnection(
+          currentUserChannel.channelId!,
+          data.userId,
+          MediaServerConnection.getInstance().getLocalStream()!
+        );
+      }
+    },
   };
 
   private reconnectCount = 0;
