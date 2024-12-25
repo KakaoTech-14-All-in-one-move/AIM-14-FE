@@ -287,7 +287,7 @@ export class MediaServerConnection {
     });
 
     // ICE candidate 처리
-    console.log('SEND ICE CANDIDATE : LOCAL PEER ->', userId);
+    console.log('SEND ICE CANDIDATE : LOCAL PEER ->', userId, useAuthStore.getState().user?.user_id);
     peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
         callConnection.sendOp(OP_CODES.ON_ICE_CANDIDATE, {
@@ -307,7 +307,7 @@ export class MediaServerConnection {
       const offer = await peerConnection.createOffer();
       await peerConnection.setLocalDescription(offer);
 
-      console.log('SEND RECEIVED VIDEO : LOCAL PEER ->', userId);
+      console.log('SEND RECEIVED VIDEO : LOCAL PEER ->', userId, useAuthStore.getState().user?.user_id);
       callConnection.sendOp(OP_CODES.RECEIVE_VIDEO, {
         sdp_offer: offer.sdp,
         sender_id: userId,
@@ -736,6 +736,7 @@ export class MediaServerConnection {
       isConnecting: false,
       isNegotiating: false,
       pendingOffer: false,
+      isInitiator: false,
     });
     this.pendingCandidates.set(remotePeerId, []);
   }

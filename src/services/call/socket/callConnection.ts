@@ -116,7 +116,6 @@ export class CallConnection {
         screen_sharing: data.screen_sharing ?? false,
         stream: null,
       };
-      this.userStateManager.handleUserJoin(channelId, userData);
 
       // 내가 입장한 경우
       if (data.user_id === currentUserId) {
@@ -138,9 +137,16 @@ export class CallConnection {
       }
       // 다른 사람이 입장한 경우
       else {
-        console.log('Other user channel enter - Creating receive peer');
-        // 해당 유저의 receive peer 생성
-        await MediaServerConnection.getInstance().createRemotePeer(channelId, data.user_id);
+        this.userStateManager.handleUserJoin(channelId, userData);
+        // 현재 사용자가 해당 채널에 있는지 확인
+        const { currentUserChannel } = useUserChannelStore.getState();
+        if (currentUserChannel.channelId === channelId) {
+          console.log('Other user channel enter - Creating receive peer');
+          // 해당 유저의 receive peer 생성
+          await MediaServerConnection.getInstance().createRemotePeer(channelId, data.user_id);
+        } else {
+          console.log('Skipping remote peer creation - current user not in channel:', channelId);
+        }
       }
     },
 
@@ -292,6 +298,7 @@ export class CallConnection {
           // MediaServerConnection에 CallConnection 설정
           MediaServerConnection.getInstance().setCallConnection(this);
           MediaConnectionManager.getInstance().setCallConnection(this);
+          UserStateManager.getInstance().resetJoinedUsers();
 
           // 초기화 메시지 전송
           this.sendOp(OP_CODES.INIT, { token: this.accessToken });

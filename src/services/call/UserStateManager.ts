@@ -22,6 +22,10 @@ export class UserStateManager {
     this.joinedUsers = new Set();
   }
 
+  resetJoinedUsers() {
+    this.joinedUsers.clear();
+  }
+
   static getInstance(): UserStateManager {
     if (!this.instance) {
       this.instance = new UserStateManager();
@@ -80,7 +84,8 @@ export class UserStateManager {
     // 이미 존재하는 경우 기존 상태 정리 후 재가입
     if (this.joinedUsers.has(userKey)) {
       // this.handleUserLeave(channelId, userData.user_id);
-      console.log('User is already in joinedUsers Set', userKey);
+      console.warn('User is already in joinedUsers Set', userKey);
+      return;
     }
 
     try {

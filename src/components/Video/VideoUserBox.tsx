@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { CameraOff, HeadphoneOff, MicOff, MonitorUp, MonitorOff, Video, Maximize2, Minimize2 } from 'lucide-react';
+import { CameraOff, HeadphoneOff, Maximize2, MicOff, Minimize2, MonitorOff, MonitorUp, Video } from 'lucide-react';
 import { DefaultProfileImage } from '@/components/Login/DefaultProfileImage';
 import { ChannelUser } from '@/stores/userChannelStore';
 import { useAuthStore } from '@/stores/authStore.ts';
@@ -13,12 +13,12 @@ interface VideoUserBoxProps {
 }
 
 export const VideoUserBox = React.memo<VideoUserBoxProps>(({
-  user,
-  isScreenShare = false,
-  totalUsers,
-  onMaximize,
-  isMaximized = false
-}) => {
+                                                             user,
+                                                             isScreenShare = false,
+                                                             totalUsers,
+                                                             onMaximize,
+                                                             isMaximized = false,
+                                                           }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const BASE_URL = import.meta.env.VITE_S3_URL;
   const currentUser = useAuthStore(state => state.user);
@@ -71,8 +71,8 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({
         enabled: t.enabled,
         muted: t.muted,
         readyState: t.readyState,
-        label: t.label
-      }))
+        label: t.label,
+      })),
     });
   };
 
@@ -80,18 +80,41 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({
     const videoElement = videoRef.current;
     if (!videoElement) return;
 
+    console.log('Stream details:', {
+      userId: user.userId,
+      hasStream: !!user.mediaState.stream,
+      trackCount: user.mediaState.stream?.getTracks().length,
+      videoTracks: user.mediaState.stream?.getVideoTracks().length,
+      audioTracks: user.mediaState.stream?.getAudioTracks().length,
+    });
+
     const stream = isScreenShare ? user.mediaState.screenStream : user.mediaState.stream;
     logStreamInfo(stream, 'Stream Update');
 
     if (stream) {
+      console.log('Stream tracks state:', stream.getTracks().map(track => ({
+        kind: track.kind,
+        readyState: track.readyState,
+        enabled: track.enabled,
+        muted: track.muted
+      })));
+
       console.log(`[VideoUserBox] Attaching ${isScreenShare ? 'screen' : 'camera'} stream to video element:`, {
         userId: user.userId,
         trackCount: stream.getTracks().length,
         videoTracks: stream.getVideoTracks().length,
-        audioTracks: stream.getAudioTracks().length
+        audioTracks: stream.getAudioTracks().length,
       });
 
       if (videoElement.srcObject !== stream) {
+        console.log('Video element state:', {
+          userId: user.userId,
+          readyState: videoElement.readyState,
+          paused: videoElement.paused,
+          srcObject: !!videoElement.srcObject,
+          offsetWidth: videoElement.offsetWidth,
+          offsetHeight: videoElement.offsetHeight,
+        });
         videoElement.srcObject = stream;
         videoElement.muted = user.mediaState.isMuted || user.mediaState.isDeafened;
 
@@ -136,10 +159,16 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({
     user.mediaState.isCameraOn,
     user.mediaState.isMuted,
     user.mediaState.isDeafened,
-    isScreenShare
+    isScreenShare,
   ]);
 
   const showVideo = useMemo(() => {
+    console.log('ShowVideo conditions:', {
+      userId: user.userId,
+      isCurrentUser,
+      isCameraOn: user.mediaState.isCameraOn,
+      hasVideoStream: !!(user.mediaState.stream?.getVideoTracks().length > 0),
+    });
     if (isScreenShare) {
       const hasScreenStream = !!user.mediaState.screenStream;
       console.log('[VideoUserBox] Screen share check:', {
@@ -155,7 +184,7 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({
       isCurrentUser,
       isCameraOn: user.mediaState.isCameraOn,
       hasStream: !!user.mediaState.stream,
-      trackCount: user.mediaState.stream?.getVideoTracks().length
+      trackCount: user.mediaState.stream?.getVideoTracks().length,
     });
 
     const hasVideoStream = !!(
@@ -175,7 +204,7 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({
     user.mediaState.stream,
     user.mediaState.screenStream,
     user.mediaState.isCameraOn,
-    isCurrentUser
+    isCurrentUser,
   ]);
 
   const NoStreamDisplay = () => {
@@ -205,7 +234,7 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({
         alt={user.username}
         style={{
           width: `${sizes.profileSize * 4}px`,
-          height: `${sizes.profileSize * 4}px`
+          height: `${sizes.profileSize * 4}px`,
         }}
         className="rounded-full"
       />
@@ -229,7 +258,7 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({
           ref={videoRef}
           autoPlay
           playsInline
-          muted = {isCurrentUser || user.mediaState.isMuted || user.mediaState.isDeafened}
+          muted={isCurrentUser || user.mediaState.isMuted || user.mediaState.isDeafened}
           className={`w-full h-full ${isScreenShare ? 'object-contain' : 'object-cover'}`}
         />
       ) : (
@@ -269,7 +298,8 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({
                 <HeadphoneOff className={`w-${sizes.iconSize} h-${sizes.iconSize} text-white`} />
               </div>
             )}
-            <div className={`rounded-full p-${sizes.padding} ${user.mediaState.isCameraOn ? (showVideo ? 'bg-green-500/90' : 'bg-yellow-500/90') : 'bg-red-500/90'}`}>
+            <div
+              className={`rounded-full p-${sizes.padding} ${user.mediaState.isCameraOn ? (showVideo ? 'bg-green-500/90' : 'bg-yellow-500/90') : 'bg-red-500/90'}`}>
               {user.mediaState.isCameraOn ? (
                 <Video className={`w-${sizes.iconSize} h-${sizes.iconSize} text-white`} />
               ) : (
