@@ -17,10 +17,7 @@ const Message: React.FC<MessageProps> = React.memo(
 
     const formatDate = useMemo(() => {
       return (dateString: string) => {
-        // 타임스탬프를 Date 객체로 변환
         const date = new Date(Number(dateString));
-
-        // 한국 시간대로 포맷팅
         return new Intl.DateTimeFormat('ko-KR', {
           timeZone: 'Asia/Seoul',
           year: 'numeric',
@@ -28,26 +25,31 @@ const Message: React.FC<MessageProps> = React.memo(
           day: 'numeric',
           hour: '2-digit',
           minute: '2-digit',
-          hour12: false, // 24시간제 사용
+          hour12: false,
         }).format(date);
       };
     }, []);
 
     const displayProfileImage = useMemo(() => {
-      if (isCurrentUser) {
-        if (user?.profile_image) {
+      // 현재 사용자인 경우
+      if (isCurrentUser && user) {
+        if (user.profile_image) {
           return user.profile_image.startsWith('http')
             ? user.profile_image
             : `${import.meta.env.VITE_S3_URL}${user.profile_image}`;
         }
-        return generateProfileImageUrl(user?.username || 'User', 40);
+        return generateProfileImageUrl(user.username || 'User', 40);
       }
+
+      // 다른 사용자인 경우
       if (profile_image) {
         return profile_image.startsWith('http')
           ? profile_image
           : `${import.meta.env.VITE_S3_URL}${profile_image}`;
       }
-      return generateProfileImageUrl((author || 'Anonymous').split('(')[0], 40);
+
+      // 프로필 이미지가 없는 경우 기본 이미지 생성
+      return generateProfileImageUrl((author || 'Anonymous').split('(')[0].trim(), 40);
     }, [isCurrentUser, user, profile_image, author]);
 
     return (
@@ -60,7 +62,8 @@ const Message: React.FC<MessageProps> = React.memo(
                 alt={author}
                 className="w-full h-full object-cover"
                 onError={(e) => {
-                  e.currentTarget.src = generateProfileImageUrl(author.split('(')[0], 40);
+                  // 이미지 로드 실패 시 기본 이미지로 대체
+                  e.currentTarget.src = generateProfileImageUrl(author.split('(')[0].trim(), 40);
                 }}
               />
             </div>

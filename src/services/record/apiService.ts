@@ -1,9 +1,13 @@
-import type { VideoFeedbackResponse, VoiceFeedbackResponse, UploadResponse } from '@/components/feedback/types';
+import type {
+  VideoFeedbackResponse,
+  VoiceFeedbackResponse,
+  UploadResponse,
+} from '@/components/feedback/types';
 
 const config = {
   videoServerUrl: import.meta.env.VITE_AI_VIDEO_SERVER_URL,
   voiceServerUrl: import.meta.env.VITE_AI_VOICE_SERVER_URL,
-  isDev: import.meta.env.VITE_ENV === 'dev'
+  isDev: import.meta.env.VITE_ENV === 'd',
 };
 
 class ApiService {
@@ -12,7 +16,7 @@ class ApiService {
     if (config.isDev) {
       const jsonResponse: UploadResponse = {
         video_id: 'test-video-id',
-        message: 'Success'
+        message: 'Success',
       };
       console.log('Dev mode: Upload response:', jsonResponse);
       return jsonResponse;
@@ -41,7 +45,7 @@ class ApiService {
     }
 
     const response = await fetch(
-      `${config.videoServerUrl}/api/video/video-send-feedback/${videoId}`
+      `${config.videoServerUrl}/api/video/video-send-feedback/${videoId}`,
     );
 
     return response.json();
@@ -53,10 +57,9 @@ class ApiService {
       return;
     }
 
-    const response = await fetch(
-      `${config.videoServerUrl}/api/video/delete_files/${videoId}`,
-      { method: 'DELETE' }
-    );
+    const response = await fetch(`${config.videoServerUrl}/api/video/delete_files/${videoId}`, {
+      method: 'DELETE',
+    });
 
     if (!response.ok) {
       throw new Error(`Failed to delete video data: ${response.status}`);
@@ -68,7 +71,7 @@ class ApiService {
     if (config.isDev) {
       const jsonResponse: UploadResponse = {
         video_id: 'test-voice-id',
-        message: 'Success'
+        message: 'Success',
       };
       console.log('Dev mode: Upload response:', jsonResponse);
       return jsonResponse;
@@ -80,13 +83,10 @@ class ApiService {
       formData.append('script', scriptFile);
     }
 
-    const response = await fetch(
-      `${config.voiceServerUrl}/api/pronun/upload-video-with-script`,
-      {
-        method: 'POST',
-        body: formData,
-      }
-    );
+    const response = await fetch(`${config.voiceServerUrl}/api/pronun/upload-video-with-script`, {
+      method: 'POST',
+      body: formData,
+    });
 
     if (!response.ok) {
       throw new Error(`Voice upload failed: ${response.status}`);
@@ -102,9 +102,7 @@ class ApiService {
       return mockData;
     }
 
-    const response = await fetch(
-      `${config.voiceServerUrl}/api/pronun/send-feedback/${videoId}`
-    );
+    const response = await fetch(`${config.voiceServerUrl}/api/pronun/send-feedback/${videoId}`);
 
     return response.json();
   }
@@ -115,10 +113,9 @@ class ApiService {
       return;
     }
 
-    const response = await fetch(
-      `${config.voiceServerUrl}/api/pronun/delete_files/${videoId}`,
-      { method: 'DELETE' }
-    );
+    const response = await fetch(`${config.voiceServerUrl}/api/pronun/delete_files/${videoId}`, {
+      method: 'DELETE',
+    });
 
     if (!response.ok) {
       throw new Error(`Failed to delete voice data: ${response.status}`);
@@ -131,14 +128,14 @@ class ApiService {
     isVoice: boolean,
     maxAttempts = 30,
     initialInterval = 10000,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<VideoFeedbackResponse | VoiceFeedbackResponse> {
     // 개발 환경에서는 mock 데이터 사용
     if (config.isDev) {
       const mockData = isVoice
         ? await import('@/services/record/mockVoiceFeedback.json')
         : await import('@/services/record/mockVideoFeedback.json');
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise((resolve) => setTimeout(resolve, 5000));
       return { ...mockData.default, problem: 'success' };
     }
 
@@ -161,12 +158,12 @@ class ApiService {
         }
 
         await Promise.race([
-          new Promise(resolve => setTimeout(resolve, currentInterval)),
+          new Promise((resolve) => setTimeout(resolve, currentInterval)),
           new Promise((_, reject) => {
             if (signal) {
               signal.addEventListener('abort', () => reject(new Error('Request aborted')));
             }
-          })
+          }),
         ]);
 
         currentInterval = Math.min(currentInterval * 1.5, 30000);

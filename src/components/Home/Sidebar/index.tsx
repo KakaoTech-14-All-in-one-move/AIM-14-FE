@@ -24,7 +24,6 @@ const Sidebar: FC = () => {
   const mediaManager = MediaConnectionManager.getInstance();
   const location = useLocation();
 
-  // handleServerChange 함수 수정
   const handleServerChange = useCallback(async (serverId: number) => {
     if (!connection) {
       console.error('No connection available');
@@ -32,69 +31,20 @@ const Sidebar: FC = () => {
     }
 
     try {
-      // 1. 현재 채널이 있다면 먼저 떠나기
       if (currentUserChannel?.channelId) {
         await mediaManager.leaveChannel();
       }
 
-      // 2. 연결 시도 전에 상태 업데이트
       setSelectedServerId(serverId);
-      setChannels([]); // 채널 목록 초기화
-
-      // 3. 서버 연결 시도 (재시도 로직 추가)
-      let attempts = 0;
-      const maxAttempts = 3;
-      let success = false;
-
-      while (attempts < maxAttempts && !success) {
-        try {
-          success = await connection.setCurrentServerId(serverId.toString());
-          if (success) break;
-        } catch (e) {
-          attempts++;
-          if (attempts === maxAttempts) throw e;
-          // 재시도 전 잠시 대기
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
-
-      if (!success) {
-        throw new Error('Failed to connect to server after multiple attempts');
-      }
-
-      // 4. 연결 성공 시 네비게이션
-      navigate(`/channels/${serverId}`);
-
-    } catch (error) {
-      console.error('Error while changing server:', error);
-      // 실패 시 이전 상태로 롤백
-      setSelectedServerId(null);
       setChannels([]);
-      // 사용자에게 에러 알림
-      alert('서버 연결에 실패했습니다. 잠시 후 다시 시도해주세요.');
-    }
-  }, [connection, currentUserChannel, setSelectedServerId, setChannels, navigate]);
 
+      let success = await connection.setCurrentServerId(serverId.toString());
+      if (!success) {
+        throw new Error('Failed to connect to server');
+      }
 
-  useEffect(() => {
-    const isRootPath = location.pathname === '/';
-    if (isRootPath && user?.servers?.length! > 0) {
-      const firstServer = user!.servers[0];
-      handleServerChange(firstServer.server_id);
-    }
-  }, [user?.servers, location.pathname, handleServerChange]);
-
-  const getFullImageUrl = (imageUrl: string | undefined) => {
-    if (!imageUrl) return undefined;
-    if (imageUrl.startsWith('http')) return imageUrl;
-    return `${BASE_URL}${imageUrl}`;
-  };
-
-  const selectOldestChatChannel = async (serverId: number) => {
-    try {
       const response = await apiClient.client.get(`/api/v1/servers/${serverId}/channels`);
       const channels: Channel[] = response.data;
-
       setChannels(channels);
 
       const chatChannels = channels
@@ -105,15 +55,34 @@ const Sidebar: FC = () => {
         const oldestChannel = chatChannels[0];
         setCurrentChannel(oldestChannel);
         navigate(`/channels/${serverId}/${oldestChannel.channelId}`);
+      } else {
+        navigate(`/channels/${serverId}`);
       }
+
     } catch (error) {
-      console.error('채널 목록을 불러오는데 실패했습니다:', error);
+      console.error('Error while changing server:', error);
+      setSelectedServerId(null);
+      setChannels([]);
+      alert('서버 연결에 실패했습니다. 잠시 후 다시 시도해주세요.');
     }
+  }, [connection, currentUserChannel, setSelectedServerId, setChannels, setCurrentChannel, navigate, mediaManager]);
+
+  useEffect(() => {
+    const isRootPath = location.pathname === '/';
+    if (isRootPath && user?.servers?.length! > 0 && !selectedServerId) {
+      const firstServer = user!.servers[0];
+      handleServerChange(firstServer.server_id);
+    }
+  }, [user?.servers, location.pathname, selectedServerId, handleServerChange]);
+
+  const getFullImageUrl = (imageUrl: string | undefined) => {
+    if (!imageUrl) return undefined;
+    if (imageUrl.startsWith('http')) return imageUrl;
+    return `${BASE_URL}${imageUrl}`;
   };
 
   const handleServerSelect = (serverId: number) => {
-    setSelectedServerId(serverId);
-    selectOldestChatChannel(serverId);
+    handleServerChange(serverId);
   };
 
   const handleImageUpload = async (serverId: number, file: File) => {
@@ -192,11 +161,22 @@ const Sidebar: FC = () => {
 
       const serverStore = useServerStore.getState();
       serverStore.addServer(newServer);
-
       serverStore.setSelectedServerId(newServer.server_id);
-      selectOldestChatChannel(newServer.server_id);
 
-      await handleServerChange(newServer.server_id);
+      // 채널 정보를 가져옵니다
+      const channelsResponse = await apiClient.client.get(`/api/v1/servers/${newServer.server_id}/channels`);
+      const channels: Channel[] = channelsResponse.data;
+      setChannels(channels);
+
+      // 새로 생성된 채널로 이동합니다
+      if (channels.length > 0) {
+        const newChannel = channels[channels.length - 1]; // 가장 최근에 생성된 채널
+        setCurrentChannel(newChannel);
+        navigate(`/channels/${newServer.server_id}/${newChannel.channelId}`);
+      } else {
+        // 채널이 없는 경우에만 서버 페이지로 이동
+        navigate(`/channels/${newServer.server_id}`);
+      }
 
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || '서버 생성에 실패했습니다.';
@@ -224,20 +204,16 @@ const Sidebar: FC = () => {
         servers: user.servers.filter(server => server.server_id !== serverId),
       });
 
-      // 현재 서버가 삭제된 경우 다른 서버로 이동
       if (selectedServerId === serverId) {
         const remainingServers = user.servers.filter(s => s.server_id !== serverId);
         if (remainingServers.length > 0) {
           setSelectedServerId(remainingServers[0].server_id);
-          selectOldestChatChannel(remainingServers[0].server_id);
+          await handleServerChange(remainingServers[0].server_id);
         } else {
           setSelectedServerId(null);
           setCurrentChannel(null);
           setChannels([]);
           navigate('/home');
-
-          await handleServerChange(remainingServers[0].server_id);
-
         }
       }
     } catch (error: any) {
@@ -278,7 +254,7 @@ const Sidebar: FC = () => {
   };
 
   return (
-    <div className="h-screen w-16 flex flex-col bg-discord900 shadow-lg">
+    <div className="h-screen w-16 min-w-[64px] max-w-[64px] flex flex-col bg-discord900 shadow-lg">
       <SidebarIcon
         icon={<HomeIcon />}
         text="홈"
@@ -288,11 +264,6 @@ const Sidebar: FC = () => {
           setCurrentChannel(null);
           setChannels([]);
           navigate('/home');
-
-          if (user?.servers?.length! > 0) {
-            const firstServer = user!.servers[0];
-            handleServerChange(firstServer.server_id);
-          }
         }}
       />
       {user?.servers?.map((server) => (
@@ -313,12 +284,7 @@ const Sidebar: FC = () => {
           }
           text={server.server_name}
           isSelected={selectedServerId === server.server_id}
-
-          onClick={() => {
-            handleServerSelect(server.server_id);
-            handleServerChange(server.server_id);
-          }}
-
+          onClick={() => handleServerSelect(server.server_id)}
           onRename={(newName) => handleRenameServer(server.server_id, newName)}
           onRemove={() => handleRemoveServer(server.server_id)}
           onImageUpload={(file) => handleImageUpload(server.server_id, file)}
@@ -336,4 +302,4 @@ const Sidebar: FC = () => {
   );
 };
 
-export default Sidebar
+export default Sidebar;

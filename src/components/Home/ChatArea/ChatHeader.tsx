@@ -1,8 +1,7 @@
-// src/components/Home/ChatArea/ChatHeader.tsx
 import React, { useMemo } from 'react';
 import { FaSearch } from 'react-icons/fa';
 import FeedbackIcon from '@/common/icons/feedback';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useChannelStore } from '@/stores/channelStore';
 
 interface ChatHeaderProps {
@@ -11,12 +10,15 @@ interface ChatHeaderProps {
 
 const ChatHeader: React.FC<ChatHeaderProps> = ({ channelId }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const channels = useChannelStore((state) => state.channels);
 
   const currentChannel = useMemo(() => {
-    if (!channelId || !channels) return null;
+    if (location.pathname === '/home' || !channelId || !channels) {
+      return { channelName: 'home' };
+    }
     return channels.find(channel => channel.channelId.toString() === channelId);
-  }, [channelId, channels]);
+  }, [channelId, channels, location.pathname]);
 
   const handleRecordClick = () => {
     navigate('/record');
@@ -26,7 +28,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({ channelId }) => {
     <div className="flex items-center justify-between p-3 bg-discord500 border-b border-discord900">
       <div className="flex items-center">
         <h2 className="text-gray-100 font-semibold mr-2 text-lg">
-          # {currentChannel?.channelName || '채널'}
+          # {currentChannel?.channelName || 'home'}
         </h2>
       </div>
       <div className="flex items-center">

@@ -48,6 +48,14 @@ export const AppRoutes: React.FC = () => {
           }
         />
         <Route
+          path="/channels/:serverId"
+          element={
+            <ProtectedRoute>
+              <Home />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/home"
           element={
             <ProtectedRoute>
