@@ -147,7 +147,6 @@ export class MediaServerConnection {
     await new Promise(resolve => setTimeout(resolve, 100));
 
     const connectionState = this.connectionStates.get(remotePeerId);
-    const remotePeerUser = channelUsers?.find(user => user.userId === remotePeerId);
 
     if (!connectionState?.pendingOffer) {
       connectionState!.pendingOffer = true;
@@ -953,8 +952,8 @@ export class MediaServerConnection {
         const videoTrack = videoStream.getVideoTracks()[0];
 
         // 3. 기존 오디오와 새 비디오를 합침
-        const newStream = new MediaStream([
-          audioTrack || (await this.getAudioTrack()),
+        const newStream = new MediaStream!([
+          audioTrack || (this.localStream?.getAudioTracks()),
           videoTrack
         ]);
 
@@ -1062,10 +1061,10 @@ export class MediaServerConnection {
           await videoSender.replaceTrack(screenStream.getVideoTracks()[0]);
         }
 
-        // 연결 재협상
-        if (peerConnection.connectionState === 'connected') {
-          await this.renegotiateConnection(currentUserId);
-        }
+        // // 연결 재협상
+        // if (peerConnection.connectionState === 'connected') {
+        //   await this.renegotiateConnection(currentUserId);
+        // }
       }
 
       screenStream.getVideoTracks()[0].onended = () => {

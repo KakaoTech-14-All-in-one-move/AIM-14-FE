@@ -94,7 +94,8 @@ export const VideoUserBox = React.memo<VideoUserBoxProps>(({
     if (stream) {
       videoElement.srcObject = stream;
       videoElement.play().catch(error => {
-        console.error('Error playing video:', error);
+        // TODO
+        // console.error('Error playing video:', error);
       });
     }
   }, [user.mediaState.stream, user.mediaState.screenStream, isScreenShare, isCurrentUser]);
